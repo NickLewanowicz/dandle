@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only overlay: unconditionally allow cleartext so QA can point the app at
+  http://10.0.2.2:8000 (emulator) / http://localhost:8000 (host) without the
+  release policy getting in the way. The comment in the release/main config documents
+  the longer-term cleartext stance.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

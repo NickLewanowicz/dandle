@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext policy (docs/briefs/00-architecture.md §Cleartext HTTP):
+  Self-hosted Baby Buddy servers are frequently plain HTTP on the home LAN. The server URL is
+  *user-directed*: it is typed by the user at login, and an http:// URL must pass the cleartext
+  warning dialog before any connection is made (functional spec §1.1.3). For the beta we therefore
+  permit cleartext in all builds — matching the original app's behavior — and rely on the
+  login-time warning as the user-facing guard. Post-beta decision: tighten release to an
+  allowlist and/or drop cleartext once QR/manual-key login (no password) ships.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

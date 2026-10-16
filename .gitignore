@@ -1,1 +1,7 @@
 .scratch/
+# Gradle
+app/.gradle/
+app/build/
+app/app/build/
+app/.kotlin/
+app/local.properties
