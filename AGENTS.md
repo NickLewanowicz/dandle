@@ -33,6 +33,10 @@ scripts/                # Dev utilities (seed_demo_data.py, etc.)
 - **Emulator**: AVD `Pixel5` (`emulator-5554`), driven via the android-emulator MCP tools.
 - **Build**: `source scripts/dev-env.sh` first — the system JDK (Homebrew 25) BREAKS Gradle; use the Android Studio JBR 21 it exports. Then `./gradlew :app:assembleDebug :app:testDebugUnitTest` from `app/`.
 
+## QA is operationalized — do not re-derive device steps
+
+Before ANY emulator work, read `docs/qa/RUNBOOK.md` and use `scripts/qa/*` (fresh-install login, tap-by-testTag, server log tails, offline toggles, screenshots, app log tail). Never reuse screen coordinates across steps; resolve by testTag each time. Debug builds log all network calls and user actions under `BB/*` tags — tail them with `scripts/qa/applog.sh` during any test; never test blind. Every feature's flow doc must include a "How to verify" section (scripts, testTags, expected server requests) and a checklist entry in `docs/qa/FEATURE-CHECKLISTS.md` in the same change.
+
 ## How we work (AI-driven team)
 
 The Maintainer orchestrates persona subagents (see `.zcode/agents/` and `docs/PERSONAS.md`): **android-engineer** implements, **test-engineer** pins behavior with tests, **qa-engineer** verifies on the emulator with screenshots, **ux-designer** specs/reviews screens, **user-persona** ("Jordan") vetoes anything slow or scary. Feature lifecycle: brief → engineer strategy → implement + tests → QA on emulator → docs/screenshots → done.
