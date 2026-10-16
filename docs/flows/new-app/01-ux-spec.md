@@ -126,7 +126,7 @@ One **TimerCard** per running timer, newest first. Anatomy, left to right:
 - **Pagination**: loading-older spinner row at the bottom while fetching; nothing at end of list (no "that's all" chatter).
 - **Empty state** (fresh server): static line-art illustration (moon + bottle — no animation), text: "Log your first event with a button above."
 
-**Rejected tradeoffs:** horizontal child paging (original) — drop for a dropdown; vertical scroll + pull-to-refresh + row tap already own the gestures. Sticky day headers — nice, but compete with the timer strip for vertical space; the beta list is short. Modal login errors — inline banners keep context and let the user fix the field they're on.
+**Create-flow conflicts (spec §3.8, as-built):** saves are local-first; a server rejection always lands the entry in FAILED state and opens the failure dialog with the entered values intact (Edit / Discard) — the same visual language as offline failures. **Rejected tradeoffs:** horizontal child paging (original) — drop for a dropdown; vertical scroll + pull-to-refresh + row tap already own the gestures. Sticky day headers — nice, but compete with the timer strip for vertical space; the beta list is short. Modal login errors — inline banners keep context and let the user fix the field they're on.
 
 ---
 
@@ -185,8 +185,8 @@ Details:
 │ Method   (Bottle)(Left breast)(Right breast)    │
 │            (Both breasts)(Parent fed)(Self fed) │
 │                                                 │
-│ START    Today 14:32     [−5m][−1m][+1m][+5m]   │ ← StepperTimeRow
-│ END      Today 14:44     [−5m][−1m][+1m][+5m]   │
+│ START    Today 14:32     [−15m][−1m][+1m][+15m] │ ← StepperTimeRow
+│ END      Today 14:44     [−15m][−1m][+1m][+15m] │
 │ (!) End time must be after start time.            │ ← inline validation
 │                                                 │
 │ [    Save    ]              Retry   Delete      │
@@ -194,7 +194,7 @@ Details:
 ```
 - **Title row**: type icon + current headline (same format as the timeline row) + close ✕.
 - **Type fields**: mirror the create panel exactly (§3 table) — never more fields than the quick action itself. Chip rows may wrap; compact sizing.
-- **StepperTimeRow** (one for Start; one for End on timed types; a single "Time" row for Diaper/Note): label + stored value ("Today 14:32") + four compact stepper buttons **−5m / −1m / +1m / +5m**. Tapping the *value* opens the platform date+time picker. Steps cross midnight and day boundaries freely; the value's date prefix updates live.
+- **StepperTimeRow** (one for Start; one for End on timed types; a single "Time" row for Diaper/Note): label + stored value ("Today 14:32") + four compact stepper buttons **−15m / −1m / +1m / +15m** (15-minute steps are primary — parents think in 5/15-minute units; "started 20 min earlier" is two taps). Tapping the *value* opens the platform date+time picker. Steps cross midnight and day boundaries freely; the value's date prefix updates live. On timed types, moving the **Start** row shifts **End** by the same delta (duration preserved — moving a start never breaks validation or forces a second clock fix).
 - **Inline validation** — message below the time rows, error color, with the reason; Save is disabled while invalid:
   - "End time must be after start time."
   - "Entries can't be in the future."
@@ -206,9 +206,9 @@ Details:
 - **Why ≤3 interactions holds:** steppers are 1 tap per minute; picker path is value-tap → picker → done = 3.
 
 ### Conflict dialog (edit creates an overlap, or server rejects the PATCH)
-- Title: "Can't save changes". Body: the server's reason verbatim (e.g. "Another entry intersects the specified time period") prefixed by nothing — it is already plain text. Buttons: **Edit times** (filled-tonal — closes dialog, sheet stays open with all values intact, scrolls to the time rows) / **Discard changes** (text — reverts to stored values). Never auto-close the sheet, never lose typed values.
+- Title: "Can't save changes". Body: the reason translated to parent language (server overlap errors MUST be parsed to name the clash, e.g. "This overlaps the 1:15–2:00 PM nap — Edit times or Discard"). Buttons: **Edit times** (filled-tonal — closes dialog, sheet stays open with all values intact, scrolls to the time rows) / **Discard changes** (text — reverts to stored values). Never auto-close the sheet, never lose typed values.
 
-**Rejected tradeoffs:** free-text time entry — pickers + steppers are fat-finger-proof at 3 a.m.; a duration stepper on the End row ("−5m" moves end, not duration) — absolute times match how the server validates and how parents think ("it ended at 14:44").
+**Create-flow conflicts (spec §3.8, as-built):** saves are local-first; a server rejection always lands the entry in FAILED state and opens the failure dialog with the entered values intact (Edit / Discard) — the same visual language as offline failures. **Rejected tradeoffs:** free-text time entry — pickers + steppers are fat-finger-proof at 3 a.m.; a duration stepper on the End row ("−5m" moves end, not duration) — absolute times match how the server validates and how parents think ("it ended at 14:44").
 
 ---
 
