@@ -1,6 +1,8 @@
-# babybuddy-next — Canonical Functional Specification (v0.1 BETA)
+# babybuddy-next — Canonical Functional Specification (v0.2 BETA)
 
 > **This document is the product of record.** Any implementation (Kotlin/Compose, Flutter, React Native, or a future rewrite) must satisfy every MUST here. Screenshots referenced under `docs/screenshots/` are normative evidence. Parity baselines: the existing Baby Buddy for Android v2.6.4 flows mapped in `docs/flows/existing-app/`, and server behavior in `docs/research/babybuddy-api.md`.
+>
+> v0.2 changes (from user-persona review, docs/flows/new-app/02-user-persona-review.md): learning feeding defaults, 15-minute steppers + duration-preserving start moves, duplicate guard, parent-language failure messages, session-expiry reassurance, configurable widget buttons, Save-emphasized stop dialog.
 >
 > Status markers: **[P]** parity with existing app (must match), **[N]** new in this app.
 
@@ -35,12 +37,13 @@ Empty state (fresh server): friendly illustration + "Log your first event with a
 Common rules:
 - Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer; tapping again (or Stop) completes it. **[P]**
 - If a timer for that type is already running for the active child, tapping the button focuses/opens that running timer instead of starting a duplicate. **[P]**
+- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save is the emphasized (filled) action**; Keep timer and Discard are subdued text buttons. <10s → discard silently. **[P]** (original semantics, emphasis per user review)
 - Timer >10s stop → confirmation dialog ("Stop timer? Keep / Discard / Save"). <10s → discard silently. **[P]** (exact original semantics per existing-app flow docs)
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
 - Save = create entry with start = timer start, end = stop time. **[P]**
 
 ### 3.1 Feeding **[P]**
-- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed}. Default: type=breast milk, method=bottle.
+- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed}. Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
 - Save → `POST /api/feedings/` {child, start, end, type, method, amount?}. Amount optional for breast methods.
 - Server timer (created on start, named `Feeding-BBapp:<n>`) DELETEd on save/discard. **[P]**
 
@@ -61,8 +64,11 @@ Common rules:
 ### 3.6 Tummy time **[P]**
 - Start/stop timer; milestone text + note. Save → `POST /api/tummy-times/` {child, start, end, milestone?, notes?}.
 
-### 3.7 Conflict on save (overlap) **[P→N bridge]**
-Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/TummyTime; future times; start≥end — research doc §conflicts). Online: show the server's reason in a non-destructive dialog; entry form stays open with values intact. Offline: entry goes to FAILED state (§6.3).
+### 3.7 Duplicate guard at save **[N]**
+Before saving, if the same type already has an entry for this child within the last **4 minutes** (server data or local), show one calm line: e.g. "Wet diaper logged 4 min ago. Add anyway?" — **Add is the default action**; "View last entry" secondary. Never blocks; never silent-dedupes.
+
+### 3.8 Conflict on save (overlap) **[P→N bridge]**
+Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/TummyTime; future times; start≥end — research doc §conflicts). Online: show a **translated, parent-language reason** (never raw server-speak; overlap errors MUST name the clashing entry, e.g. "This overlaps the 1:15–2:00 PM nap" — parse the conflicting-entry id from the server message when possible and link to it) in a non-destructive dialog; entry form stays open with values intact. Offline: entry goes to FAILED state (§6.3).
 
 ## 4. Timeline entries
 
@@ -84,7 +90,7 @@ Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/Tum
 
 Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in ≤3 interactions; never more fields than the quick action itself.
 
-- **Time editing** (all types): start time (and end time for timed types) each get a row showing the stored value + stepper buttons **−5m / −1m / +1m / +5m** and tap-to-open the platform time picker (date+time). Constraint feedback inline: end must be after start; no future times; timed entries ≤24h (server rules). Save disabled with reason while invalid.
+- **Time editing** (all types): start time (and end time for timed types) each get a row showing the stored value + stepper buttons **−15m / −1m / +1m / +15m** (15-minute steps primary — parents think in 5/15-minute units) and tap-to-open the platform time picker (date+time). **Moving the start time of a timed entry keeps its duration** (end shifts by the same delta); changing end adjusts duration independently. Constraint feedback inline: end must be after start; no future times; timed entries ≤24h (server rules). Save disabled with reason while invalid.
 - **Type fields** mirror §3 exactly (feeding type/method/amount; diaper wet/solid/color/amount; sleep notes; note text; pumping amount/notes; tummy milestone/notes).
 - **Save** → PATCH `/api/{type}/{id}/` (online) or queued edit op (offline §6). On success the timeline row updates in place (animated).
 - **Conflict on edit** (overlap created by the new times) → same handling as §3.7.
@@ -107,12 +113,12 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 3. Airplane mode mid-session → timer started offline keeps ticking → stop → entry PENDING → reconnect → syncs.
 4. Kill app offline → relaunch → pending entries and running timers intact.
 5. Two devices same child → both create near-duplicate diaper changes → both sync (server allows; no dedup) → visible in timeline (accepted tradeoff per product decision).
-6. 401 during sync (key revoked) → pause queue, surface "Session expired" → login → resume.
+6. 401 during sync (key revoked) → pause queue, surface "Session expired — your N unsaved entries are safe on this phone. Sign in and they'll go up." → login → resume automatically.
 
 ## 7. Widgets (Feature 2) **[N]**
 
 ### 7.1 Quick Actions widget (2×2 or 2×1)
-- Buttons: **Sleep** (toggle start/stop of sleep timer), **Bottle**, **Diaper**, **Pump**. Tap = same create/toggle semantics as in-app (including "diaper opens app with panel pre-opened" for types needing input).
+- Buttons: **four configurable slots** (default: Sleep toggle, Bottle, Diaper, Pump) — user picks any quick action per slot in the widget config (§7.3). Tap = same create/toggle semantics as in-app (including "diaper opens app with panel pre-opened" for types needing input).
 - Active-timer state: button shows running state (accent + elapsed for sleep if space).
 
 ### 7.2 Care Dashboard widget (4×2 or resizable 4×3)
@@ -121,7 +127,7 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 - Data: reads the local DB snapshot; refresh on app writes + on sync completion + WorkManager periodic (≥15 min) + system widget update allowance. Counters are minute-granular ("Xm ago"); staleness is acceptable and documented (no per-second widget ticking in beta).
 
 ### 7.3 Widget configuration
-- One-tap add uses active child. Long-press → Configure: child selection + (dashboard widget) row visibility.
+- One-tap add uses active child. Long-press → Configure: child selection, (dashboard widget) row visibility, and (quick-actions widget) the four button slots.
 
 ## 8. Look & feel (Feature 3) **[N]**
 
