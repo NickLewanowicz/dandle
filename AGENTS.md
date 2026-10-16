@@ -28,9 +28,10 @@ scripts/                # Dev utilities (seed_demo_data.py, etc.)
 
 ## Dev environment (this machine)
 
+- **Framework (DECIDED 2026-10-16)**: Native Kotlin + Jetpack Compose + Material 3 — see `docs/briefs/framework-eval/DECISION.md`. `domain/` and `data/` stay free of `android.*` imports (KMP-ready); HTTP client behind an interface. Fallback if revisit triggers fire: React Native/Expo.
 - **Baby Buddy server**: Docker container `babybuddy` → `http://localhost:8000` (host) / `http://10.0.2.2:8000` (emulator). Login `admin` / `admin`. API token in `/tmp/bb_token` (regenerate: see `docs/research/babybuddy-api.md`). Seed data: `python3 scripts/seed_demo_data.py`.
 - **Emulator**: AVD `Pixel5` (`emulator-5554`), driven via the android-emulator MCP tools.
-- **Build**: `./gradlew :app:assembleDebug :app:testDebugUnitTest` (JDK 17).
+- **Build**: `source scripts/dev-env.sh` first — the system JDK (Homebrew 25) BREAKS Gradle; use the Android Studio JBR 21 it exports. Then `./gradlew :app:assembleDebug :app:testDebugUnitTest` from `app/`.
 
 ## How we work (AI-driven team)
 
