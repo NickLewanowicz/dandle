@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import net.babybuddy.next.ui.login.LoginScreen
+import net.babybuddy.next.ui.login.LoginViewModel
 import net.babybuddy.next.ui.theme.TimerCounterStyle
 
 /** Route names for the beta's two top-level destinations. */
@@ -19,16 +21,25 @@ object Routes {
 
 /**
  * Beta scaffold: exactly two destinations, login <-> dashboard (spec §1/§2).
- * Session-driven start destination is wired by MainViewModel (commit 2).
+ * The start destination is session-driven (MainActivity decides before composing this).
  */
 @Composable
-fun AppNavHost(startDestination: String = Routes.DASHBOARD) {
+fun AppNavHost(
+    startDestination: String,
+    loginViewModel: LoginViewModel,
+) {
     val navController = rememberNavController()
     Surface(modifier = Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = startDestination) {
             composable(Routes.LOGIN) {
-                // Real LoginScreen lands in commit 2 (brief 01 §3).
-                Text("Login")
+                LoginScreen(
+                    onSignedIn = {
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
+                    },
+                    viewModel = loginViewModel,
+                )
             }
             composable(Routes.DASHBOARD) {
                 DashboardPlaceholder()
