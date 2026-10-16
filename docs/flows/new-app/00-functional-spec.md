@@ -43,7 +43,7 @@ Common rules:
 - Save = create entry with start = timer start, end = stop time. **[P]**
 
 ### 3.1 Feeding **[P]**
-- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed}. Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
+- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed} — **solid food offers bottle, parent fed, self fed** (verified in the existing app: docs/flows/existing-app/04-feeding.md). Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
 - Save → `POST /api/feedings/` {child, start, end, type, method, amount?}. Amount optional for breast methods.
 - Server timer (created on start, named `Feeding-BBapp:<n>`) DELETEd on save/discard. **[P]**
 
