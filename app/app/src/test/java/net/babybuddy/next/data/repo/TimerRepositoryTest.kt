@@ -10,6 +10,8 @@ import kotlinx.serialization.json.Json
 import net.babybuddy.next.data.api.BabyBuddyApi
 import net.babybuddy.next.data.db.BabyBuddyDatabase
 import net.babybuddy.next.domain.Clock
+import net.babybuddy.next.domain.ElapsedTimeFormatter
+import net.babybuddy.next.domain.Iso8601
 import net.babybuddy.next.domain.ServerClock
 import net.babybuddy.next.domain.model.EventDraft
 import net.babybuddy.next.domain.model.EventType
@@ -50,9 +52,11 @@ class TimerRepositoryTest {
 
     // Wall clock and server clock are frozen apart by a fixed skew so we can prove which one
     // stamps what (entries use the SERVER clock, matching the original app's discipline).
-    private val wallNow = 1_760_000_000_000L
+    // wallNow is a var so restart tests can advance it between calls ("process death").
+    private var wallNow = 1_760_000_000_000L
     private val serverNow = wallNow + 90_000L
     private val clock = Clock { wallNow }
+    private val serverClock = ServerClock(clock).apply { restoreOffset(serverNow - wallNow) }
 
     private val responses = ArrayDeque<MockResponse>()
     private val seenRequests = mutableListOf<String>()
@@ -76,7 +80,7 @@ class TimerRepositoryTest {
             .build()
             .create(BabyBuddyApi::class.java)
 
-        val serverClock = ServerClock(clock).apply { restoreOffset(serverNow - wallNow) }
+        val serverClockLocal = serverClock
         eventRepo = EventRepository(
             apiProvider = { api },
             db = db,
@@ -98,7 +102,7 @@ class TimerRepositoryTest {
             db = db,
             eventRepository = eventRepo,
             clock = clock,
-            serverClock = serverClock,
+            serverClock = serverClockLocal,
         )
     }
 
@@ -212,5 +216,65 @@ class TimerRepositoryTest {
         timerRepo.refresh(childId = 1)
         assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
         assertEquals(0, db.timerDao().snapshot().size)
+    }
+
+    // -- Process death: the Room row is the timer -----------------------------------
+
+    /** A brand-new repository stack over the same Room instance (fresh "process"). */
+    private fun restartedTimerRepo() = TimerRepository(
+        apiProvider = { api },
+        db = db,
+        eventRepository = eventRepo,
+        clock = Clock { wallNow },
+        serverClock = serverClock,
+    )
+
+    @Test
+    fun `timer started offline survives a restart and elapsed comes from the persisted start`() = runTest {
+        // Offline start: no scripted 201 → local row only, no server timer.
+        val started = timerRepo.start(EventType.SLEEP, childId = 1)
+        assertNull(started.serverTimerId)
+
+        // 12m34s later the process is dead and restarted: a fresh repository reads Room.
+        wallNow += 12 * 60_000L + 34_000L
+        val restarted = restartedTimerRepo()
+        val restored = restarted.findRunning(EventType.SLEEP, childId = 1)!!
+        assertEquals("start survives verbatim", started.startedAtMillis, restored.startedAtMillis)
+
+        // The dashboard's live-counter math (serverClock.nowMillis() - startedAtMillis):
+        // the skew cancels because both stamps carry the same +90s server offset.
+        val elapsed = serverClock.nowMillis() - restored.startedAtMillis
+        assertEquals(12 * 60_000L + 34_000L, elapsed)
+        assertEquals("00:12:34", ElapsedTimeFormatter.timerCounter(elapsed))
+
+        // Stopping after the restart still saves the ORIGINAL start with the fresh end.
+        restarted.stopAndSave(
+            restored,
+            EventDraft(type = EventType.SLEEP, childId = 1, startMillis = 0, endMillis = 0),
+        )
+        val saved = db.eventDao().observeTimeline(1).first().single()
+        assertEquals(started.startedAtMillis, saved.startMillis)
+        assertEquals(wallNow + 90_000L, saved.endMillis)
+        assertEquals(12 * 60_000L + 34_000L, saved.endMillis - saved.startMillis)
+        assertNull(restarted.findRunning(EventType.SLEEP, childId = 1))
+    }
+
+    @Test
+    fun `stop just after midnight keeps duration from the persisted start - pure epoch math`() = runTest {
+        // Start at 23:55:00Z server time, stop at 00:07:00Z the next UTC day: no local-field
+        // day arithmetic may leak into the duration.
+        wallNow = Iso8601.parse("2025-10-09T23:55:00Z") - 90_000L
+        val started = timerRepo.start(EventType.SLEEP, childId = 1)
+        wallNow = Iso8601.parse("2025-10-10T00:07:00Z") - 90_000L
+
+        restartedTimerRepo().stopAndSave(
+            started,
+            EventDraft(type = EventType.SLEEP, childId = 1, startMillis = 0, endMillis = 0),
+        )
+
+        val saved = db.eventDao().observeTimeline(1).first().single()
+        assertEquals(Iso8601.parse("2025-10-09T23:55:00Z"), saved.startMillis)
+        assertEquals(Iso8601.parse("2025-10-10T00:07:00Z"), saved.endMillis)
+        assertEquals(12 * 60_000L, saved.endMillis - saved.startMillis)
     }
 }
