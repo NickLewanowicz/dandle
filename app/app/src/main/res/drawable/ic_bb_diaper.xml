@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original artwork: folded diaper (Diaper change). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M2.8,5.8 h18.4 v3.4 c0,5.2 -4.1,9 -9.2,9 c-5.1,0 -9.2,-3.8 -9.2,-9 Z M5.2,12.1 c1.9,1.7 4.2,2.6 6.8,2.6 c2.6,0 4.9,-0.9 6.8,-2.6 v1.9 c-1.9,1.5 -4.2,2.3 -6.8,2.3 c-2.6,0 -4.9,-0.8 -6.8,-2.3 Z" />
+</vector>

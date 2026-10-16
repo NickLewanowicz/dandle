@@ -46,6 +46,8 @@ class OutboxDrainer(
     private val isAuthPaused: () -> Boolean,
     /** Marks the session expired (DataStore) — called once, on the first auth failure. */
     private val onAuthExpired: suspend () -> Unit,
+    /** Drain-activity signal for the header's SyncStatusChip (UX spec §5). */
+    private val onDrainActiveChange: (Boolean) -> Unit = {},
 ) {
 
     sealed interface Outcome {
@@ -63,8 +65,13 @@ class OutboxDrainer(
 
     /** Serialized drain: write-path one-shots and SyncWorker never double-post. */
     suspend fun drain(): Outcome = mutex.withLock {
-        if (isAuthPaused()) return Outcome.PausedAuth
-        return drainOnce()
+        onDrainActiveChange(true)
+        try {
+            if (isAuthPaused()) return Outcome.PausedAuth
+            return drainOnce()
+        } finally {
+            onDrainActiveChange(false)
+        }
     }
 
     private suspend fun drainOnce(): Outcome {

@@ -35,6 +35,10 @@ class TimerRepository(
     fun observeRunning(): Flow<List<RunningTimer>> =
         timerDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
+    /** The running timer for this child+kind, or null (spec §3: never two of the same kind). */
+    suspend fun findRunning(kind: EventType, childId: Long): RunningTimer? =
+        timerDao.findRunning(childId, kind.name)?.toModel()
+
     /**
      * Starts a timer for [kind] + [childId]. Local row first; server timer created when the
      * call succeeds (id attached to the row). A duplicate running timer for the same child+kind

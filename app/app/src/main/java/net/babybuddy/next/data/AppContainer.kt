@@ -36,6 +36,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 class AppContainer(
     private val appScope: CoroutineScope,
     sessionFile: okio.Path,
+    quickActionsFile: okio.Path,
 ) {
 
     val clock: Clock = Clock.SYSTEM
@@ -49,6 +50,12 @@ class AppContainer(
     }
 
     val sessionStore = SessionStore(sessionFile)
+
+    /** Quick-action prefs: learned feeding defaults + panel drafts (Stage 2). */
+    val quickActionStore = net.babybuddy.next.data.prefs.QuickActionStore(quickActionsFile)
+
+    /** True while an outbox drain is running — feeds the SyncStatusChip (UX spec §5). */
+    val drainActive = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     // In-memory mirrors of session state for OkHttp/worker threads (no blocking DataStore reads).
     @Volatile
@@ -117,6 +124,7 @@ class AppContainer(
                 authExpiredMirror = true
                 sessionStore.setSessionExpired(true)
             },
+            onDrainActiveChange = { drainActive.value = it },
         )
     }
 
@@ -149,6 +157,7 @@ class AppContainer(
         childRepository.clear()
         eventRepository.clear()
         db().timerDao().clear()
+        quickActionStore.clearAll()
     }
 
     /** Must be called once from App.onCreate: mirrors session state + persists clock offsets. */

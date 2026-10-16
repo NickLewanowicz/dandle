@@ -41,6 +41,20 @@ interface EventDao {
     @Query("SELECT COUNT(*) FROM events")
     fun observeCount(): Flow<Int>
 
+    /** Newest same-type entry for a child — the duplicate guard's probe (spec §3.7). */
+    @Query(
+        "SELECT * FROM events WHERE childId = :childId AND type = :type " +
+            "ORDER BY endMillis DESC LIMIT 1"
+    )
+    suspend fun latestByType(childId: Long, type: String): EventEntity?
+
+    @Query("SELECT COUNT(*) FROM events WHERE syncState = 'FAILED'")
+    fun observeFailedCount(): Flow<Int>
+
+    /** Entries not yet on the server (PENDING + FAILED) — the session-expiry "N unsent" count. */
+    @Query("SELECT COUNT(*) FROM events WHERE syncState != 'SYNCED'")
+    fun observeUnsentCount(): Flow<Int>
+
     @Query("DELETE FROM events WHERE localUuid = :localUuid")
     suspend fun delete(localUuid: String)
 

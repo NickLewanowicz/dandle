@@ -41,6 +41,14 @@ class EventRepository(
     fun observeTimeline(childId: Long): Flow<List<Event>> =
         eventDao.observeTimeline(childId).map { rows -> rows.map { it.toModel() } }
 
+    /** Newest same-type entry for the child — the duplicate guard's probe (spec §3.7). */
+    suspend fun latestByType(childId: Long, type: EventType): Event? =
+        eventDao.latestByType(childId, type.name)?.toModel()
+
+    fun observeFailedCount(): Flow<Int> = eventDao.observeFailedCount()
+
+    fun observeUnsentCount(): Flow<Int> = eventDao.observeUnsentCount()
+
     fun observeEventCount(): Flow<Int> = eventDao.observeCount()
 
     // -- Writes -----------------------------------------------------------------

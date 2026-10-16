@@ -19,6 +19,7 @@ class App : Application() {
         container = AppContainer(
             appScope = applicationScope,
             sessionFile = filesDir.resolve("session.preferences_pb").absolutePath.toPath(),
+            quickActionsFile = filesDir.resolve("quick_actions.preferences_pb").absolutePath.toPath(),
         )
         container.initDatabase(this)
         container.start()

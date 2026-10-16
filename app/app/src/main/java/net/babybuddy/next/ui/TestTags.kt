@@ -14,9 +14,71 @@ object TestTags {
     const val LOGIN_ERROR_BANNER = "login/error_banner"
     const val LOGIN_CLEARTEXT_DIALOG = "login/cleartext_dialog"
 
-    // Dashboard (placeholder until Stage 2)
+    // Dashboard (UX spec §2)
     const val DASHBOARD = "dashboard"
     const val DASHBOARD_CHILD_SWITCHER = "dashboard/child_switcher"
+    const val DASHBOARD_OVERFLOW = "dashboard/overflow"
     const val DASHBOARD_TIMELINE = "dashboard/timeline"
     const val DASHBOARD_REFRESH = "dashboard/refresh"
+    const val DASHBOARD_SYNC_CHIP = "dashboard/sync_chip"
+    const val DASHBOARD_TIMER_STRIP = "dashboard/timer_strip"
+    const val DASHBOARD_EMPTY_TIMELINE = "dashboard/empty_timeline"
+
+    /** Parametrized: "dashboard/quick_action/FEEDING" etc. (EventType.name). */
+    fun quickAction(type: String) = "dashboard/quick_action/$type"
+
+    /** Parametrized: "dashboard/timer/SLEEP" (EventType.name of the running timer). */
+    fun timerCard(type: String) = "dashboard/timer/$type"
+
+    fun timerSave(type: String) = "dashboard/timer/$type/save"
+
+    fun timerDiscard(type: String) = "dashboard/timer/$type/discard"
+
+    /** The inline quick-action panel: "dashboard/panel/FEEDING" etc. */
+    fun panel(type: String) = "dashboard/panel/$type"
+
+    const val PANEL_SAVE = "dashboard/panel/save"
+    const val PANEL_CLOSE = "dashboard/panel/close"
+    const val PANEL_NOTE = "dashboard/panel/note"
+    const val PANEL_NOTE_TEXT = "dashboard/panel/note_text"
+    const val PANEL_AMOUNT = "dashboard/panel/amount"
+    const val PANEL_WET = "dashboard/panel/wet"
+    const val PANEL_SOLID = "dashboard/panel/solid"
+    const val PANEL_EXTRA_OPTIONS = "dashboard/panel/extra_options"
+    const val PANEL_MILESTONE = "dashboard/panel/milestone"
+    const val PANEL_TEXT = "dashboard/panel/text"
+
+    fun feedingTypeChip(wire: String) = "dashboard/panel/feeding_type/$wire"
+
+    fun feedingMethodChip(wire: String) = "dashboard/panel/feeding_method/$wire"
+
+    fun diaperColorChip(wire: String) = "dashboard/panel/color/$wire"
+
+    // Dialogs
+    const val STOP_DIALOG = "dashboard/stop_dialog"
+    const val STOP_DIALOG_SAVE = "dashboard/stop_dialog/save"
+    const val STOP_DIALOG_DISCARD = "dashboard/stop_dialog/discard"
+    const val STOP_DIALOG_KEEP = "dashboard/stop_dialog/keep"
+    const val DUPLICATE_DIALOG = "dashboard/duplicate_dialog"
+    const val DUPLICATE_ADD = "dashboard/duplicate_dialog/add"
+
+    // Timeline rows/badges (UX spec §2/§5)
+    fun timelineRow(localUuid: String) = "dashboard/timeline/$localUuid"
+
+    const val BADGE_PENDING = "dashboard/badge_pending"
+    const val BADGE_FAILED = "dashboard/badge_failed"
+    const val DAY_HEADER = "dashboard/day_header"
+
+    // Quick Edit sheet (Stage 3, UX spec §4)
+    const val EDIT_SHEET = "edit/sheet"
+    const val EDIT_SAVE = "edit/save"
+    const val EDIT_RETRY = "edit/retry"
+    const val EDIT_DELETE = "edit/delete"
+    const val EDIT_VALIDATION = "edit/validation"
+
+    fun editStepperMinus(field: String) = "edit/stepper/${field}_minus"
+
+    fun editStepperPlus(field: String) = "edit/stepper/${field}_plus"
+
+    const val FAILURE_DIALOG = "edit/failure_dialog"
 }
