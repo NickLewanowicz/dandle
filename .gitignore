@@ -5,3 +5,11 @@ app/build/
 app/app/build/
 app/.kotlin/
 app/local.properties
+
+# Gradle/IDE build artifacts
+.gradle/
+build/
+app/build/
+local.properties
+.DS_Store
+.kotlin/
