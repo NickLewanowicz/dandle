@@ -1,5 +1,7 @@
 package net.babybuddy.next.data
 
+import android.content.Context
+import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -9,7 +11,13 @@ import net.babybuddy.next.data.api.BaseUrlInterceptor
 import net.babybuddy.next.data.auth.AuthInterceptor
 import net.babybuddy.next.data.auth.LoginFlow
 import net.babybuddy.next.data.auth.ServerClockInterceptor
+import net.babybuddy.next.data.db.BabyBuddyDatabase
 import net.babybuddy.next.data.prefs.SessionStore
+import net.babybuddy.next.data.repo.ChildRepository
+import net.babybuddy.next.data.repo.EventRepository
+import net.babybuddy.next.data.repo.TimerRepository
+import net.babybuddy.next.data.sync.OutboxDrainer
+import net.babybuddy.next.data.sync.SyncWorker
 import net.babybuddy.next.domain.Clock
 import net.babybuddy.next.domain.ServerClock
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,9 +27,11 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /**
  * Manual DI on Application (brief 00: no codegen; small app). Holds the single Json, the two
- * OkHttp clients (login vs token API), the Retrofit [BabyBuddyApi], the session store, and the
- * server clock. Everything here is JVM-friendly; Android only supplies the session file path
- * and the app scope.
+ * OkHttp clients (login vs token API), the Retrofit [BabyBuddyApi], the Room database, the
+ * repositories, the outbox drainer, and the session store.
+ *
+ * Lifecycle: construct in Application.onCreate → [start] (session mirrors + clock restore) →
+ * [initDatabase] (Room + worker wiring). Android supplies context/scope; the rest is JVM-friendly.
  */
 class AppContainer(
     private val appScope: CoroutineScope,
@@ -40,12 +50,15 @@ class AppContainer(
 
     val sessionStore = SessionStore(sessionFile)
 
-    // In-memory mirrors of session state for OkHttp interceptor threads (no blocking reads).
+    // In-memory mirrors of session state for OkHttp/worker threads (no blocking DataStore reads).
     @Volatile
     private var apiKeyMirror: String? = null
 
     @Volatile
     private var serverUrlMirror: String? = null
+
+    @Volatile
+    private var authExpiredMirror: Boolean = false
 
     /** Client for the login dance: no redirects (302 = success signal), no token header. */
     val loginClient: OkHttpClient = OkHttpClient.Builder()
@@ -71,6 +84,73 @@ class AppContainer(
 
     val loginFlow = LoginFlow(client = loginClient, json = json, sessionStore = sessionStore)
 
+    // -- Offline-first store -----------------------------------------------------
+
+    @Volatile
+    private var dbRef: BabyBuddyDatabase? = null
+
+    @Volatile
+    private var appContext: Context? = null
+
+    private fun db(): BabyBuddyDatabase =
+        dbRef ?: error("AppContainer.initDatabase(context) was not called")
+
+    fun initDatabase(context: Context) {
+        appContext = context.applicationContext
+        if (dbRef == null) {
+            dbRef = Room.databaseBuilder(context.applicationContext, BabyBuddyDatabase::class.java, BabyBuddyDatabase.NAME)
+                .build()
+        }
+    }
+
+    val childRepository: ChildRepository by lazy { ChildRepository({ api }, db()) }
+
+    val drainer: OutboxDrainer by lazy {
+        OutboxDrainer(
+            apiProvider = { api },
+            json = json,
+            eventDao = db().eventDao(),
+            outboxDao = db().outboxDao(),
+            clock = clock,
+            isAuthPaused = { authExpiredMirror },
+            onAuthExpired = {
+                authExpiredMirror = true
+                sessionStore.setSessionExpired(true)
+            },
+        )
+    }
+
+    val eventRepository: EventRepository by lazy {
+        EventRepository(
+            apiProvider = { api },
+            db = db(),
+            json = json,
+            clock = clock,
+            drainer = drainer,
+            // One-shot drain attempt after every write, via WorkManager (collapses concurrent
+            // requests, retries with backoff when the network is down).
+            requestDrain = { SyncWorker.enqueue(appContext ?: error("initDatabase not called")) },
+        )
+    }
+
+    val timerRepository: TimerRepository by lazy {
+        TimerRepository(
+            apiProvider = { api },
+            db = db(),
+            eventRepository = eventRepository,
+            clock = clock,
+            serverClock = serverClock,
+        )
+    }
+
+    /** Sign out (spec §1.2): stored key + local cache go; server data is untouched. */
+    suspend fun signOut() {
+        sessionStore.clear()
+        childRepository.clear()
+        eventRepository.clear()
+        db().timerDao().clear()
+    }
+
     /** Must be called once from App.onCreate: mirrors session state + persists clock offsets. */
     fun start() {
         appScope.launch {
@@ -84,6 +164,7 @@ class AppContainer(
             sessionStore.sessionFlow.collect { session ->
                 apiKeyMirror = session.apiKey
                 serverUrlMirror = session.serverUrl
+                authExpiredMirror = session.sessionExpired
             }
         }
     }

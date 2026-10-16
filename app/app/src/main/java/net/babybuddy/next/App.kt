@@ -20,6 +20,7 @@ class App : Application() {
             appScope = applicationScope,
             sessionFile = filesDir.resolve("session.preferences_pb").absolutePath.toPath(),
         )
+        container.initDatabase(this)
         container.start()
     }
 }

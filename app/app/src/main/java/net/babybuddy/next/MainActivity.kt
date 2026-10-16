@@ -68,6 +68,7 @@ private fun RootNavigation(container: net.babybuddy.next.data.AppContainer) {
         null -> Unit // first DataStore read still in flight; blank frame is fine (<50 ms)
         else -> AppNavHost(
             startDestination = initialStart!!,
+            container = container,
             loginViewModel = LoginViewModel(
                 loginFlow = container.loginFlow,
                 sessionStore = container.sessionStore,

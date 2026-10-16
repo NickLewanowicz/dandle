@@ -1,17 +1,16 @@
 package net.babybuddy.next.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import net.babybuddy.next.data.AppContainer
+import net.babybuddy.next.ui.dashboard.DashboardScreen
 import net.babybuddy.next.ui.login.LoginScreen
 import net.babybuddy.next.ui.login.LoginViewModel
-import net.babybuddy.next.ui.theme.TimerCounterStyle
 
 /** Route names for the beta's two top-level destinations. */
 object Routes {
@@ -26,6 +25,7 @@ object Routes {
 @Composable
 fun AppNavHost(
     startDestination: String,
+    container: AppContainer,
     loginViewModel: LoginViewModel,
 ) {
     val navController = rememberNavController()
@@ -42,17 +42,15 @@ fun AppNavHost(
                 )
             }
             composable(Routes.DASHBOARD) {
-                DashboardPlaceholder()
+                DashboardScreen(
+                    container = container,
+                    onSignedOut = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.DASHBOARD) { inclusive = true }
+                        }
+                    },
+                )
             }
         }
     }
-}
-
-@Composable
-private fun DashboardPlaceholder() {
-    Text(
-        text = "Baby Buddy Next",
-        style = TimerCounterStyle,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
 }
