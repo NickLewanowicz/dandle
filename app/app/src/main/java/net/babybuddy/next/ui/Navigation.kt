@@ -49,6 +49,13 @@ fun AppNavHost(
                             popUpTo(Routes.DASHBOARD) { inclusive = true }
                         }
                     },
+                    // Session expired mid-sync (spec §6.3.6): back to login (fields pre-filled);
+                    // the outbox resumes automatically after a successful sign-in.
+                    onSignIn = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.DASHBOARD) { inclusive = true }
+                        }
+                    },
                 )
             }
         }

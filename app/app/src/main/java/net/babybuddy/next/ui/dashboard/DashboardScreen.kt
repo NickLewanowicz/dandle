@@ -49,6 +49,7 @@ import net.babybuddy.next.domain.StopGuard
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
 import net.babybuddy.next.ui.TestTags
+import net.babybuddy.next.ui.edit.QuickEditSheet
 
 /**
  * Dashboard (spec §2): header (child switcher + overflow + sync chip), active-timers strip,
@@ -60,6 +61,7 @@ import net.babybuddy.next.ui.TestTags
 fun DashboardScreen(
     container: AppContainer,
     onSignedOut: () -> Unit,
+    onSignIn: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val viewModel = viewModel { DashboardViewModel(container, context) }
@@ -124,6 +126,13 @@ fun DashboardScreen(
                     onSyncChipTap = viewModel::syncNow,
                 )
 
+                if (state.sessionExpired) {
+                    SessionExpiredBanner(
+                        unsentCount = state.unsentCount,
+                        onSignIn = onSignIn,
+                    )
+                }
+
                 ActiveTimersStrip(
                     timers = state.runningTimers,
                     nowMillis = nowMillis,
@@ -157,7 +166,7 @@ fun DashboardScreen(
                     events = state.timeline,
                     totalCount = state.totalTimelineCount,
                     loadingOlder = state.loadingOlder,
-                    onTapRow = viewModel::onTimelineRowTapped, // Quick Edit sheet: Stage 3
+                    onTapRow = viewModel::onTimelineRowTapped, // → Quick Edit sheet (spec §4.2)
                     onLongPressRow = { event ->
                         val url = viewModel.webUrlFor(event)
                         if (url == null) {
@@ -168,6 +177,7 @@ fun DashboardScreen(
                             }
                         }
                     },
+                    onFailureBadge = viewModel::onFailureBadgeTapped,
                     onLoadOlder = viewModel::loadOlder,
                     scrollToUuid = viewLastEntryUuid,
                     modifier = Modifier.weight(1f),
@@ -270,6 +280,38 @@ fun DashboardScreen(
                 }) { Text("View last entry") }
             },
             modifier = Modifier.testTag(TestTags.DUPLICATE_DIALOG),
+        )
+    }
+
+    // Quick Edit sheet (spec §5): opens from a row tap or the failure dialog's Edit.
+    state.editState?.let { edit ->
+        QuickEditSheet(
+            event = edit.event,
+            draft = edit.draft,
+            validationReason = viewModel.editValidationReason(edit),
+            onDraftChange = viewModel::onEditDraftChange,
+            onStartStepped = viewModel::onEditStartStepped,
+            onEndStepped = viewModel::onEditEndStepped,
+            onStartTimeSet = viewModel::onEditStartTimeSet,
+            onEndTimeSet = viewModel::onEditEndTimeSet,
+            onSave = viewModel::saveEdit,
+            onRetry = { viewModel.retryEvent(edit.event.localUuid) },
+            onDelete = { viewModel.deleteEvent(edit.event.localUuid) },
+            onDismiss = viewModel::closeEdit,
+        )
+    }
+
+    // Failure dialog (spec §6.2): tap a FAILED badge/row → parent-language reason.
+    state.failureDialog?.let { failure ->
+        FailureDialog(
+            state = failure,
+            onEdit = viewModel::editFromFailureDialog,
+            onRetry = { viewModel.retryEvent(failure.event.localUuid) },
+            onDelete = { viewModel.deleteEvent(failure.event.localUuid) },
+            onShowClash = { clashUuid ->
+                viewLastEntryUuid = clashUuid
+            },
+            onDismiss = viewModel::dismissFailureDialog,
         )
     }
 }

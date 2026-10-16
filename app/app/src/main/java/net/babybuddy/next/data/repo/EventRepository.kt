@@ -45,6 +45,9 @@ class EventRepository(
     suspend fun latestByType(childId: Long, type: EventType): Event? =
         eventDao.latestByType(childId, type.name)?.toModel()
 
+    /** One event by local id (Quick Edit sheet open — also covers FAILED rows). */
+    suspend fun event(localUuid: String): Event? = eventDao.byLocalUuid(localUuid)?.toModel()
+
     fun observeFailedCount(): Flow<Int> = eventDao.observeFailedCount()
 
     fun observeUnsentCount(): Flow<Int> = eventDao.observeUnsentCount()

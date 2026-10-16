@@ -61,6 +61,7 @@ fun TimelineSection(
     loadingOlder: Boolean,
     onTapRow: (Event) -> Unit,
     onLongPressRow: (Event) -> Unit,
+    onFailureBadge: (Event) -> Unit,
     onLoadOlder: (visibleCount: Int) -> Unit,
     modifier: Modifier = Modifier,
     scrollToUuid: String? = null,
@@ -95,11 +96,14 @@ fun TimelineSection(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         items(events, key = { it.localUuid }) { event ->
+            val failed = event.syncState == SyncState.FAILED
             TimelineRow(
                 event = event,
                 showDayHeader = needsHeader(events, event),
-                onTap = { onTapRow(event) },
+                // FAILED rows (and their badge) open the failure dialog, not the sheet (UX §5).
+                onTap = { if (failed) onFailureBadge(event) else onTapRow(event) },
                 onLongPress = { onLongPressRow(event) },
+                onFailedBadge = { onFailureBadge(event) },
                 modifier = Modifier.animateItem(),
             )
         }
@@ -160,6 +164,7 @@ private fun TimelineRow(
     showDayHeader: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
+    onFailedBadge: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.animateContentSize()) {
@@ -232,7 +237,7 @@ private fun TimelineRow(
                     }
                     SyncBadge(
                         state = SyncState.valueOf(event.syncState.name),
-                        onTapFailed = onTap, // FAILED badge tap → failure dialog (Stage 3: dialog)
+                        onTapFailed = onFailedBadge,
                     )
                 }
             }

@@ -98,3 +98,19 @@ data class RunningTimer(
     /** Server timer created when the start happened online; null when started offline. */
     val serverTimerId: Long?,
 )
+
+/** Editable draft rebuilt from a stored event (Quick Edit sheet's starting point, spec §5). */
+fun Event.toDraft(): EventDraft = EventDraft(
+    type = type,
+    childId = childId,
+    startMillis = startMillis,
+    endMillis = endMillis,
+    feedingType = feedingType,
+    feedingMethod = feedingMethod,
+    amount = amount,
+    wet = wet,
+    solid = solid,
+    color = color,
+    noteText = noteText,
+    milestone = milestone,
+)

@@ -25,12 +25,16 @@ import net.babybuddy.next.data.prefs.PanelDraft
 import net.babybuddy.next.data.repo.EventRepository
 import net.babybuddy.next.data.sync.SyncWorker
 import net.babybuddy.next.domain.DuplicateGuard
+import net.babybuddy.next.domain.FailureMessage
 import net.babybuddy.next.domain.FeedingOptions
+import net.babybuddy.next.domain.TimeEditLogic
 import net.babybuddy.next.domain.model.Child
 import net.babybuddy.next.domain.model.Event
 import net.babybuddy.next.domain.model.EventDraft
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
+import net.babybuddy.next.domain.model.SyncState
+import net.babybuddy.next.domain.model.toDraft
 import net.babybuddy.next.data.repo.TimerRepository
 
 /** One open quick-action panel: its type, persisted field draft, and running timer (if any). */
@@ -47,6 +51,21 @@ data class DuplicatePrompt(
     val lastEventLocalUuid: String,
 )
 
+/** The Quick Edit sheet's working state (spec §5): a snapshot of the entry plus its draft. */
+data class EditState(
+    /** Snapshot as opened — the timeline row itself keeps live-syncing underneath. */
+    val event: Event,
+    val draft: EventDraft,
+)
+
+/** Failure dialog state (spec §6.2): the FAILED entry plus its parent-language reason. */
+data class FailureDialogState(
+    val event: Event,
+    val reason: String,
+    /** Local row of the clashing entry, when loaded — enables "Show clashing entry". */
+    val clashLocalUuid: String? = null,
+)
+
 data class DashboardUiState(
     val loading: Boolean = true,
     val children: List<Child> = emptyList(),
@@ -58,6 +77,8 @@ data class DashboardUiState(
     val runningTimers: List<RunningTimer> = emptyList(),
     val openPanel: OpenPanel? = null,
     val duplicatePrompt: DuplicatePrompt? = null,
+    val editState: EditState? = null,
+    val failureDialog: FailureDialogState? = null,
     // Sync health (UX spec §5 SyncStatusChip + badges)
     val isOnline: Boolean = true,
     /** A user-initiated (pull-to-refresh) re-sync is running. */
@@ -99,6 +120,8 @@ class DashboardViewModel(
     private val refreshing = MutableStateFlow(false)
     private val openPanel = MutableStateFlow<OpenPanel?>(null)
     private val duplicatePrompt = MutableStateFlow<DuplicatePrompt?>(null)
+    private val editState = MutableStateFlow<EditState?>(null)
+    private val failureDialog = MutableStateFlow<FailureDialogState?>(null)
     private val showLongPressHint = MutableStateFlow(false)
 
     // Pagination (spec §2.4: load older on scroll)
@@ -168,6 +191,29 @@ class DashboardViewModel(
         }
     }
 
+    private data class Combined(
+        val children: List<Child>,
+        val timers: List<RunningTimer>,
+        val failedCount: Int,
+        val unsentCount: Int,
+        val drainActive: Boolean,
+    )
+
+    private data class Combined2(
+        val session: net.babybuddy.next.data.prefs.Session,
+        val isOnline: Boolean,
+        val refreshing: Boolean,
+        val loadingOlder: Boolean,
+    )
+
+    /** Panel/dialog tail of the state (kept as one flow to stay within combine's arity). */
+    private data class UiTail(
+        val panel: OpenPanel?,
+        val prompt: DuplicatePrompt?,
+        val edit: EditState?,
+        val failure: FailureDialogState?,
+    )
+
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(
             childRepo.children,
@@ -189,14 +235,20 @@ class DashboardViewModel(
         activeChildId.flatMapLatest { id ->
             if (id == null) flowOf(emptyList()) else eventRepo.observeTimeline(id)
         },
-        openPanel,
-        duplicatePrompt,
-    ) { core, sessionCore, timeline, panel, prompt ->
+        combine(
+            openPanel,
+            duplicatePrompt,
+            editState,
+            failureDialog,
+        ) { panel, prompt, edit, failure ->
+            UiTail(panel, prompt, edit, failure)
+        },
+    ) { core, sessionCore, timeline, tail ->
         val storedId = activeChildId.value ?: sessionCore.session.activeChildId
         val active = core.children.firstOrNull { it.id == storedId } ?: core.children.firstOrNull()
         val childTimers = core.timers.filter { it.childId == (active?.id ?: it.childId) }
         // Open panels only make sense for the active child.
-        val panelForChild = panel?.takeIf { it.timer == null || it.timer.childId == active?.id }
+        val panelForChild = tail.panel?.takeIf { it.timer == null || it.timer.childId == active?.id }
         if (timeline.size != totalTimelineCount.value) totalTimelineCount.value = timeline.size
         DashboardUiState(
             loading = false,
@@ -207,7 +259,9 @@ class DashboardViewModel(
             loadingOlder = sessionCore.loadingOlder,
             runningTimers = childTimers,
             openPanel = panelForChild,
-            duplicatePrompt = prompt,
+            duplicatePrompt = tail.prompt,
+            editState = tail.edit,
+            failureDialog = tail.failure,
             isOnline = sessionCore.isOnline,
             refreshing = sessionCore.refreshing,
             syncing = sessionCore.refreshing || core.drainActive,
@@ -533,8 +587,143 @@ class DashboardViewModel(
         return "$server/${event.type.uiPath}/$serverId/"
     }
 
-    /** Row tap — the Quick Edit sheet arrives in Stage 3; clickable now, deliberately inert. */
-    fun onTimelineRowTapped(@Suppress("UNUSED_PARAMETER") event: Event) = Unit
+    // -- Quick Edit sheet (spec §5) ---------------------------------------------------
+
+    /** Row tap → the sheet (spec §4.2). Never more fields than the quick action itself. */
+    fun onTimelineRowTapped(event: Event) {
+        viewModelScope.launch {
+            val stored = eventRepo.event(event.localUuid) ?: return@launch
+            editState.value = EditState(event = stored, draft = stored.toDraft())
+        }
+    }
+
+    fun closeEdit() {
+        editState.value = null
+    }
+
+    fun onEditDraftChange(transform: (EventDraft) -> EventDraft) {
+        val current = editState.value ?: return
+        editState.value = current.copy(draft = transform(current.draft))
+    }
+
+    /** Stepper on the START row (timed types): duration-preserving (spec §5). */
+    fun onEditStartStepped(minutes: Long) {
+        val current = editState.value ?: return
+        if (current.event.type.isTimed) {
+            val (start, end) = TimeEditLogic.moveStart(
+                current.draft.startMillis,
+                current.draft.endMillis,
+                TimeEditLogic.step(current.draft.startMillis, minutes),
+            )
+            onEditDraftChange { it.copy(startMillis = start, endMillis = end) }
+        } else {
+            onEditDraftChange { it.copy(startMillis = TimeEditLogic.step(it.startMillis, minutes)) }
+        }
+    }
+
+    /** Stepper on the END row (timed types): adjusts duration independently (raw; the
+     *  end ≤ start case surfaces via [editValidationReason] and disables Save). */
+    fun onEditEndStepped(minutes: Long) {
+        onEditDraftChange { draft ->
+            draft.copy(endMillis = TimeEditLogic.step(draft.endMillis, minutes))
+        }
+    }
+
+    /** Absolute set from the platform date+time picker. */
+    fun onEditStartTimeSet(millis: Long) {
+        val current = editState.value ?: return
+        if (current.event.type.isTimed) {
+            val (start, end) = TimeEditLogic.moveStart(current.draft.startMillis, current.draft.endMillis, millis)
+            onEditDraftChange { it.copy(startMillis = start, endMillis = end) }
+        } else {
+            onEditDraftChange { it.copy(startMillis = millis) }
+        }
+    }
+
+    fun onEditEndTimeSet(millis: Long) {
+        onEditDraftChange { it.copy(endMillis = millis) }
+    }
+
+    /**
+     * Inline validation reason (Save disabled while non-null) — computed against the live
+     * server clock so "no future" stays honest as time passes. Combines the type-field gate
+     * (diaper needs Wet/Solid — mirrors the create panel) with the time constraints.
+     */
+    fun editValidationReason(state: EditState): String? =
+        TimeEditLogic.validateTypeFields(state.event.type, state.draft.wet, state.draft.solid)
+            ?: TimeEditLogic.validate(
+                startMillis = state.draft.startMillis,
+                endMillis = state.draft.endMillis,
+                isTimed = state.event.type.isTimed,
+                nowMillis = container.serverClock.nowMillis(),
+            )
+
+    /** Save → PATCH online or queued edit op offline; row updates in place (spec §5). */
+    fun saveEdit() {
+        val current = editState.value ?: return
+        if (editValidationReason(current) != null) return
+        val uuid = current.event.localUuid
+        editState.value = null
+        viewModelScope.launch { eventRepo.edit(uuid, current.draft) }
+    }
+
+    /** FAILED entry "Retry" (spec §6.2): re-queues the op; badge → PENDING. */
+    fun retryEvent(localUuid: String) {
+        editState.value = null
+        failureDialog.value = null
+        viewModelScope.launch { eventRepo.retry(localUuid) }
+    }
+
+    /** Delete with confirm (UI owns the confirm dialog); local-only for never-synced rows. */
+    fun deleteEvent(localUuid: String) {
+        editState.value = null
+        failureDialog.value = null
+        viewModelScope.launch { eventRepo.delete(localUuid) }
+    }
+
+    // -- Failure dialog (spec §6.2 / UX spec §5) --------------------------------------
+
+    /** FAILED badge tap → parent-language reason + resolution actions. */
+    fun onFailureBadgeTapped(event: Event) {
+        if (event.syncState != SyncState.FAILED) return
+        viewModelScope.launch {
+            var clash: Event? = null
+            val conflictServerId = event.conflictServerId
+            val conflictUiPath = event.conflictUiPath
+            if (conflictServerId != null && conflictUiPath != null) {
+                // Conflict refs carry the web path ("tummy-time"); match either spelling.
+                val type = EventType.entries.firstOrNull {
+                    it.uiPath == conflictUiPath || it.apiPath == conflictUiPath
+                }
+                if (type != null) {
+                    clash = uiState.value.timeline.firstOrNull {
+                        it.type == type && it.serverId == conflictServerId
+                    }
+                }
+            }
+            failureDialog.value = FailureDialogState(
+                event = event,
+                reason = FailureMessage.translate(
+                    reason = event.failureReason,
+                    conflictUiPath = conflictUiPath,
+                    conflictServerId = conflictServerId,
+                    clash = clash,
+                ),
+                clashLocalUuid = clash?.localUuid,
+            )
+        }
+    }
+
+    fun dismissFailureDialog() {
+        failureDialog.value = null
+    }
+
+    /** Failure dialog "Edit" → the Quick Edit sheet with the original values intact. */
+    fun editFromFailureDialog() {
+        val event = failureDialog.value?.event ?: return
+        failureDialog.value = null
+        onTimelineRowTapped(event)
+    }
 
     // -- Session ----------------------------------------------------------------------
 
@@ -572,21 +761,6 @@ class DashboardViewModel(
             milestone = if (type == EventType.TUMMY_TIME) milestone.trim().ifBlank { null } else null,
         )
     }
-
-    private data class Combined(
-        val children: List<Child>,
-        val timers: List<RunningTimer>,
-        val failedCount: Int,
-        val unsentCount: Int,
-        val drainActive: Boolean,
-    )
-
-    private data class Combined2(
-        val session: net.babybuddy.next.data.prefs.Session,
-        val isOnline: Boolean,
-        val refreshing: Boolean,
-        val loadingOlder: Boolean,
-    )
 
     companion object {
         const val TIMELINE_PAGE = 30
