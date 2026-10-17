@@ -147,3 +147,9 @@ CareDashboard @ 4×2:
 ## Beta verdict
 
 **Not acceptable as-is.** W1-W6 are the beta bar: the default placement never renders the spec'd layout, ~85% of the QuickActions area is dead space, the running state paints a bug-looking slab with no elapsed time, and both widgets' legibility depends on the user's wallpaper. W7-W11 (previews, child header, reconfigurable, resize awareness, 0 mL) should land in the same pass — all are small, local changes. W12-W14 follow.
+
+---
+
+## Resolution (Maintainer, 2026-10-17)
+
+W1–W13 implemented (commits `af4930d`, `e78dea3`, evidence `eaa94b7`; screenshots in `docs/screenshots/new-app/80-widget-fixes/`), W14 deferred. The product owner's mid-pass P1 (massive inner padding + truncated "Bott…"/"Diap…" labels — root cause: on API 33+ Glance only applies layout params from explicit modifiers, so rows without explicit width collapsed weighted cells to content) was fixed in `e78dea3`: every row carries `fillMaxWidth`, chips `fillMaxSize` in weighted cells, 4dp outer padding. Maintainer visually verified: 2×2 fills cleanly with full labels; running slot renders a rounded primaryContainer chip with live elapsed; CareDashboard shows the child header, no "0 mL" rows, rounded running row. 187 tests green. Documented deviations: running-row padding 8dp (tap-target floor), relaxed-bucket icons 24dp (consistency with W12), API <31 corner radii square (Glance limitation). Resize-by-automation remains impossible via adb; wide/tall buckets are unit-tested but not screenshot-verified on device.
