@@ -75,6 +75,7 @@ object TestTags {
     const val EDIT_RETRY = "edit/retry"
     const val EDIT_DELETE = "edit/delete"
     const val EDIT_VALIDATION = "edit/validation"
+    const val EDIT_DELETE_CONFIRM = "edit/delete_confirm"
 
     fun editStepperMinus(field: String) = "edit/stepper/${field}_minus"
 

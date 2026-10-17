@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import net.babybuddy.next.R
 import net.babybuddy.next.domain.FailureMessage
 import net.babybuddy.next.ui.TestTags
+import net.babybuddy.next.ui.dialogTestTags
 
 /**
  * Failure dialog for FAILED entries (spec §6.2, UX spec §5): the server's reason in parent
@@ -43,6 +44,7 @@ fun FailureDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dialogTestTags().testTag(TestTags.FAILURE_DIALOG),
         title = { Text("Couldn't sync this entry") },
         text = { Text(state.reason) },
         confirmButton = {
@@ -69,12 +71,12 @@ fun FailureDialog(
                 ) { Text("Delete locally", color = MaterialTheme.colorScheme.error) }
             }
         },
-        modifier = Modifier.testTag(TestTags.FAILURE_DIALOG),
     )
 
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            modifier = Modifier.dialogTestTags().testTag(TestTags.FAILURE_DIALOG + "/delete_confirm"),
             title = { Text("Delete entry?") },
             text = {
                 Text(

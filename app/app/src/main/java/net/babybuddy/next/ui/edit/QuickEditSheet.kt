@@ -50,6 +50,7 @@ import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.EventHeadline
 import net.babybuddy.next.domain.model.SyncState
 import net.babybuddy.next.ui.TestTags
+import net.babybuddy.next.ui.dialogTestTags
 import net.babybuddy.next.ui.dashboard.ChoiceChipRow
 import net.babybuddy.next.ui.dashboard.DiaperSwatches
 import net.babybuddy.next.ui.dashboard.dayLabel
@@ -89,7 +90,9 @@ fun QuickEditSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        modifier = Modifier.testTag(TestTags.EDIT_SHEET),
+        modifier = Modifier
+            .dialogTestTags()
+            .testTag(TestTags.EDIT_SHEET),
     ) {
         Column(
             modifier = Modifier
@@ -234,6 +237,7 @@ fun QuickEditSheet(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            modifier = Modifier.dialogTestTags().testTag(TestTags.EDIT_DELETE_CONFIRM),
             title = { Text("Delete entry?") },
             text = {
                 Text(
