@@ -87,6 +87,18 @@ class LoginViewModel(
                 }
             }
         }
+        // The ViewModel is store-backed and outlives single login attempts (see AppNavHost), so
+        // the session-expired notice must be reactive: a 401 pause during sync (spec §6.3.6)
+        // can arrive long after this instance was created, while the user is elsewhere.
+        viewModelScope.launch {
+            sessionStore.sessionFlow.collect { session ->
+                if (session.sessionExpired && _uiState.value.banner == null) {
+                    _uiState.update {
+                        it.copy(banner = LoginBanner.SESSION_EXPIRED, sessionPrefill = true)
+                    }
+                }
+            }
+        }
     }
 
     fun onServerUrlChange(value: String) = _uiState.update {

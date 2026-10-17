@@ -69,10 +69,6 @@ private fun RootNavigation(container: net.babybuddy.next.data.AppContainer) {
         else -> AppNavHost(
             startDestination = initialStart!!,
             container = container,
-            loginViewModel = LoginViewModel(
-                loginFlow = container.loginFlow,
-                sessionStore = container.sessionStore,
-            ),
         )
     }
 }
