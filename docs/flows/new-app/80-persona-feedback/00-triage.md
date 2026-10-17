@@ -1,6 +1,6 @@
-# Persona round 1 — Maintainer triage (draft; finalized after Elena)
+# Persona round 1 — Maintainer triage (FINAL 2026-10-17)
 
-Inputs: [jordan.md](jordan.md) · [sam.md](sam.md) · [priya.md](priya.md) · [elena.md](elena.md) · Verdicts so far: 3× FIX FIRST (0 REJECT). The core logging, wire fidelity, parent-language failure dialog, widgets' glance value, and duplicate guard all landed as intended.
+Inputs: [jordan.md](jordan.md) · [sam.md](sam.md) · [priya.md](priya.md) · [elena.md](elena.md) · Verdicts: 4× FIX FIRST (0 REJECT). Consensus #1 across all four personas: saves must appear in the timeline instantly (T1). The core logging, wire fidelity, parent-language failure dialog, widgets' glance value, and duplicate guard all landed as intended.
 
 ## Triage table
 
@@ -15,7 +15,8 @@ Inputs: [jordan.md](jordan.md) · [sam.md](sam.md) · [priya.md](priya.md) · [e
 | T7 | Cross-child running-timer awareness (Priya: "forgotten-nap factory") | **ACCEPT — P3** | When a timer runs for another child, show a quiet one-line indicator ("Zoe's nap running · 32m") on the dashboard. Not a switch. |
 | T8 | API key: paste-token option + exclude from backups (Priya) | **ACCEPT — P2** | `allowBackup=false` (or backup rules excluding the prefs) + an "advanced: paste API key" path on login. Matches original app's threat model; cheap. |
 | T9 | Widget picker previews (from UX round) already fixed; Elena pending | — | Confirm with Elena's session. |
-| T10 | (Reserved for Elena — first-run discoverability, label comprehension, Help) | pending | |
+| T10 | Login: Sign-in silently disabled with no reason; "Unencrypted connection" reads accusatory (Elena) | **ACCEPT — P2 copy/UX** | Show why submit is disabled (inline hint "Enter your server URL") and soften cleartext copy to neutral-informational ("This server uses http:// — data is not encrypted. Continue?"). |
+| T11 | Sleep panel lacks an "already asleep" backdated start control (Elena; reinforces Jordan T2) | merged into T2 | T2 covers timed-type panels incl. Sleep. |
 
 ## Sequencing
 1. Engineer engagement "round 1 fixes": T1 (regression, with capture `--assert` green) → T6 → T5 → T3 → T2 → T8 → T4 → T7. One commit per item, suite + capture-flows full run green, updated flow PNGs committed with the changes.

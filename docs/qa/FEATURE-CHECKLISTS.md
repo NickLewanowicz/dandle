@@ -1,5 +1,7 @@
 # Feature checklists — concrete verification steps
 
+> **Flow screenshots:** the canonical PNG set under `docs/screenshots/new-app/flows/` can be regenerated with `scripts/qa/capture-flows.sh` (see RUNBOOK "Flow capture & regression canaries") instead of hand-capturing. Run it after any UI-affecting change; `--assert` adds the save-visibility/edit-update regression canaries.
+
 Per `docs/qa/RUNBOOK.md` rule 7: every feature ships with an entry here in the
 same change. Steps name scripts (`scripts/qa/*`), testTags (resource-ids; see
 `app/app/src/main/java/net/babybuddy/next/ui/TestTags.kt`), and the expected
