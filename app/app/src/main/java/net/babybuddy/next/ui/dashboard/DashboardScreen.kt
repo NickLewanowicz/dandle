@@ -49,6 +49,7 @@ import net.babybuddy.next.domain.StopGuard
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
 import net.babybuddy.next.ui.TestTags
+import net.babybuddy.next.ui.dialogTestTags
 import net.babybuddy.next.ui.edit.QuickEditSheet
 
 /**
@@ -79,10 +80,22 @@ fun DashboardScreen(
     }
     val nowMillis = remember(tick) { container.serverClock.nowMillis() }
 
+    var stopDialog by remember { mutableStateOf<RunningTimer?>(null) }
+
+    // P2-4: guard requests from panel close / re-tap routes (the <=10s branch never emits —
+    // the VM discards silently and closes the panel there).
+    LaunchedEffect(Unit) {
+        viewModel.stopGuardRequests.collect { timer ->
+            if (timer != null) {
+                stopDialog = timer
+                viewModel.consumeStopGuardRequest()
+            }
+        }
+    }
+
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
-    var stopDialog by remember { mutableStateOf<RunningTimer?>(null) }
     var viewLastEntryUuid by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -245,7 +258,9 @@ fun DashboardScreen(
                     ) { Text("Keep") }
                 }
             },
-            modifier = Modifier.testTag(TestTags.STOP_DIALOG),
+            modifier = Modifier
+                .dialogTestTags()
+                .testTag(TestTags.STOP_DIALOG),
         )
     }
     state.duplicatePrompt?.let { prompt ->
@@ -266,7 +281,9 @@ fun DashboardScreen(
                     viewModel.onDuplicateDismiss()
                 }) { Text("View last entry") }
             },
-            modifier = Modifier.testTag(TestTags.DUPLICATE_DIALOG),
+            modifier = Modifier
+                .dialogTestTags()
+                .testTag(TestTags.DUPLICATE_DIALOG),
         )
     }
 

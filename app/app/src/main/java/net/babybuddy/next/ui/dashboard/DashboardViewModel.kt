@@ -433,6 +433,13 @@ class DashboardViewModel(
 
     override fun onClosePanel(type: EventType) {
         val panel = openPanel.value?.takeIf { it.type == type } ?: return
+        // P2-4: on a running timer the panel ✕ is a stop-guard trigger (UX spec §3) — never a
+        // silent close. <=10s discards silently (and closes); >10s raises the guard dialog:
+        // Save/Discard close the panel via their paths, Keep keeps both timer and panel open.
+        panel.timer?.let { running ->
+            requestStopGuard(running)
+            return
+        }
         openPanel.value = null
         val childId = uiState.value.activeChild?.id ?: return
         viewModelScope.launch {
