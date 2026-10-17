@@ -1,17 +1,20 @@
-# babybuddy-next — Canonical Functional Specification (v0.2 BETA)
+# babybuddy-next — Canonical Functional Specification (v0.3 BETA)
 
 > **This document is the product of record.** Any implementation (Kotlin/Compose, Flutter, React Native, or a future rewrite) must satisfy every MUST here. Screenshots referenced under `docs/screenshots/` are normative evidence. Parity baselines: the existing Baby Buddy for Android v2.6.4 flows mapped in `docs/flows/existing-app/`, and server behavior in `docs/research/babybuddy-api.md`.
 >
 > v0.2 changes (from user-persona review, docs/flows/new-app/02-user-persona-review.md): learning feeding defaults, 15-minute steppers + duration-preserving start moves, duplicate guard, parent-language failure messages, session-expiry reassurance, configurable widget buttons, Save-emphasized stop dialog.
+>
+> v0.3 changes (from persona beta round 1, docs/flows/new-app/80-persona-feedback/00-triage.md): panel "Started X min ago" adjust (§3), visible offline badge + "All synced" settle (§6.2), widget child-name prominence + cross-child timer line + stop-guard deep link (§7), login dead-button reason + neutral cleartext copy + paste-API-key path (§1.1).
 >
 > Status markers: **[P]** parity with existing app (must match), **[N]** new in this app.
 
 ## 1. Identity & connection
 
 ### 1.1 First launch → login **[P]**
-1. App opens to Login screen: fields **Server URL**, **Username**, **Password**; primary button **Sign in**.
+1. App opens to Login screen: fields **Server URL**, **Username**, **Password**; primary button **Sign in**. While the button is disabled (fields missing) it states WHAT is missing in place ("Enter the server URL, username, and password") — never a silent grey button. **[v0.3]**
+1a. **Advanced: paste an API key** **[N, v0.3]**: an expander swaps the username/password fields for a single **API key** field. The key is validated exactly like the password path's final step (`GET /api/children/` with `Authorization: Token <key>`; a best-effort `/api/profile` read supplies the display name) and persists the same session. The key is stored app-private and the app opts out of Android backups (allowBackup=false) — the key to the household's data never leaves the phone via the backup door.
 2. MUST accept URL with or without scheme (bare host gets `https://`). MUST trim trailing `/`.
-3. If scheme is `http://`: warning dialog — "Unencrypted connection. Your credentials and data travel in clear text. Continue?" → Continue / Cancel. **[P]** (original warns too)
+3. If scheme is `http://`: confirmation dialog — "This server uses http:// — data is not encrypted on the way. Continue?" → Continue / Cancel. **[P]** (original warns too; v0.3 copy is neutral-informational — plain http is common on home networks, and the wording must not read as an accusation)
 4. Sign-in sequence (server semantics per research doc §auth): GET `/login/` (csrf) → POST `/login/` → GET `/api/profile` → store `api_key` → validate with `GET /api/children/`.
 5. Error states (distinct copy, no stack traces):
    - Unreachable server ("Couldn't reach the server — check the URL and your connection.")
@@ -41,6 +44,7 @@ Common rules:
 - Timer >10s stop → confirmation dialog ("Stop timer? Keep / Discard / Save"). <10s → discard silently. **[P]** (exact original semantics per existing-app flow docs)
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
 - Save = create entry with start = timer start, end = stop time. **[P]**
+- **"Started X min ago" adjust (timed panels) [N, v0.3]**: the four timer panels carry one compact line — "Started just now" / "Started 20m ago" — with an **Adjust** expander offering **−15m / −5m / +5m / +15m** nudges and a **Pick time** platform time picker. The adjust backdates the ENTRY START only (start = timer start − adjust, clamped to the stop time); end and duration rules are unchanged. Clamp 0..24h; a future start is unreachable by construction. The adjustment persists with the panel draft and applies to both the panel Save and the stop-dialog Save.
 
 ### 3.1 Feeding **[P]**
 - Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed} — **solid food offers bottle, parent fed, self fed** (verified in the existing app: docs/flows/existing-app/04-feeding.md). Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
@@ -104,8 +108,9 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 
 ### 6.2 Sync-state badge per entry (timeline + sheets)
 - **SYNCED**: no badge (clean look).
-- **PENDING**: small muted clock icon + "Will sync" — shown while offline or queued.
+- **PENDING**: tonal pill — clock icon + "Will sync" in a secondary-container chip — shown while offline or queued. MUST be legible at arm's length: an offline-created row wears the badge from the moment it renders (no restart, no refresh required) [v0.3 visibility rule].
 - **FAILED**: subdued but noticeable amber/red-outline style + warning icon. Tap opens the failure dialog: server's error reason (e.g. "Another entry intersects the specified time period"), buttons: **Edit** (opens Quick Edit) / **Delete locally** / **Retry**. MUST NOT auto-delete. MUST NOT block other entries' sync.
+- **"All synced" settle [N, v0.3]**: when a drain completes while online, the header chip shows **"All synced ✓"** for ~4 seconds (suppressed while offline — a failed drain synced nothing — and outranked by the Failed and Syncing states) — the visible "caught up" moment after queued entries land. The chip's clean default stays hidden.
 
 ### 6.3 Scenarios (MUST all pass QA)
 1. Server down → create events → badge PENDING → server returns → events replayed in order → badges clear.
@@ -119,11 +124,13 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 
 ### 7.1 Quick Actions widget (2×2 or 2×1)
 - Buttons: **four configurable slots** (default: Sleep toggle, Bottle, Diaper, Pump) — user picks any quick action per slot in the widget config (§7.3). Tap = same create/toggle semantics as in-app (including "diaper opens app with panel pre-opened" for types needing input).
-- Active-timer state: button shows running state (accent + elapsed for sleep if space).
+- Active-timer state: button shows running state (accent + elapsed for sleep if space). Tap on a RUNNING slot → opens the app **directly into the stop-guard dialog for that timer** — the slot reads "tap to stop" and the tap does what it says (≤10s discards silently, in-app semantics; widgets cannot host the dialog themselves) [v0.3].
 
 ### 7.2 Care Dashboard widget (4×2 or resizable 4×3)
+- **Child-name header [v0.3]**: bold, full-contrast — the widget's WHO must be impossible to miss (the widget answers for one specific child).
 - Rows (configurable set, default all): **Last feed** (X min ago + amount), **Last diaper** (X min ago + wet/solid), **Last nap** (X h ago + duration), **Last pump** (X min ago + amount), plus **Running timer** row when one is active.
-- Tap a row → deep link: nap row starts a sleep timer; feed/diaper rows open the app with that quick-action panel open. Running-timer row → opens app to the timer.
+- Tap a row → deep link: nap row starts a sleep timer; feed/diaper rows open the app with that quick-action panel open. Running-timer row → opens the app **directly into the stop-guard dialog for that timer** (label "… — tap to stop"; ≤10s discards silently) [v0.3].
+- **Cross-child running line [N, v0.3]**: when a timer runs for a DIFFERENT child, the widget shows one quiet, unaccented line — "[FirstName]'s [nap|feed|diaper change|pump] · Xm" — that opens the app (that timer's stop guard lives on that child's screen). No line when no other-child timer runs; unknown child name reads "Another child" rather than guessing. Data isolation is unchanged — this line is awareness, not access.
 - Data: reads the local DB snapshot; refresh on app writes + on sync completion + WorkManager periodic (≥15 min) + system widget update allowance. Counters are minute-granular ("Xm ago"); staleness is acceptable and documented (no per-second widget ticking in beta).
 
 ### 7.3 Widget configuration
