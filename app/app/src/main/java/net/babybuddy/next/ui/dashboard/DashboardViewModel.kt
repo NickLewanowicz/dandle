@@ -188,19 +188,34 @@ class DashboardViewModel(
             net.babybuddy.next.widget.WidgetDeepLink.panelRequest.collect { type ->
                 if (type == null) return@collect
                 net.babybuddy.next.log.BbLog.d(TAG_UI, "deep link panel ${type.name}")
-                val children = withTimeoutOrNull(10_000) {
-                    childRepo.children.first { it.isNotEmpty() }
-                }
-                // The tap semantics read the resolved active child from uiState — wait for the
-                // combine to publish it (children -> active child -> uiState is ordered but the
-                // collector resumes between those steps).
-                val child = withTimeoutOrNull(10_000) {
-                    uiState.first { it.activeChild != null }.activeChild
-                }
-                if (children != null && child != null) {
+                awaitDashboardReady()?.let {
                     onQuickActionTap(type)
                 }
-                net.babybuddy.next.widget.WidgetDeepLink.consume()
+                net.babybuddy.next.widget.WidgetDeepLink.consume(type)
+            }
+        }
+        // T5 (spec §7.2): a widget "tap to stop" opens the app DIRECTLY into the stop guard for
+        // that timer — the same requestStopGuard the in-app ✕/re-tap uses (>10s dialog, ≤10s
+        // silent discard). A vanished timer (state race: stopped elsewhere) falls back to the
+        // plain quick-action semantics instead of stranding the request.
+        viewModelScope.launch {
+            net.babybuddy.next.widget.WidgetDeepLink.stopRequest.collect { type ->
+                if (type == null) return@collect
+                net.babybuddy.next.log.BbLog.d(TAG_UI, "deep link stop ${type.name}")
+                val ready = awaitDashboardReady()
+                val timer = ready
+                    ?.let { uiState.value.runningTimers.firstOrNull { it.kind == type } }
+                if (timer != null) {
+                    requestStopGuard(timer)
+                } else if (ready != null) {
+                    net.babybuddy.next.log.BbLog.d(
+                        TAG_UI,
+                        "deep link stop: no running ${type.name} timer " +
+                            "(running=${uiState.value.runningTimers.map { it.kind }}) — fallback to quick action",
+                    )
+                    onQuickActionTap(type)
+                }
+                net.babybuddy.next.widget.WidgetDeepLink.consumeStop(type)
             }
         }
         // Fresh start with no persisted selection: adopt the first child (spec §2 "default =
@@ -239,6 +254,16 @@ class DashboardViewModel(
             return
         }
     }
+
+    /**
+     * Deep-link taps read the resolved active child from uiState — wait (bounded) for the
+     * combine's first populated state (activeChild != null already implies the child list
+     * loaded — it is resolved from it); null = a childless server, consume as a no-op.
+     */
+    private suspend fun awaitDashboardReady(): DashboardUiState? =
+        withTimeoutOrNull(10_000) {
+            uiState.first { it.activeChild != null }
+        }
 
     override fun onCleared() {
         try {

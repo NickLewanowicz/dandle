@@ -16,11 +16,26 @@ object WidgetDeepLink {
 
     val panelRequest = MutableStateFlow<EventType?>(null)
 
+    /** T5: a "stop this timer" tap on a widget — the app opens straight into the stop guard. */
+    val stopRequest = MutableStateFlow<EventType?>(null)
+
     fun requestPanel(type: EventType) {
         panelRequest.value = type
     }
 
-    fun consume() {
-        panelRequest.value = null
+    fun requestStop(type: EventType) {
+        stopRequest.value = type
+    }
+
+    /**
+     * Consume only the request the caller actually handled — a plain `value = null` here could
+     * clobber a NEWER request that arrived while this one was being processed (lost tap).
+     */
+    fun consume(type: EventType) {
+        panelRequest.compareAndSet(type, null)
+    }
+
+    fun consumeStop(type: EventType) {
+        stopRequest.compareAndSet(type, null)
     }
 }

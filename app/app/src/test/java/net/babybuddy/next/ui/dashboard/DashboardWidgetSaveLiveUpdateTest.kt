@@ -57,6 +57,11 @@ class DashboardWidgetSaveLiveUpdateTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        org.robolectric.shadows.ShadowLog.stream = System.out
+        net.babybuddy.next.log.BbLog.enabled = true
+        // Deep-link channels are process-global singletons — isolate tests from each other.
+        net.babybuddy.next.widget.WidgetDeepLink.panelRequest.value = null
+        net.babybuddy.next.widget.WidgetDeepLink.stopRequest.value = null
         val context = ApplicationProvider.getApplicationContext<Context>()
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
@@ -183,4 +188,5 @@ class DashboardWidgetSaveLiveUpdateTest {
         }
         assertEquals(EventType.NOTE, latest.value.timeline.first().type)
     }
+
 }

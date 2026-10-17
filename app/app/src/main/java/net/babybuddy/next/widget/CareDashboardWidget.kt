@@ -60,9 +60,9 @@ private val SIZE_RELAXED = DpSize(250.dp, 180.dp) // 4×3 breathing room
  * refresh on app writes, drain completion, trampoline actions, and the 15-min periodic job
  * (see [WidgetRefresher]).
  *
- * Taps — unchanged by the UX pass (QA-pinned): nap row → starts the sleep timer via broadcast;
- * feed / diaper / pump rows → deep-link into the app with that panel pre-opened;
- * running-timer row → opens the plain app (timers strip).
+ * Taps: nap row → starts the sleep timer via broadcast; feed / diaper / pump rows → deep-link
+ * into the app with that panel pre-opened; running-timer row (T5) → deep-links into the app's
+ * stop-guard dialog for that timer — the label says "tap to stop" and the tap now does it.
  */
 class CareDashboardWidget : GlanceAppWidget() {
 
@@ -179,7 +179,9 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 label = "Running: ${WidgetStateMapper.slotLabel(running.kind)}",
                 detail = "${running.elapsedText} — tap to stop",
                 accent = true,
-                action = WidgetActions.openAppModifier(),
+                // T5: the row says "tap to stop" — the tap now deep-links straight into the
+                // app's stop-guard dialog for this timer (widgets cannot host the dialog).
+                action = WidgetActions.openStopTimerModifier(context, running.kind),
                 relaxed = relaxed,
             )
         }

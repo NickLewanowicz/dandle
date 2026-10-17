@@ -62,10 +62,15 @@ class MainActivity : ComponentActivity() {
 
     /** Parses the widget deep link into the deep-link channel (no-op when absent). */
     private fun openPanelFromIntent(intent: Intent?) {
-        val type = intent?.getStringExtra(net.babybuddy.next.widget.WidgetActions.EXTRA_OPEN_PANEL)
+        val panelType = intent?.getStringExtra(net.babybuddy.next.widget.WidgetActions.EXTRA_OPEN_PANEL)
             ?.let { raw -> runCatching { net.babybuddy.next.domain.model.EventType.valueOf(raw) }.getOrNull() }
-        if (type != null) {
-            net.babybuddy.next.widget.WidgetDeepLink.requestPanel(type)
+        if (panelType != null) {
+            net.babybuddy.next.widget.WidgetDeepLink.requestPanel(panelType)
+        }
+        val stopType = intent?.getStringExtra(net.babybuddy.next.widget.WidgetActions.EXTRA_STOP_TIMER)
+            ?.let { raw -> runCatching { net.babybuddy.next.domain.model.EventType.valueOf(raw) }.getOrNull() }
+        if (stopType != null) {
+            net.babybuddy.next.widget.WidgetDeepLink.requestStop(stopType)
         }
     }
 }

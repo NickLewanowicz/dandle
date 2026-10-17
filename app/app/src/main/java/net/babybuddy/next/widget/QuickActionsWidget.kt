@@ -73,10 +73,11 @@ private val SIZE_TALL = DpSize(110.dp, 220.dp) // 2×3+ grid, capped cells
  * the primaryContainer accent chip with the minute-granular elapsed replacing the label (W3/W4)
  * — no per-second ticking (UX spec §6: minute granularity, staleness documented).
  *
- * Tap semantics mirror the app (spec §3/§7.1) — unchanged by the UX pass (QA-pinned):
+ * Tap semantics mirror the app (spec §3/§7.1):
  *  - idle timer slot (Sleep per default) → starts the timer via [WidgetSleepStartAction];
- *  - RUNNING slot → opens the app (timers strip) — widgets cannot host the >10s stop-guard
- *    dialog, and the decision renders from state so there is no launch-time race;
+ *  - RUNNING slot → deep-links straight into the app's >10s stop-guard dialog for that timer
+ *    (T5: the label reads "tap to stop" and now does; widgets cannot host the dialog themselves,
+ *    and the decision renders from state so there is no launch-time race);
  *  - Bottle / Diaper / Pump slots → deep-link into the app with that panel pre-opened.
  *
  * Config (child + four slots, spec §7.3) lives in this widget's Preferences state, written by
@@ -222,7 +223,9 @@ private fun SlotCell(
     val colors = GlanceTheme.colors
     val running = slot.running
     val action = if (running) {
-        WidgetActions.openAppModifier()
+        // T5: the slot reads "tap to stop" — the tap deep-links straight into the app's
+        // stop-guard dialog for this timer (≤10s discards silently, in-app semantics).
+        WidgetActions.openStopTimerModifier(context, slot.type)
     } else {
         GlanceModifier.clickable(slotAction(context, slot.type))
     }
