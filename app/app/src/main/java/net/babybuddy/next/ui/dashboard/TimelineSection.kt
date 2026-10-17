@@ -224,7 +224,10 @@ private fun TimelineRow(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    event.noteText?.takeIf { it.isNotBlank() }?.let { note ->
+                    // Note entries: headline IS the first line — don't repeat it below (UX polish).
+                    val preview = event.noteText
+                        ?.takeIf { it.isNotBlank() && it.trim() != EventHeadline.headline(event).trim() }
+                    preview?.let { note ->
                         Text(
                             note,
                             style = MaterialTheme.typography.bodySmall,

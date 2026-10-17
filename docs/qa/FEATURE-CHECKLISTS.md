@@ -162,6 +162,50 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 ---
 
+## 9. QuickActions widget placement + taps (spec §7.1, §7.3)
+
+**Goal:** the 2×2 quick-actions widget places, configures, and drives in-app semantics from the home screen.
+
+**Steps**
+1. Fresh session: `scripts/qa/fresh-install-login.sh` (widget taps resolve the active child from the persisted selection).
+2. Long-press launcher → Widgets → drag "Quick actions" to the home screen → the configure screen opens (`QuickActionsConfigActivity`): pick the child and four buttons (default Sleep / Bottle / Diaper / Pump) → **Save**.
+3. Tap the **Sleep** cell (idle) → NO app launch; a server timer appears (`scripts/qa/server-log.sh` shows `POST /api/timers/`), the cell turns accented with minute-granular elapsed, and the CareDashboard running row appears if placed.
+4. Tap the **Sleep** cell (running) → the app opens on the timers strip (the >10s stop guard is an in-app dialog; widgets open the app instead — see `docs/flows/new-app/widgets.md`).
+5. Tap **Diaper** → the app opens with the Diaper panel pre-opened (wet/solid toggles). Same for Bottle (feeding timer + panel) and Pump.
+6. Long-press widget → Configure again → change a slot → Save → the cell updates in place.
+
+**Tags:** launcher-driven (no in-app tags); verify via `adb shell uiautomator dump` on the home screen.
+
+**Expected server requests:** `POST /api/timers/` on sleep start; `POST /api/feedings/` + timer DELETE after an in-app feeding save; nothing on pure navigation taps.
+
+**Expected UI states:** running slot = secondaryContainer accent + elapsed text ("12m"); idle slots = surface; labels hidden in the 4×1 resized variant.
+
+**JVM tests:** `QuickActionActionsTest` (facade semantics), `WidgetStateMapperTest` (slot accents + elapsed).
+
+---
+
+## 10. CareDashboard widget rows + refresh (spec §7.2)
+
+**Goal:** the 4×2 care dashboard shows last feed/diaper/nap/pump (+ running row) and refreshes without opening the app.
+
+**Steps**
+1. With data on the server: place "Care dashboard" (long-press → Configure: child + row visibility) → rows appear: `Last feed · 12m · 120 mL` shape, minute-granular.
+2. In the app: log a new feeding → the widget's feed row updates WITHOUT opening anything (in-app write refresh).
+3. Stop the server (`docker stop babybuddy`), log two overlapping naps in-app → PENDING → start the server → after drain the widget reflects the synced rows (drain-completion refresh).
+4. Nap row tap → sleep timer starts (trampoline; no app launch unless a sleep timer already runs). Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
+5. Wait 15+ minutes (or `adb shell am broadcast -a android.intent.action.TIME_SET` to nudge the scheduler in QA) → periodic refresh keeps "Xm ago" honest.
+
+**Tags:** launcher-driven; in-app steps use standard dashboard tags.
+
+**Expected server requests:** normal sync chain (checklist 1); no extra writes from widget taps except the sleep-timer start.
+
+**Expected UI states:** rows with icon + label + `Xm · detail`; running row = secondaryContainer accent, "Running: Sleep — tap to stop"; empty data → the row is omitted (never a blank stub).
+
+**JVM tests:** `WidgetStateMapperTest` (rows, visibility, cross-child isolation, since/duration edges incl. future skew and days).
+
+
+---
+
 ## TEMPLATE (copy for every new feature)
 
 ## N. <Feature name> (spec §<ref>)

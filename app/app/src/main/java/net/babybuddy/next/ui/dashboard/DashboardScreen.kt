@@ -220,29 +220,10 @@ fun DashboardScreen(
         )
     }
     if (showHelpDialog) {
-        AlertDialog(
-            onDismissRequest = { showHelpDialog = false },
-            title = { Text("Help") },
-            text = { Text("Help arrives with the beta polish pass.") },
-            confirmButton = {
-                TextButton(onClick = { showHelpDialog = false }) { Text("OK") }
-            },
-        )
+        net.babybuddy.next.ui.about.HelpDialog(onDismiss = { showHelpDialog = false })
     }
     if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text("About") },
-            text = {
-                Text(
-                    "Baby Buddy (beta)\nA companion app for self-hosted Baby Buddy servers.\n\n" +
-                        "About: version, licenses, and upstream links arrive with the beta polish pass.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text("OK") }
-            },
-        )
+        net.babybuddy.next.ui.about.AboutDialog(onDismiss = { showAboutDialog = false })
     }
     stopDialog?.let { timer ->
         val elapsed = (nowMillis - timer.startedAtMillis).coerceAtLeast(0)
@@ -376,7 +357,8 @@ private fun HeaderRow(
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     children.forEach { child ->
                         DropdownMenuItem(
-                            text = { Text(child.firstName) },
+                            // Full names in the dropdown (original-app parity); chip stays short.
+                            text = { Text(listOfNotNull(child.firstName, child.lastName).joinToString(" ")) },
                             onClick = {
                                 onSelectChild(child.id)
                                 menuOpen = false
