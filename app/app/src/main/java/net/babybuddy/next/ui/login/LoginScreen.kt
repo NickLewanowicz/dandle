@@ -94,8 +94,11 @@ fun LoginScreen(
                     label = { Text("Server URL") },
                     singleLine = true,
                     supportingText = {
-                        if (state.showNormalizationHint && normalized != null) {
-                            Text("Will use ${normalized.url}")
+                        when {
+                            state.showNormalizationHint && normalized != null ->
+                                Text("Will use ${normalized.url}")
+                            state.serverUrl.isBlank() ->
+                                Text("The address your family's Baby Buddy lives at.")
                         }
                     },
                     isError = state.banner == LoginBanner.UNREACHABLE,
@@ -185,6 +188,21 @@ fun LoginScreen(
                             strokeWidth = 2.dp,
                         )
                         Text("Signing in…", modifier = Modifier.padding(start = 12.dp))
+                    } else if (!state.canSubmit) {
+                        // T10 (Elena): a greyed Sign in with no reason reads as "I broke it".
+                        // The disabled button says what is missing — no separate hint row, so
+                        // the layout never grows and the reason is exactly where she taps.
+                        Text(
+                            when {
+                                state.serverUrl.isBlank() && state.apiKeyMode ->
+                                    "Enter the server URL to continue"
+                                state.serverUrl.isBlank() ->
+                                    "Enter the server URL, username, and password"
+                                state.apiKeyMode -> "Paste your API key to continue"
+                                else -> "Enter your username and password"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                     } else {
                         Text("Sign in")
                     }
@@ -210,7 +228,9 @@ fun LoginScreen(
                 AlertDialog(
                     onDismissRequest = viewModel::onCleartextCancel,
                     title = { Text("Unencrypted connection") },
-                    text = { Text("Your credentials and data travel in clear text. Continue?") },
+                    // T10 (Elena): neutral-informational — nothing she did wrong; many family
+                    // servers run plain http inside their own home network.
+                    text = { Text("This server uses http:// — data is not encrypted on the way. Continue?") },
                     confirmButton = {
                         Button(onClick = viewModel::onCleartextContinue) { Text("Continue") }
                     },

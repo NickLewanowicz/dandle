@@ -43,6 +43,8 @@ class MainActivitySmokeTest {
         }
         composeRule.onNodeWithTag(TestTags.LOGIN_SUBMIT)
             .assertExists()
-        composeRule.onNodeWithText("Sign in").assertExists()
+        // T10: the disabled button says WHAT is missing instead of a bare "Sign in".
+        composeRule.onNodeWithText("Enter the server URL, username, and password", substring = true)
+            .assertExists()
     }
 }
