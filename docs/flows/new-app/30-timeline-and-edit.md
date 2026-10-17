@@ -1,0 +1,46 @@
+# 30 — Timeline + Quick Edit (spec §4–§5) — QA flow doc
+
+**Purpose:** verify timeline structure (day groups, §4.1 headlines, durations, pull-to-refresh, pagination order) and the Quick Edit sheet (steppers, duration-preserving start moves, inline validation, delete-with-confirm, server PATCH).
+
+## How to verify
+
+- Login + at least one entry of each type (see `20-quick-actions.md`).
+- Tags: `dashboard/timeline`, `dashboard/timeline/<localUuid>`, `dashboard/timeline/server:<TYPE>:<id>`, `dashboard/day_header`, `dashboard/badge_pending`, `dashboard/badge_failed`. **All `edit/*` tags (sheet, steppers, save, delete, validation) are defined in TestTags.kt but absent from the a11y tree — QA finding #8** — drive the sheet via fresh `uiautomator dump` bounds (buttons identified by text: `−15m/−1m/+1m/+15m`, `Save`, `Delete`, `Today HH:MM`).
+- Server: `scripts/qa/api.sh GET /api/<type>/<id>/` after each edit; `scripts/qa/server-log.sh` must show `PATCH /api/<type>/<id>/` (never PUT) for saves and `DELETE /api/changes/<id>/` for deletes.
+
+## Observed
+
+### Timeline structure
+- Day groups render ("Today", "Yesterday" verified; date headers not reachable in seed range). Durations in `12m` / `1h 00m` / `46s` form ✓; time-of-day trailing column ✓.
+- Headlines match §4.1: `Bottle · 120 mL`, `Bottle · 3 mL`, `Sleep` (+ note preview "QA night nap"), `Pump · 85 mL`, `Tummy time · Rolled over!` / `· Grabbed toy`, note first line ("Loved the mobile today!", "Pediatrician called — next checkup Nov 14."), diaper `Wet` / `Wet + Solid (Yellow)` + swatch. **Exception:** diaper headlines carry a redundant "(Color)" parenthetical — finding #6.
+- Pull-to-refresh triggers the sync chain (verified via `GET /api/feedings|changes|…` in server log after swipe).
+- Ordering is newest-first within each group.
+
+### Quick Edit sheet
+- Tap a timeline row → sheet opens with type-appropriate fields, mirroring §3 (diaper: wet/solid/color/amount + single TIME row; sleep/feeding/pumping/tummy: type fields + START and END rows) ✓ UX §4 anatomy.
+- **Steppers:** diaper TIME `−15m` ×2 moved 22:17 → 21:47 → `PATCH /api/changes/9/` 200, time exact, all other fields intact ✓.
+- **Duration-preserving start move:** feeding sheet, START `+15m` → START 22:22 **and END auto-shifted to 22:25** (duration 3 m preserved) → `PATCH /api/feedings/11/` 200 with `duration "00:03:07"` unchanged ✓ (spec §5).
+- **Inline validation:** END `−15m` ×2 below START → message **"End time must be after start time."** shown; Save tapped → no PATCH fired, sheet stays open (save correctly blocked) ✓.
+- **Delete:** sheet Delete → confirm dialog "Delete entry? / This removes it from the app and the server." (Cancel/Delete) → confirm → `DELETE /api/changes/10/` 204, row removed in place immediately ✓ (spec §4.2).
+- Edit save updates the row in place (times in rows changed after edits: 22:22, 21:47 visible) ✓.
+
+## Branches / states
+
+| Branch | Result |
+|---|---|
+| Edit time (non-timed) | PATCH, row updates |
+| Move START of timed entry | END shifts, duration preserved |
+| END before START | Inline reason, Save blocked |
+| Delete | Confirm dialog → server DELETE → row gone |
+| Edit rejected by server | **BROKEN — see finding #3** |
+
+## Screenshots
+
+`docs/screenshots/new-app/30-timeline-edit/01…12` — edit sheet (diaper + feeding), nudged time, duration-preserving move, delete confirm, post-delete list, day headers (Yesterday), list states.
+
+## Deviations from spec
+
+- **P1** — locally created entries render in a separate duplicate "Today" group instead of merging with fetched entries (spec §2 grouping); and new saves do not appear until restart/refresh (spec §3/UX §3 insert-as-confirmation). Findings #1/#2.
+- **P1** — server-rejected edit: no conflict dialog, row vanishes, unresolvable (spec §3.8/§5 conflict dialog + §6.2 FAILED badge). Finding #3.
+- **P3** — diaper headline parenthetical. Finding #6.
+- **P3** — `edit/*` tags absent from the a11y tree despite FEATURE-CHECKLISTS 5. Finding #8.
