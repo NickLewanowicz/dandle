@@ -24,6 +24,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -33,6 +34,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.state.GlanceStateDefinition
@@ -48,13 +50,29 @@ import net.babybuddy.next.ui.dashboard.iconRes
 
 
 
+// Responsive options bucketed on both axes (W2). LocalSize inside the composition is the
+// selected option, so branching on it picks the branch per placed size. 110dp fits 2 launcher
+// cells with margin (minWidth in quick_actions_widget_info.xml must stay at or below this —
+// W1), 250dp covers 3-4 cells across, 220dp covers 2-3 rows tall.
+private val SIZE_GRID = DpSize(110.dp, 110.dp) // 2×2 grid
+private val SIZE_ROW = DpSize(250.dp, 110.dp) // 4×1 / 3×1 chip row
+private val SIZE_TALL = DpSize(110.dp, 220.dp) // 2×3+ grid, capped cells
+
 /**
  * QuickActions widget (spec §7.1, UX spec §6): four configurable slots, default Sleep toggle,
- * Bottle, Diaper, Pump. 2×2 with labels; renders as a 4×1 icon-only row when the host sizes it
- * wide (2×1 home cells). Running slots get the tonal accent + minute-granular elapsed — no
- * per-second ticking (UX spec §6: minute granularity, staleness documented).
+ * Bottle, Diaper, Pump. Layout buckets on BOTH axes (UX-review W2):
  *
- * Tap semantics mirror the app (spec §3/§7.1):
+ *  - narrow (default 2×2 placement): the spec'd 2×2 grid — per-cell rounded chips with
+ *    24dp glyph + 12sp label (W12/W13);
+ *  - wide-short (4×1/3×1): one 4-across chip row, capped to content height and vertically
+ *    centered — never stretched to the frame height (W2);
+ *  - narrow-tall (2×3+): the grid, centered, cells capped to chip content.
+ *
+ * Idle cells read as surface buttons (surfaceVariant chips, W5); a running timer slot swaps to
+ * the primaryContainer accent chip with the minute-granular elapsed replacing the label (W3/W4)
+ * — no per-second ticking (UX spec §6: minute granularity, staleness documented).
+ *
+ * Tap semantics mirror the app (spec §3/§7.1) — unchanged by the UX pass (QA-pinned):
  *  - idle timer slot (Sleep per default) → starts the timer via [WidgetSleepStartAction];
  *  - RUNNING slot → opens the app (timers strip) — widgets cannot host the >10s stop-guard
  *    dialog, and the decision renders from state so there is no launch-time race;
@@ -65,7 +83,7 @@ import net.babybuddy.next.ui.dashboard.iconRes
  */
 class QuickActionsWidget : GlanceAppWidget() {
 
-    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SIZE_NARROW, SIZE_WIDE))
+    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SIZE_GRID, SIZE_ROW, SIZE_TALL))
 
     @Suppress("UNCHECKED_CAST")
     override val stateDefinition: GlanceStateDefinition<Preferences> =
@@ -88,15 +106,12 @@ class QuickActionsWidget : GlanceAppWidget() {
 
         provideContent {
             GlanceTheme {
-                QuickActionsContent(slots, wide = LocalSize.current.width >= SIZE_WIDE.width)
+                QuickActionsContent(slots)
             }
         }
     }
 
     companion object {
-        private val SIZE_NARROW = DpSize(150.dp, 110.dp)
-        private val SIZE_WIDE = DpSize(240.dp, 110.dp)
-
         val KEY_CHILD_ID = longPreferencesKey("child_id")
         private fun slotKey(index: Int) = stringPreferencesKey("slot$index")
 
@@ -128,27 +143,49 @@ class QuickActionsWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 @Composable
-private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>, wide: Boolean) {
+private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>) {
+    // W5: paint the widget surface so text/icons never float on the wallpaper. widgetBackground
+    // (not background) is the launcher's Material-3 widget surface token — system dynamic color
+    // on S+ (system_accent2_50/800 day/night), resource-resolved at apply time by the host.
     Box(
-        modifier = GlanceModifier.fillMaxSize().padding(2.dp),
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(GlanceTheme.colors.widgetBackground)
+            .padding(2.dp),
         contentAlignment = Alignment.Center,
     ) {
         val context = LocalContext.current
-        if (wide) {
-            Row(modifier = GlanceModifier.fillMaxSize()) {
-                slots.forEachIndexed { index, slot ->
-                    Box(modifier = GlanceModifier.defaultWeight()) {
-                        SlotCell(context, slot, compact = true)
+        if (LocalSize.current.width >= SIZE_ROW.width) {
+            // Wide-short (W2): one chip row capped to content height, vertically centered.
+            // Width-only fill: weighted cells split the width evenly; height wraps the chips.
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                slots.forEach { slot ->
+                    Box(
+                        modifier = GlanceModifier.defaultWeight(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        SlotCell(context, slot)
                     }
                 }
             }
         } else {
-            Column(modifier = GlanceModifier.fillMaxSize()) {
+            // Grid (2×2 or tall): content-sized cells, centered — never stretched to the frame.
+            // fillMaxWidth (not fillMaxSize) keeps cell height capped to chip content (W2).
+            Column(
+                modifier = GlanceModifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 slots.chunked(2).forEach { rowSlots ->
-                    Row(modifier = GlanceModifier.defaultWeight()) {
+                    Row {
                         rowSlots.forEach { slot ->
-                            Box(modifier = GlanceModifier.defaultWeight()) {
-                                SlotCell(context, slot, compact = false)
+                            Box(
+                                modifier = GlanceModifier.defaultWeight(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                SlotCell(context, slot)
                             }
                         }
                         repeat(2 - rowSlots.size) {
@@ -165,32 +202,41 @@ private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>, 
 private fun SlotCell(
     context: Context,
     slot: WidgetStateMapper.QuickActionSlot,
-    compact: Boolean,
 ) {
     val colors = GlanceTheme.colors
-    val modifier = when {
-        slot.running -> GlanceModifier
-            .background(colors.secondaryContainer)
-            .then(WidgetActions.openAppModifier())
-        else -> GlanceModifier.clickable(slotAction(context, slot.type))
+    val running = slot.running
+    val action = if (running) {
+        WidgetActions.openAppModifier()
+    } else {
+        GlanceModifier.clickable(slotAction(context, slot.type))
     }
-    Box(
-        modifier = GlanceModifier.fillMaxSize().padding(3.dp).then(modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(
-                provider = ImageProvider(slot.type.iconRes()),
-                contentDescription = slot.label,
-                modifier = GlanceModifier.size(26.dp),
-                colorFilter = ColorFilter.tint(colors.onSurface),
-            )
-            if (!compact) {
+    val fill = if (running) colors.primaryContainer else colors.surfaceVariant
+    val content = if (running) colors.onPrimaryContainer else colors.onSurface
+    // 2dp gap between chips; the chip itself is a rounded state surface (W3/W5), sized to its
+    // content (24dp glyph + 12sp label, W12/W13) so cells never stretch to the frame.
+    Box(modifier = GlanceModifier.padding(2.dp)) {
+        Box(
+            modifier = GlanceModifier
+                .then(action)
+                .background(fill)
+                .cornerRadius(12.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    provider = ImageProvider(slot.type.iconRes()),
+                    contentDescription = slot.label,
+                    modifier = GlanceModifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(content),
+                )
+                // W4: the running slot renders the elapsed time; if the state race leaves it
+                // null, fall back to the label — never an empty chip.
                 Text(
-                    slot.label,
+                    if (running) slot.elapsedText ?: slot.label else slot.label,
                     style = TextStyle(
-                        color = colors.onSurface,
-                        fontSize = 11.sp,
+                        color = content,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                     ),
                     maxLines = 1,

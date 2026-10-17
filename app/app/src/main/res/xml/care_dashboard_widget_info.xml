@@ -6,6 +6,9 @@
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable"
     android:configure="net.babybuddy.next.widget.CareDashboardConfigActivity"
     android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewLayout="@layout/preview_care_dashboard"
+    android:previewImage="@drawable/preview_care_dashboard"
     android:description="@string/care_dashboard_widget_description" />

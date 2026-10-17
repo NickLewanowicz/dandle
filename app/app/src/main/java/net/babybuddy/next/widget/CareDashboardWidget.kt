@@ -2,6 +2,7 @@ package net.babybuddy.next.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
@@ -15,10 +16,13 @@ import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -43,17 +47,26 @@ import net.babybuddy.next.ui.dashboard.iconRes
 
 
 
+// W11: both buckets share the 4-cell width; the height selects the layout density.
+// LocalSize inside the composition is the selected option.
+private val SIZE_COMPACT = DpSize(250.dp, 110.dp) // 4×2
+private val SIZE_RELAXED = DpSize(250.dp, 180.dp) // 4×3 breathing room
+
 /**
- * CareDashboard widget (spec §7.2, UX spec §6): 4×2 (resizable 4×3) with rows Last feed /
- * Last diaper / Last nap / Last pump (minute-granular, staleness documented) plus a
- * running-timer row when one is active. Data is a Room snapshot; refresh on app writes, drain
- * completion, trampoline actions, and the 15-min periodic job (see [WidgetRefresher]).
+ * CareDashboard widget (spec §7.2, UX spec §6): 4×2 (resizable 4×3) with a child-name header
+ * (UX-review W8) and rows Last feed / Last diaper / Last nap / Last pump (minute-granular,
+ * staleness documented) plus a running-timer row when one is active. Two size buckets (W11):
+ * compact (4×2) and relaxed (4×3 — breathing room, larger type). Data is a Room snapshot;
+ * refresh on app writes, drain completion, trampoline actions, and the 15-min periodic job
+ * (see [WidgetRefresher]).
  *
- * Taps: nap row → [WidgetTrampolineActivity] (starts the sleep timer, spec §7.2);
+ * Taps — unchanged by the UX pass (QA-pinned): nap row → starts the sleep timer via broadcast;
  * feed / diaper / pump rows → deep-link into the app with that panel pre-opened;
  * running-timer row → opens the plain app (timers strip).
  */
 class CareDashboardWidget : GlanceAppWidget() {
+
+    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(SIZE_COMPACT, SIZE_RELAXED))
 
     @Suppress("UNCHECKED_CAST")
     override val stateDefinition: GlanceStateDefinition<Preferences> =
@@ -66,6 +79,11 @@ class CareDashboardWidget : GlanceAppWidget() {
         val state = if (childId == null) {
             WidgetStateMapper.CareDashboardState(rows = emptyList(), running = null)
         } else {
+            // W8: resolve the child name for the header from the Room snapshot.
+            val childName = container.childRepository.children
+                .first()
+                .firstOrNull { it.id == childId }
+                ?.firstName
             WidgetStateMapper.careDashboard(
                 events = container.eventRepository
                     .observeTimeline(childId)
@@ -74,6 +92,7 @@ class CareDashboardWidget : GlanceAppWidget() {
                 childId = childId,
                 nowMillis = container.serverClock.nowMillis(),
                 visible = visibleRows(prefs),
+                childName = childName,
             )
         }
 
@@ -113,10 +132,29 @@ class CareDashboardWidgetReceiver : GlanceAppWidgetReceiver() {
 @Composable
 private fun CareDashboardContent(context: Context, state: WidgetStateMapper.CareDashboardState) {
     val colors = GlanceTheme.colors
+    // W11: the relaxed bucket gets breathing room and larger type; compact keeps 4×2 metrics.
+    val relaxed = LocalSize.current.height >= SIZE_RELAXED.height
+    // W5: paint the widget surface (launcher's Material-3 widget token, day/night) so rows
+    // never float on the wallpaper.
     Column(
-        modifier = GlanceModifier.fillMaxSize().padding(8.dp),
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(colors.widgetBackground)
+            .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        state.childName?.let { name ->
+            Text(
+                name,
+                style = TextStyle(
+                    color = colors.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.padding(bottom = 2.dp),
+            )
+        }
         state.rows.forEach { row ->
             // P2-5: the nap row STARTS the sleep timer via broadcast — the launcher stays
             // foreground (matching the QuickActions sleep cell). When a sleep timer already
@@ -132,6 +170,7 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 detail = listOfNotNull(row.sinceText, row.detailText).joinToString(" · "),
                 accent = false,
                 action = action,
+                relaxed = relaxed,
             )
         }
         state.running?.let { running ->
@@ -141,6 +180,7 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 detail = "${running.elapsedText} — tap to stop",
                 accent = true,
                 action = WidgetActions.openAppModifier(),
+                relaxed = relaxed,
             )
         }
     }
@@ -153,31 +193,47 @@ private fun CareRow(
     detail: String,
     accent: Boolean,
     action: GlanceModifier,
+    relaxed: Boolean,
 ) {
     val colors = GlanceTheme.colors
+    // W6: the accent is a rounded primaryContainer chip painted BEFORE the padding (so it is
+    // not a full-bleed square bar) and the content insets horizontally. 24dp glyph + 8dp
+    // vertical padding keeps the running row at the ≥40dp tap target.
+    val chip = if (accent) {
+        GlanceModifier
+            .background(colors.primaryContainer)
+            .cornerRadius(12.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    } else {
+        GlanceModifier.padding(vertical = if (relaxed) 6.dp else 2.dp)
+    }
+    val content = if (accent) colors.onPrimaryContainer else colors.onSurface
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .then(if (accent) GlanceModifier.background(colors.secondaryContainer) else GlanceModifier)
+            .then(chip)
             .then(action),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
             provider = ImageProvider(icon),
             contentDescription = label,
-            modifier = GlanceModifier.size(18.dp).padding(end = 2.dp),
-            colorFilter = ColorFilter.tint(colors.onSurface),
+            modifier = GlanceModifier.size(24.dp),
+            colorFilter = ColorFilter.tint(content),
         )
         Text(
             label,
-            style = TextStyle(color = colors.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+            style = TextStyle(
+                color = content,
+                fontSize = if (relaxed) 14.sp else 13.sp,
+                fontWeight = FontWeight.Medium,
+            ),
             maxLines = 1,
-            modifier = GlanceModifier.defaultWeight(),
+            modifier = GlanceModifier.defaultWeight().padding(start = 6.dp),
         )
         Text(
             detail,
-            style = TextStyle(color = colors.onSurface, fontSize = 12.sp),
+            style = TextStyle(color = content, fontSize = if (relaxed) 13.sp else 12.sp),
             maxLines = 1,
         )
     }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static preview surfaces (W7): the picker renders previewLayout/previewImage outside our
+     theme, so chips use literal Material-3 baseline colors approximating the widget's
+     dynamic-color look. Shape drawables are RemoteViews-safe. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="#F7F2FA" />
+</shape>

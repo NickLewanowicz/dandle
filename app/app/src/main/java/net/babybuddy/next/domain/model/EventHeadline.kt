@@ -2,7 +2,7 @@ package net.babybuddy.next.domain.model
 
 /**
  * Timeline headline formats — MUST be consistent app-wide (functional spec §4.1):
- * - Feeding: "Bottle · 120 mL" (method · amount; amount omitted when null)
+ * - Feeding: "Bottle · 120 mL" (method · amount; amount omitted when null or ≤ 0 — UX-review W9)
  * - Diaper:  "Wet" / "Solid" / "Wet + Solid" (+ color name)
  * - Sleep:   "Sleep"
  * - Note:    first line of the note text
@@ -14,7 +14,7 @@ object EventHeadline {
     fun headline(event: Event): String = when (event.type) {
         EventType.FEEDING -> {
             val method = event.feedingMethod?.replaceFirstChar { it.uppercase() } ?: "Feed"
-            val amount = event.amount?.let { " · ${trimNumber(it)} mL" }.orEmpty()
+            val amount = amountText(event)
             "$method$amount"
         }
         EventType.CHANGE -> {
@@ -34,7 +34,7 @@ object EventHeadline {
         EventType.SLEEP -> "Sleep"
         EventType.NOTE -> event.noteText?.lineSequence()?.firstOrNull().orEmpty().ifBlank { "Note" }
         EventType.PUMPING -> {
-            val amount = event.amount?.let { " · ${trimNumber(it)} mL" }.orEmpty()
+            val amount = amountText(event)
             "Pump$amount"
         }
         EventType.TUMMY_TIME -> {
@@ -42,6 +42,17 @@ object EventHeadline {
             "Tummy time$milestone"
         }
     }
+
+    /**
+     * " · 120 mL" segment, omitted when the amount is null or ≤ 0 (UX-review W9: a failed-sync
+     * pump with amount 0 must not present "0 mL" as data; kept in lockstep with the widget
+     * mapper's [WidgetStateMapper.detailText]).
+     */
+    private fun amountText(event: Event): String =
+        event.amount
+            ?.takeIf { it > 0.0 }
+            ?.let { " · ${trimNumber(it)} mL" }
+            .orEmpty()
 
     /** 120.0 prints as "120", 2.5 as "2.5". */
     private fun trimNumber(value: Double): String =

@@ -31,6 +31,7 @@ object WidgetStateMapper {
     )
 
     data class CareDashboardState(
+        val childName: String? = null,
         val rows: List<CareRow>,
         val running: RunningTimerState?,
     )
@@ -63,7 +64,8 @@ object WidgetStateMapper {
 
     /**
      * CareDashboard rows (spec §7.2): last event per type, newest activity first per row,
-     * plus the running-timer row when one is active. [visible] filters configured rows.
+     * plus the running-timer row when one is active. [visible] filters configured rows;
+     * [childName] feeds the widget header (UX-review W8).
      */
     fun careDashboard(
         events: List<Event>,
@@ -71,6 +73,7 @@ object WidgetStateMapper {
         childId: Long,
         nowMillis: Long,
         visible: Set<EventType>,
+        childName: String? = null,
     ): CareDashboardState {
         val latestByType = visible.associateWith { type ->
             events.filter { it.type == type && it.childId == childId }
@@ -88,7 +91,7 @@ object WidgetStateMapper {
         val running = timers.firstOrNull { it.childId == childId }?.let {
             RunningTimerState(it.kind, elapsedMinutesText(nowMillis - it.startedAtMillis))
         }
-        return CareDashboardState(rows = rows, running = running)
+        return CareDashboardState(childName = childName, rows = rows, running = running)
     }
 
     fun rowLabel(type: EventType): String = when (type) {
@@ -100,10 +103,14 @@ object WidgetStateMapper {
         EventType.TUMMY_TIME -> "Last tummy time"
     }
 
-    /** "12m ago" · amount for feed/pump, wet/solid for diaper, duration for nap (spec §7.2). */
+    /**
+     * "12m ago" · amount for feed/pump, wet/solid for diaper, duration for nap (spec §7.2).
+     * Amount ≤ 0 reads as unknown (UX-review W9): the known failed-sync pump with amount 0
+     * must not present "0 mL" as data. Kept in lockstep with [EventHeadline].
+     */
     fun detailText(event: Event): String? = when (event.type) {
         EventType.FEEDING, EventType.PUMPING ->
-            event.amount?.let { amount -> "${trimNumber(amount)} mL" }
+            event.amount?.takeIf { it > 0.0 }?.let { amount -> "${trimNumber(amount)} mL" }
         EventType.CHANGE -> when {
             event.wet == true && event.solid == true -> "Wet + Solid"
             event.wet == true -> "Wet"

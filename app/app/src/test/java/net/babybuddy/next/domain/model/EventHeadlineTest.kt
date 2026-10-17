@@ -92,6 +92,18 @@ class EventHeadlineTest {
     }
 
     @Test
+    fun `zero or negative amount reads as unknown - no mL segment`() {
+        // UX-review W9: the known failed-sync pump (amount 0) must not read as data,
+        // in the app exactly like in the widgets (WidgetStateMapper.detailText).
+        assertEquals("Pump", event(EventType.PUMPING) { copy(amount = 0.0) })
+        assertEquals(
+            "Bottle",
+            event(EventType.FEEDING) { copy(feedingMethod = "bottle", amount = 0.0) },
+        )
+        assertEquals("Pump", event(EventType.PUMPING) { copy(amount = -1.0) })
+    }
+
+    @Test
     fun `tummy time appends the milestone when set`() {
         assertEquals("Tummy time", event(EventType.TUMMY_TIME) { copy(milestone = null) })
         assertEquals(

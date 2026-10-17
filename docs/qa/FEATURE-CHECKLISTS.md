@@ -168,17 +168,18 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **Steps**
 1. Fresh session: `scripts/qa/fresh-install-login.sh` (widget taps resolve the active child from the persisted selection).
-2. Long-press launcher → Widgets → drag "Quick actions" to the home screen → the configure screen opens (`QuickActionsConfigActivity`): pick the child and four buttons (default Sleep / Bottle / Diaper / Pump) → **Save**.
+2. Long-press launcher → Widgets → the "Quick actions" card previews the real 2×2 chip layout (not the loading grid) and is labeled **2 × 2** (UX-review W1/W7) → drag to the home screen → the configure screen opens (`QuickActionsConfigActivity`): pick the child and four buttons (default Sleep / Bottle / Diaper / Pump) → **Save**.
 3. Tap the **Sleep** cell (idle) → NO app launch; a server timer appears (`scripts/qa/server-log.sh` shows `POST /api/timers/`), the cell turns accented with minute-granular elapsed, and the CareDashboard running row appears if placed.
 4. Tap the **Sleep** cell (running) → the app opens on the timers strip (the >10s stop guard is an in-app dialog; widgets open the app instead — see `docs/flows/new-app/widgets.md`).
 5. Tap **Diaper** → the app opens with the Diaper panel pre-opened (wet/solid toggles). Same for Bottle (feeding timer + panel) and Pump.
-6. Long-press widget → Configure again → change a slot → Save → the cell updates in place.
+6. Long-press widget → a **Configure** entry must exist (UX-review W10) → change a slot → Save → the cell updates in place.
+7. Theme variant: switch system dark mode (`adb shell "cmd uimode night yes"`) and use a light wallpaper → the widget surface and chips follow the system theme; text/icons stay readable (UX-review W5). Verify both directions (`night no` / `night yes`).
 
 **Tags:** launcher-driven (no in-app tags); verify via `adb shell uiautomator dump` on the home screen.
 
 **Expected server requests:** `POST /api/timers/` on sleep start; `POST /api/feedings/` + timer DELETE after an in-app feeding save; nothing on pure navigation taps.
 
-**Expected UI states:** running slot = secondaryContainer accent + elapsed text ("12m"); idle slots = surface; labels hidden in the 4×1 resized variant.
+**Expected UI states:** widget paints a surface background (never wallpaper-show-through); idle slots = rounded surfaceVariant chips (24dp glyph + 12sp label); running slot = rounded primaryContainer chip + elapsed text ("12m") replacing the label (UX-review W3/W4); 4×1 resized variant = one content-capped centered chip row with labels (never stretched to the frame height, W2).
 
 **JVM tests:** `QuickActionActionsTest` (facade semantics), `WidgetStateMapperTest` (slot accents + elapsed).
 
@@ -189,17 +190,19 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Goal:** the 4×2 care dashboard shows last feed/diaper/nap/pump (+ running row) and refreshes without opening the app.
 
 **Steps**
-1. With data on the server: place "Care dashboard" (long-press → Configure: child + row visibility) → rows appear: `Last feed · 12m · 120 mL` shape, minute-granular.
+1. With data on the server: the widget card previews the real layout (child name + rows + running chip, UX-review W7); place "Care dashboard" (long-press → Configure: child + row visibility) → child-name header, then rows `Last feed · 12m · 120 mL` shape, minute-granular (header per UX-review W8).
 2. In the app: log a new feeding → the widget's feed row updates WITHOUT opening anything (in-app write refresh).
 3. Stop the server (`docker stop babybuddy`), log two overlapping naps in-app → PENDING → start the server → after drain the widget reflects the synced rows (drain-completion refresh).
 4. Nap row tap → sleep timer starts via broadcast, launcher stays foreground (verify `topResumedActivity` remains `NexusLauncherActivity`); if a sleep timer already runs, the tap opens the app (timers strip) so the stop guard is reachable. Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
 5. Wait 15+ minutes (or `adb shell am broadcast -a android.intent.action.TIME_SET` to nudge the scheduler in QA) → periodic refresh keeps "Xm ago" honest.
+6. Theme variant: `adb shell "cmd uimode night yes"` on a light wallpaper (and the reverse) → the widget surface and the running-row accent follow the system theme; rows stay readable (UX-review W5).
+7. Amount ≤ 0 (e.g. the known failed-sync pump) shows only the since text — never "0 mL" (UX-review W9; same in the app timeline).
 
 **Tags:** launcher-driven; in-app steps use standard dashboard tags.
 
 **Expected server requests:** normal sync chain (checklist 1); no extra writes from widget taps except the sleep-timer start.
 
-**Expected UI states:** rows with icon + label + `Xm · detail`; running row = secondaryContainer accent, "Running: Sleep — tap to stop"; empty data → the row is omitted (never a blank stub).
+**Expected UI states:** rows with icon + label + `Xm · detail`; running row = rounded primaryContainer chip with horizontal padding, "Running: Sleep — tap to stop" in onPrimaryContainer (UX-review W6); empty data → the row is omitted (never a blank stub).
 
 **JVM tests:** `WidgetStateMapperTest` (rows, visibility, cross-child isolation, since/duration edges incl. future skew and days).
 

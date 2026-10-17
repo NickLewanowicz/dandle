@@ -189,6 +189,38 @@ class WidgetStateMapperTest {
     }
 
     @Test
+    fun `zero or negative amount reads as unknown - row shows only the since text`() {
+        // UX-review W9: the known failed-sync pump with amount 0 must not read as data.
+        val state = WidgetStateMapper.careDashboard(
+            events = listOf(
+                event(EventType.PUMPING, endedMinutesAgo = 9 * 60, amount = 0.0),
+                event(EventType.FEEDING, endedMinutesAgo = 12, amount = -1.0),
+            ),
+            timers = emptyList(),
+            childId = 1,
+            nowMillis = now,
+            visible = setOf(EventType.PUMPING, EventType.FEEDING),
+        )
+        assertEquals("9h", state.rows.first { it.type == EventType.PUMPING }.sinceText)
+        assertNull(state.rows.first { it.type == EventType.PUMPING }.detailText)
+        assertNull(state.rows.first { it.type == EventType.FEEDING }.detailText)
+    }
+
+    @Test
+    fun `dashboard state carries the child name for the header`() {
+        // UX-review W8: the widget header names whose data it shows.
+        val state = WidgetStateMapper.careDashboard(
+            events = listOf(event(EventType.FEEDING, endedMinutesAgo = 12, amount = 120.0)),
+            timers = emptyList(),
+            childId = 1,
+            nowMillis = now,
+            visible = setOf(EventType.FEEDING),
+            childName = "Milo",
+        )
+        assertEquals("Milo", state.childName)
+    }
+
+    @Test
     fun `running timer row carries the kind and minute-granular elapsed`() {
         val state = WidgetStateMapper.careDashboard(
             events = emptyList(),

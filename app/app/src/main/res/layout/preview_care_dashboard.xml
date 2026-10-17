@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static widget-picker preview for the CareDashboard widget (UX-review W7). Plain
+    RemoteViews-compatible views (no Glance): child-name header, four data rows, and the
+    rounded primaryContainer running row. Mirrors CareDashboardWidget's compact branch;
+    literal baseline colors (see preview_widget_bg.xml).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/preview_widget_bg"
+    android:padding="10dp">
+
+    <!-- W8 child-name header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Milo"
+        android:textSize="11sp"
+        android:textColor="#49454F"
+        android:maxLines="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_feeding"
+            android:tint="#1D1B20"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Last feed"
+            android:textSize="13sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12m · 120 mL"
+            android:textSize="12sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_diaper"
+            android:tint="#1D1B20"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Last diaper"
+            android:textSize="13sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="34m · Wet"
+            android:textSize="12sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_sleep"
+            android:tint="#1D1B20"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Last nap"
+            android:textSize="13sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2h · 45m"
+            android:textSize="12sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_pumping"
+            android:tint="#1D1B20"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Last pump"
+            android:textSize="13sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+
+        <!-- W9: amount 0 (failed-sync pump) reads as unknown — only the since text shows. -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="9h"
+            android:textSize="12sp"
+            android:textColor="#1D1B20"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <!-- Running row: rounded primaryContainer chip with horizontal padding (W6). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/preview_chip_running"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_sleep"
+            android:tint="#21005D"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Running: Sleep"
+            android:textSize="13sp"
+            android:textColor="#21005D"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12m — tap to stop"
+            android:textSize="12sp"
+            android:textColor="#21005D"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

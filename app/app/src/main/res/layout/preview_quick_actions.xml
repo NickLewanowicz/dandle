@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static widget-picker preview for the QuickActions widget (UX-review W7). Plain
+    RemoteViews-compatible views (no Glance): the spec'd 2×2 chip grid with the Sleep cell in
+    the running accent showing the elapsed time. Mirrors QuickActionsWidget's compact branch;
+    literal baseline colors (see preview_widget_bg.xml).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/preview_widget_bg"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <!-- Sleep, running: primaryContainer chip, elapsed replaces the label. -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="3dp"
+            android:orientation="vertical"
+            android:background="@drawable/preview_chip_running"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_bb_sleep"
+                android:tint="#21005D"
+                android:contentDescription="@string/quick_actions_widget_label" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="12m"
+                android:textSize="12sp"
+                android:textColor="#21005D"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="3dp"
+            android:orientation="vertical"
+            android:background="@drawable/preview_chip_idle"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_bb_feeding"
+                android:tint="#1D1B20"
+                android:contentDescription="@string/quick_actions_widget_label" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Bottle"
+                android:textSize="12sp"
+                android:textColor="#1D1B20"
+                android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="3dp"
+            android:orientation="vertical"
+            android:background="@drawable/preview_chip_idle"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_bb_diaper"
+                android:tint="#1D1B20"
+                android:contentDescription="@string/quick_actions_widget_label" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Diaper"
+                android:textSize="12sp"
+                android:textColor="#1D1B20"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="3dp"
+            android:orientation="vertical"
+            android:background="@drawable/preview_chip_idle"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_bb_pumping"
+                android:tint="#1D1B20"
+                android:contentDescription="@string/quick_actions_widget_label" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Pump"
+                android:textSize="12sp"
+                android:textColor="#1D1B20"
+                android:maxLines="1" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
