@@ -25,7 +25,13 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         val container = (applicationContext as App).container
-        return when (container.drainer.drain()) {
+        val outcome = container.drainer.drain()
+        // Drain completion is a widget refresh trigger (spec §7.2): new server events and
+        // cleared PENDING badges should be visible on the home screen promptly.
+        if (outcome == Outcome.Completed) {
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(applicationContext)
+        }
+        return when (outcome) {
             Outcome.Completed, Outcome.PausedAuth -> Result.success()
             Outcome.NetworkDown -> Result.retry()
         }

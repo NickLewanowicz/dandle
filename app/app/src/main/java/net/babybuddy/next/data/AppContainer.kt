@@ -15,6 +15,7 @@ import net.babybuddy.next.data.db.BabyBuddyDatabase
 import net.babybuddy.next.data.prefs.SessionStore
 import net.babybuddy.next.data.repo.ChildRepository
 import net.babybuddy.next.data.repo.EventRepository
+import net.babybuddy.next.data.repo.QuickActionActions
 import net.babybuddy.next.data.repo.TimerRepository
 import net.babybuddy.next.data.sync.OutboxDrainer
 import net.babybuddy.next.data.sync.SyncWorker
@@ -169,6 +170,18 @@ class AppContainer(
             db = db(),
             eventRepository = eventRepository,
             clock = clock,
+            serverClock = serverClock,
+        )
+    }
+
+    /** Widget-facing actions (Stage 4): DashboardViewModel semantics without the UI state. */
+    val quickActionActions by lazy {
+        QuickActionActions(
+            timerRepository = timerRepository,
+            eventRepository = eventRepository,
+            quickActionStore = quickActionStore,
+            childRepository = childRepository,
+            sessionStore = sessionStore,
             serverClock = serverClock,
         )
     }

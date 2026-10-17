@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Baby Buddy Next</string>
+
+    <!-- Widgets (spec §7) -->
+    <string name="quick_actions_widget_label">Quick actions</string>
+    <string name="quick_actions_widget_description">Four tappable care buttons: sleep timer, bottle, diaper, pump</string>
+    <string name="care_dashboard_widget_label">Care dashboard</string>
+    <string name="care_dashboard_widget_description">Last feed, diaper, nap, and pump at a glance</string>
 </resources>

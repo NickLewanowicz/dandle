@@ -23,5 +23,6 @@ class App : Application() {
         )
         container.initDatabase(this)
         container.start()
+        net.babybuddy.next.widget.WidgetPeriodicWorker.schedule(this)
     }
 }

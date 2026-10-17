@@ -13,11 +13,53 @@
         android:theme="@style/AppTheme">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Widget deep-link trampoline (transparent; never shows UI itself). -->
+        <activity
+            android:name=".widget.WidgetTrampolineActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Configure screens (spec §7.3): long-press → Configure. -->
+        <activity
+            android:name=".widget.QuickActionsConfigActivity"
+            android:exported="false" />
+        <activity
+            android:name=".widget.CareDashboardConfigActivity"
+            android:exported="false" />
+
+        <receiver
+            android:name=".widget.QuickActionsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/quick_actions_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_actions_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.CareDashboardWidgetReceiver"
+            android:exported="false"
+            android:label="@string/care_dashboard_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/care_dashboard_widget_info" />
+        </receiver>
     </application>
 </manifest>

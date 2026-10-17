@@ -82,6 +82,7 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.glance.appwidget) // Stage 4 widgets (spec §7)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

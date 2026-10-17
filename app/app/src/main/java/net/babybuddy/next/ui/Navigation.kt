@@ -36,6 +36,8 @@ object Routes {
 fun AppNavHost(
     startDestination: String,
     container: AppContainer,
+    openPanelRequest: net.babybuddy.next.domain.model.EventType? = null,
+    onPanelRequestConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -63,6 +65,8 @@ fun AppNavHost(
             composable(Routes.DASHBOARD) {
                 DashboardScreen(
                     container = container,
+                    openPanelRequest = openPanelRequest,
+                    onPanelRequestConsumed = onPanelRequestConsumed,
                     onSignedOut = {
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(Routes.DASHBOARD) { inclusive = true }

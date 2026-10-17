@@ -42,6 +42,10 @@ class TimerRepository(
     suspend fun findRunning(kind: EventType, childId: Long): RunningTimer? =
         timerDao.findRunning(childId, kind.name)?.toModel()
 
+    /** One-shot snapshot for widget rendering (no Flow collection on Glance's main). */
+    suspend fun snapshotRunning(): List<RunningTimer> =
+        timerDao.snapshot().map { it.toModel() }
+
     /**
      * Starts a timer for [kind] + [childId]. Local row first; server timer created when the
      * call succeeds (id attached to the row). A duplicate running timer for the same child+kind

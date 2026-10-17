@@ -489,6 +489,7 @@ class DashboardViewModel(
         net.babybuddy.next.log.BbLog.d(TAG_UI, "strip discard ${timer.kind.name} localId=${timer.localId}")
         viewModelScope.launch {
             timerRepo.discard(timer)
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
             val panel = openPanel.value?.takeIf { it.type == timer.kind }
             if (panel != null) {
                 openPanel.value = null
@@ -525,6 +526,7 @@ class DashboardViewModel(
         }
         quickActions.clearPanel(childId, type.name)
         if (openPanel.value?.type == type) openPanel.value = null
+        net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
     }
 
     private suspend fun openPanelFor(type: EventType, childId: Long) {
@@ -687,7 +689,10 @@ class DashboardViewModel(
         if (editValidationReason(current) != null) return
         val uuid = current.event.localUuid
         editState.value = null
-        viewModelScope.launch { eventRepo.edit(uuid, current.draft) }
+        viewModelScope.launch {
+            eventRepo.edit(uuid, current.draft)
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
+        }
     }
 
     /** FAILED entry "Retry" (spec §6.2): re-queues the op; badge → PENDING. */
