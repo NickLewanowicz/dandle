@@ -1,0 +1,182 @@
+# Feature checklists — concrete verification steps
+
+Per `docs/qa/RUNBOOK.md` rule 7: every feature ships with an entry here in the
+same change. Steps name scripts (`scripts/qa/*`), testTags (resource-ids; see
+`app/app/src/main/java/net/babybuddy/next/ui/TestTags.kt`), and the expected
+server requests (`scripts/qa/server-log.sh`, `scripts/qa/api.sh`). JVM tests are
+run with `./gradlew :app:testDebugUnitTest` from `app/` (after
+`source scripts/dev-env.sh`). A checklist row is not "done" until QA has driven
+it on the emulator with screenshots archived under `docs/screenshots/`.
+
+---
+
+## 1. Fresh-install login (spec §1.1)
+
+**Goal:** cleared app data -> login screen -> signed in -> dashboard.
+
+**Steps**
+1. `scripts/qa/fresh-install-login.sh` (defaults: `net.babybuddy.next.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). It clears data, disables animations, and types the fields by tag — fresh dump before every tap.
+2. To watch it live: `scripts/qa/applog.sh` in a side terminal; `scripts/qa/server-log.sh -f` for the request lines.
+3. Script exits 0 only when tag `dashboard` is visible. `scripts/qa/shot.sh qa/login/04-dashboard.png` for evidence.
+
+**Tags:** `login/server_url`, `login/username`, `login/password`, `login/submit`, text node `Continue` (cleartext warning), `login/error_banner` (failure), `dashboard`.
+
+**Expected server requests** (via `server-log.sh`): `GET /login/` (csrf) -> `POST /login/` -> `GET /api/profile` -> `GET /api/children/`. No 401/4xx beyond the intended csrf dance.
+
+**Expected UI states:** login fields empty after `pm clear`; http:// URL pops the unencrypted-connection warning (tap Continue); on success dashboard with child switcher + timeline. Wrong password -> `login/error_banner` with parent-language copy (script exits 2 and prints the banner text).
+
+**JVM tests:** `LoginFlowTest`, `ServerUrlNormalizerTest` (scheme-less / trailing-slash URLs).
+
+## 2. Feeding quick action (spec §3.1)
+
+**Goal:** create a feeding from the dashboard quick action.
+
+**Steps**
+1. Login (checklist 1).
+2. `scripts/qa/ui-tap-tag.sh dashboard/quick_action/FEEDING` — timer starts; running panel appears.
+3. `scripts/qa/ui-tap-tag.sh dashboard/panel/amount` then type mL via `adb shell input text` (re-dump first if a dialog/keyboard shifted layout). Check default type/method remembered per child.
+4. Save: `scripts/qa/ui-tap-tag.sh dashboard/panel/save`.
+5. Verify row: `scripts/qa/ui-text.sh` on the new timeline row tag (`dashboard/timeline/<localUuid>`); verify server: `scripts/qa/api.sh GET /api/feedings/ | head -40`.
+
+**Tags:** `dashboard/quick_action/FEEDING`, `dashboard/panel/FEEDING`, `dashboard/panel/amount`, `dashboard/panel/feeding_type/<wire>`, `dashboard/panel/feeding_method/<wire>`, `dashboard/panel/save`.
+
+**Expected server requests:** on start: `POST /api/timers/` (named `Feeding-BBapp:<n>`); on save: `POST /api/feedings/` `{child, start, end, type, method, amount?}` + `DELETE /api/timers/<id>/`.
+
+**Expected UI states:** running panel with live counter; after save the timeline headline follows §4.1 format; no PENDING badge when online.
+
+**JVM tests:** `FeedingOptionsTest` (type->method cascade, solid food methods), `QuickActionStoreTest`, `DuplicateGuardTest` (§3.7: "logged N min ago. Add anyway?" — `dashboard/duplicate_dialog` + `dashboard/duplicate_dialog/add`).
+
+## 3. Diaper quick action (spec §3.2)
+
+**Goal:** create a diaper change (no timer).
+
+**Steps**
+1. Login (checklist 1).
+2. `scripts/qa/ui-tap-tag.sh dashboard/quick_action/DIAPER` — panel opens, save disabled.
+3. Toggle: `ui-tap-tag.sh dashboard/panel/wet` (save enables). Optional: `dashboard/panel/solid`, extra options `dashboard/panel/extra_options` -> color chips `dashboard/panel/color/<wire>`, `dashboard/panel/amount`.
+4. Save: `ui-tap-tag.sh dashboard/panel/save`.
+5. Verify: `scripts/qa/api.sh GET /api/changes/` — newest entry has correct wet/solid/color/amount.
+
+**Tags:** `dashboard/quick_action/DIAPER`, `dashboard/panel/wet`, `dashboard/panel/solid`, `dashboard/panel/extra_options`, `dashboard/panel/color/<wire>`, `dashboard/panel/amount`, `dashboard/panel/save`.
+
+**Expected server requests:** `POST /api/changes/` `{child, time, wet, solid, color?, amount?}` (endpoint is `/api/changes/`, not `/api/diaperchanges/`).
+
+**Expected UI states:** save disabled until Wet or Solid on; timeline row appears immediately (local-first), no badge when online.
+
+**JVM tests:** `QuickActionStoreTest`, `MappersTest` (change DTO round-trip).
+
+## 4. Sleep timer start/stop/save (spec §3.3 + §3 common rules)
+
+**Goal:** timer lifecycle: start, live elapsed, stop >10s -> confirm dialog, save.
+
+**Steps**
+1. Login (checklist 1).
+2. Start: `ui-tap-tag.sh dashboard/quick_action/SLEEP`; card appears in `dashboard/timer_strip` with tag `dashboard/timer/SLEEP` and ticking counter.
+3. Kill the app (`adb shell am kill net.babybuddy.next.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
+4. Stop after >10s: `ui-tap-tag.sh dashboard/timer/SLEEP` -> stop dialog `dashboard/stop_dialog` with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
+5. Save: `ui-tap-tag.sh dashboard/stop_dialog/save`; verify `scripts/qa/api.sh GET /api/sleep/`.
+6. <10s path: repeat quickly — stop must discard silently (no dialog).
+
+**Tags:** `dashboard/quick_action/SLEEP`, `dashboard/timer_strip`, `dashboard/timer/SLEEP`, `dashboard/timer/SLEEP/save`, `dashboard/timer/SLEEP/discard`, `dashboard/stop_dialog/{save,keep,discard}`.
+
+**Expected server requests:** start: `POST /api/timers/` (named `Sleep-BBapp:<n>`); save: `POST /api/sleep/` `{child, start, end, notes?}` + `DELETE /api/timers/<id>/` (nap flag is server-computed; app must not send it).
+
+**Expected UI states:** timer strip only while running; elapsed HH:mm:ss; >10s stop -> "Stop timer?" dialog with Save emphasized; timeline entry SYNCED.
+
+**JVM tests:** `StopGuardTest` (>10s vs <10s), `TimerRepositoryTest` (restore after process death).
+
+## 5. Quick edit time nudge (spec §5)
+
+**Goal:** fix an entry's time in <=3 interactions via stepper buttons.
+
+**Steps**
+1. Login; ensure at least one entry exists (checklist 2 or 3).
+2. Tap its timeline row (`dashboard/timeline/<localUuid>`) -> `edit/sheet` opens.
+3. Nudge start: `ui-tap-tag.sh edit/stepper/start_plus` (or `_minus` / `end_plus` / `end_minus`). For timed types moving start shifts end by the same delta (duration preserved).
+4. Save: `ui-tap-tag.sh edit/save`; timeline row updates in place.
+5. Verify: `scripts/qa/api.sh GET /api/<type>/<id>/` shows the nudged time; `server-log.sh` shows the `PATCH`.
+
+**Tags:** `edit/sheet`, `edit/stepper/{start,end}_{minus,plus}`, `edit/validation`, `edit/save`, `edit/delete`.
+
+**Expected server requests:** `PATCH /api/{type}/{id}/` (never PUT — always 405 on Baby Buddy).
+
+**Expected UI states:** sheet with type-appropriate fields; inline validation (end after start, no future times, <=24h) disables save with a reason; no dialog on clean save.
+
+**JVM tests:** `TimeEditLogicTest` (duration-preserving shift, constraints), `EventRepositoryEditTest`.
+
+## 6. Offline create -> replay (spec §6.3.1)
+
+**Goal:** entries created offline queue as PENDING, then replay in order when connectivity/server returns.
+
+**Steps**
+1. Login; baseline `scripts/qa/server-log.sh -n 5`.
+2. Go offline: `scripts/qa/offline.sh on` (airplane mode) **or** `scripts/qa/server.sh stop` (server-down flavor — use one flavor per run, both must pass).
+3. Create a note (`dashboard/quick_action/NOTE` -> `dashboard/panel/text` -> `dashboard/panel/save`) and a diaper (checklist 3). Timeline rows appear instantly; badge `dashboard/badge_pending` ("Will sync").
+4. Kill + relaunch app offline: pending entries intact (spec §6.3.4).
+5. Recover: `scripts/qa/offline.sh off` or `scripts/qa/server.sh wait`.
+6. Watch replay: `scripts/qa/applog.sh` (BB/SYNC), `scripts/qa/server-log.sh -f` — creates POST in outbox order (oldest first); badges clear; `scripts/qa/api.sh GET /api/notes/` shows them.
+
+**Tags:** `dashboard/quick_action/NOTE`, `dashboard/panel/text`, `dashboard/panel/save`, `dashboard/badge_pending`, `dashboard/sync_chip`.
+
+**Expected server requests:** while offline: none (verify `server-log.sh -n 20` stays flat for the app's host). On recovery: queued `POST /api/notes/`, `POST /api/changes/` in creation order.
+
+**Expected UI states:** PENDING badge while queued; badge disappears on sync; sync chip in header reflects draining.
+
+**JVM tests:** `OutboxDrainerTest` (oldest-first, backoff, drain independence), `Iso8601Test` (wire times).
+
+## 7. Server-rejected (overlap) FAILED flow (spec §6.3.2, §3.8)
+
+**Goal:** an entry the server rejects (overlapping sleep) ends FAILED with a resolution path — never a dead end, never auto-deleted.
+
+**Steps**
+1. While server is down (`scripts/qa/server.sh stop`), create sleep entry A: `dashboard/quick_action/SLEEP` -> stop -> save (offline).
+2. Create overlapping sleep entry B (times intersecting A) — also offline.
+3. `scripts/qa/server.sh wait`; let sync drain: A syncs, B is rejected (`non_field_errors`: "Another entry intersects the specified time period").
+4. B shows `dashboard/badge_failed`; A must still sync (FAILED must not block the queue). `scripts/qa/api.sh GET /api/sleep/` — only A on server.
+5. Tap FAILED badge -> failure dialog `edit/failure_dialog`: parent-language reason naming the clashing entry + **Edit** / **Delete locally** / **Retry** (`edit/retry`, `edit/delete`).
+6. Resolution path A: Edit via sheet -> non-overlapping times -> save -> retries -> SYNCED. Path B: `edit/delete` -> row gone locally, nothing on server.
+
+**Tags:** `dashboard/badge_failed`, `edit/failure_dialog`, `edit/sheet`, `edit/retry`, `edit/delete`, `edit/validation`.
+
+**Expected server requests:** replayed `POST /api/sleep/` x2 — one 201, one 400 with `non_field_errors`; after edit-resolve: `PATCH`/re-POST 201.
+
+**Expected UI states:** amber FAILED badge on B only; dialog copy translated to parent language (spec §3.8: "This overlaps the 1:15–2:00 PM nap"), values intact for edit.
+
+**JVM tests:** `ConflictPolicyTest`, `FailureMessageTest` (server error -> parent-language copy), `OutboxDrainerTest` (failed op does not block the rest).
+
+## 8. Sign-out (spec §1.2)
+
+**Goal:** sign out clears stored key + local cache; data on server untouched.
+
+**Steps**
+1. Login (checklist 1); note an existing entry on the server via `scripts/qa/api.sh GET /api/children/`.
+2. `ui-tap-tag.sh dashboard/overflow` -> tap "Sign out" -> confirmation dialog (`dashboard/overflow` menu; confirm tag per implementation — dump the tree with `ui-tap-tag.sh --dump-after`).
+3. Confirm -> app returns to login screen (`login/server_url` visible; use `ui-text.sh` / dump to verify).
+4. Relaunch app (no data clear): login screen again, not dashboard (stored key gone). Server still has all entries (`api.sh GET /api/children/` unchanged).
+
+**Tags:** `dashboard/overflow`, confirmation dialog (dump to discover), `login/server_url` (post-condition).
+
+**Expected server requests:** on next successful login the normal chain (checklist 1). No DELETEs to the API during sign-out.
+
+**Expected UI states:** confirm dialog warns local data is cleared and server data untouched; after sign-out, back navigation must not re-enter the dashboard.
+
+---
+
+## TEMPLATE (copy for every new feature)
+
+## N. <Feature name> (spec §<ref>)
+
+**Goal:** <one line: what user outcome is proven>.
+
+**Steps**
+1. `scripts/qa/<script>.sh` <args> — <what it proves>.
+2. `scripts/qa/ui-tap-tag.sh <tag>` — <action>.
+3. Verify server: `scripts/qa/api.sh <METHOD> <path>` — <expected>.
+
+**Tags:** `<tag/a>`, `<tag/b>`.
+
+**Expected server requests:** `<METHOD> <path>` <body/shape>.
+
+**Expected UI states:** <before / during / after, incl. badges & dialogs>.
+
+**JVM tests:** `<TestClass>` (<what it pins>).
