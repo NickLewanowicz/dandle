@@ -2,7 +2,7 @@
 
 A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source self-hosted baby tracker — rebuilt from scratch by an AI-driven team, with a couple of creature comforts the original Android app never had.
 
-**Status: beta in development.** Not yet published.
+**Status: feature-complete beta, in QA.** The app builds, installs, and runs against a real Baby Buddy server; automated QA is documenting the flows in `docs/flows/new-app/` with screenshot evidence.
 
 ## Why this exists
 
@@ -35,4 +35,10 @@ Two things make that workable:
 See [AGENTS.md](AGENTS.md) for the full working agreement. Short version:
 
 - **Server**: `docker run -d --name babybuddy -p 8000:8000 -v babybuddy_config:/config lscr.io/linuxserver/babybuddy` (default login `admin`/`admin`), seed with `python3 scripts/seed_demo_data.py`.
-- **Docs**: `docs/research/` (verified API + original-app internals), `docs/flows/` (user flows old & new), `docs/briefs/` (maintainer briefs incl. the framework evaluation).
+- **Build**: `source scripts/dev-env.sh && cd app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` (uses the Android Studio JBR; the system JDK breaks Gradle). Debug builds install as `net.babybuddy.next.debug`.
+- **Emulator QA**: `scripts/qa/fresh-install-login.sh` and friends — see [`docs/qa/RUNBOOK.md`](docs/qa/RUNBOOK.md). Debug builds log every network call and user action under `BB/*` tags (`scripts/qa/applog.sh`).
+- **Docs**: `docs/research/` (verified API + original-app internals), `docs/flows/` (user flows old & new, with the canonical [functional spec](docs/flows/new-app/00-functional-spec.md)), `docs/briefs/` (maintainer briefs incl. the [framework evaluation and decision](docs/briefs/framework-eval/DECISION.md)), `docs/qa/` (runbook + per-feature test checklists).
+
+## Tech
+
+Native Kotlin + Jetpack Compose + Material 3 (dynamic color), Room (offline-first, outbox pattern), WorkManager (background replay), Glance (widgets), Retrofit/OkHttp. Single module, manual DI, ~7k lines of app code + 170+ JVM tests. Why native and not Flutter/React Native: [DECISION.md](docs/briefs/framework-eval/DECISION.md) — the short version is that the features that differentiate this app (widgets, Material You, background sync) are native features, and the AI-agent QA loop on the emulator was measured at under 10 seconds.
