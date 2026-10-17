@@ -30,11 +30,6 @@ object WidgetActions {
     /** MainActivity extra: EventType.name of the quick-action panel to pre-open. */
     const val EXTRA_OPEN_PANEL = "net.babybuddy.next.extra.OPEN_PANEL"
 
-    /** Trampoline extra: which widget action to run (see WidgetTrampolineActivity.Action). */
-    const val EXTRA_ACTION = "net.babybuddy.next.extra.WIDGET_ACTION"
-
-    const val ACTION_SLEEP_TOGGLE = "SLEEP_TOGGLE"
-
     /** Deep link: open the app with this quick-action panel pre-opened. */
     fun openPanelAction(context: Context, type: EventType): androidx.glance.action.Action {
         val intent = Intent(context, MainActivity::class.java).apply {

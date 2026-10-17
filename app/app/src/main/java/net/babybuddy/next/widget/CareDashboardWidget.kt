@@ -18,7 +18,7 @@ import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -118,12 +118,20 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
         verticalAlignment = Alignment.CenterVertically,
     ) {
         state.rows.forEach { row ->
+            // P2-5: the nap row STARTS the sleep timer via broadcast — the launcher stays
+            // foreground (matching the QuickActions sleep cell). When a sleep timer already
+            // runs, the broadcast opens the app (timers strip) so the guard is reachable.
+            val action = if (row.type == EventType.SLEEP) {
+                GlanceModifier.clickable(actionRunCallback<WidgetSleepStartAction>())
+            } else {
+                WidgetActions.openPanelModifier(context, row.type)
+            }
             CareRow(
                 icon = row.type.iconRes(),
                 label = row.label,
                 detail = listOfNotNull(row.sinceText, row.detailText).joinToString(" · "),
                 accent = false,
-                action = WidgetActions.openPanelModifier(context, row.type),
+                action = action,
             )
         }
         state.running?.let { running ->

@@ -21,8 +21,10 @@ Checklists: `docs/qa/FEATURE-CHECKLISTS.md` entries 9–10. Tags: `BB/UI`, `BB/S
 - Rows: Last feed (`12m · 120 mL`), Last diaper (`34m · Wet`), Last nap (`2h · 45m`), Last pump —
   minute-granular, staleness documented (spec §7.2). Running-timer row is accented
   ("Running: Sleep — 22m — tap to stop") when a timer is active.
-- Taps: nap row → trampoline (`WidgetTrampolineActivity`) starts the sleep timer without opening
-  the app; feed/diaper/pump rows deep-link with the panel pre-opened; running row opens the app.
+- Taps: nap row → starts the sleep timer via broadcast (stays on the launcher; P2-5 fix — the
+  activity trampoline previously landed on the app task); when a sleep timer already runs, the
+  broadcast opens the app so the in-app stop guard is reachable. feed/diaper/pump rows deep-link
+  with the panel pre-opened; running row opens the app.
 
 ## Refresh (spec §7.2)
 

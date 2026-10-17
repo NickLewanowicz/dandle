@@ -23,15 +23,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Widget deep-link trampoline (transparent; never shows UI itself). -->
-        <activity
-            android:name=".widget.WidgetTrampolineActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
         <!-- Configure screens (spec §7.3): long-press → Configure. -->
         <activity
             android:name=".widget.QuickActionsConfigActivity"

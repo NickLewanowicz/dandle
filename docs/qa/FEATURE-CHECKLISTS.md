@@ -192,7 +192,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. With data on the server: place "Care dashboard" (long-press → Configure: child + row visibility) → rows appear: `Last feed · 12m · 120 mL` shape, minute-granular.
 2. In the app: log a new feeding → the widget's feed row updates WITHOUT opening anything (in-app write refresh).
 3. Stop the server (`docker stop babybuddy`), log two overlapping naps in-app → PENDING → start the server → after drain the widget reflects the synced rows (drain-completion refresh).
-4. Nap row tap → sleep timer starts (trampoline; no app launch unless a sleep timer already runs). Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
+4. Nap row tap → sleep timer starts via broadcast, launcher stays foreground (verify `topResumedActivity` remains `NexusLauncherActivity`); if a sleep timer already runs, the tap opens the app (timers strip) so the stop guard is reachable. Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
 5. Wait 15+ minutes (or `adb shell am broadcast -a android.intent.action.TIME_SET` to nudge the scheduler in QA) → periodic refresh keeps "Xm ago" honest.
 
 **Tags:** launcher-driven; in-app steps use standard dashboard tags.
