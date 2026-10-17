@@ -35,6 +35,7 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.state.GlanceStateDefinition
@@ -147,44 +148,59 @@ private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>) 
     // W5: paint the widget surface so text/icons never float on the wallpaper. widgetBackground
     // (not background) is the launcher's Material-3 widget surface token — system dynamic color
     // on S+ (system_accent2_50/800 day/night), resource-resolved at apply time by the host.
-    Box(
+    //
+    // Layout uses only the Glance constructs that translate reliably to RemoteViews (verified on
+    // device): a fillMaxSize Column whose children weight the leftover space, full-width rows of
+    // defaultWeight cells, and fixed-dp row heights. Chips fill their weighted cell; the W2
+    // height caps live in the row heights, never in wrap-content chains.
+    Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(GlanceTheme.colors.widgetBackground)
             .padding(2.dp),
-        contentAlignment = Alignment.Center,
     ) {
         val context = LocalContext.current
-        if (LocalSize.current.width >= SIZE_ROW.width) {
-            // Wide-short (W2): one chip row capped to content height, vertically centered.
-            // Width-only fill: weighted cells split the width evenly; height wraps the chips.
-            Row(
-                modifier = GlanceModifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                slots.forEach { slot ->
-                    Box(
-                        modifier = GlanceModifier.defaultWeight(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        SlotCell(context, slot)
+        val size = LocalSize.current
+        when {
+            // Wide-short (W2): one 4-across chip row capped to content height (~56dp = 24dp
+            // glyph + 12sp label + padding), vertically centered — never stretched to the frame.
+            size.width >= SIZE_ROW.width -> {
+                Box(modifier = GlanceModifier.defaultWeight()) {}
+                Row(modifier = GlanceModifier.fillMaxWidth().height(56.dp)) {
+                    slots.forEach { slot ->
+                        Box(modifier = GlanceModifier.defaultWeight()) {
+                            SlotCell(context, slot)
+                        }
                     }
                 }
+                Box(modifier = GlanceModifier.defaultWeight()) {}
             }
-        } else {
-            // Grid (2×2 or tall): content-sized cells, centered — never stretched to the frame.
-            // fillMaxWidth (not fillMaxSize) keeps cell height capped to chip content (W2).
-            Column(
-                modifier = GlanceModifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
+            // Tall (W2): the grid, vertically centered, cell rows capped at ~72dp.
+            size.height >= SIZE_TALL.height -> {
+                Box(modifier = GlanceModifier.defaultWeight()) {}
                 slots.chunked(2).forEach { rowSlots ->
-                    Row {
+                    Row(modifier = GlanceModifier.fillMaxWidth().height(72.dp)) {
                         rowSlots.forEach { slot ->
-                            Box(
-                                modifier = GlanceModifier.defaultWeight(),
-                                contentAlignment = Alignment.Center,
-                            ) {
+                            Box(modifier = GlanceModifier.defaultWeight()) {
+                                SlotCell(context, slot)
+                            }
+                        }
+                        repeat(2 - rowSlots.size) {
+                            Box(modifier = GlanceModifier.defaultWeight()) {}
+                        }
+                    }
+                }
+                Box(modifier = GlanceModifier.defaultWeight()) {}
+            }
+            // Default 2×2 (W1): the spec grid — cells expand to their quadrants, chips fill
+            // them with 4dp gaps (target sketch, review §Target look). Every row carries an
+            // explicit width: on API 33+ Glance only applies layout params from modifiers, and
+            // an unspecified row width wraps, collapsing the weighted cells (owner P1).
+            else -> {
+                slots.chunked(2).forEach { rowSlots ->
+                    Row(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                        rowSlots.forEach { slot ->
+                            Box(modifier = GlanceModifier.defaultWeight()) {
                                 SlotCell(context, slot)
                             }
                         }
@@ -212,15 +228,18 @@ private fun SlotCell(
     }
     val fill = if (running) colors.primaryContainer else colors.surfaceVariant
     val content = if (running) colors.onPrimaryContainer else colors.onSurface
-    // 2dp gap between chips; the chip itself is a rounded state surface (W3/W5), sized to its
-    // content (24dp glyph + 12sp label, W12/W13) so cells never stretch to the frame.
-    Box(modifier = GlanceModifier.padding(2.dp)) {
+    // 2dp inset per cell = 4dp gaps between chips and ≤4dp outer breathing room; the chip fills
+    // the rest of its weighted cell so the grid fills the widget (owner padding fix) and 12sp
+    // labels get the cell's full width (wrap-content chips collapsed to icon width and
+    // ellipsized "Bott…" — never do content-sized chips in a weighted cell).
+    Box(modifier = GlanceModifier.fillMaxSize().padding(2.dp)) {
         Box(
             modifier = GlanceModifier
+                .fillMaxSize()
                 .then(action)
                 .background(fill)
                 .cornerRadius(12.dp)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 4.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
