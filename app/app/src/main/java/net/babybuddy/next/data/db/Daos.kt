@@ -38,6 +38,10 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE childId = :childId ORDER BY startMillis DESC")
     fun observeTimeline(childId: Long): Flow<List<EventEntity>>
 
+    /** One-shot timeline read — the write-boundary reconciliation query (see EventRepository). */
+    @Query("SELECT * FROM events WHERE childId = :childId ORDER BY startMillis DESC")
+    suspend fun timeline(childId: Long): List<EventEntity>
+
     @Query("SELECT COUNT(*) FROM events")
     fun observeCount(): Flow<Int>
 

@@ -2,6 +2,7 @@ package net.babybuddy.next.data
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -135,6 +136,11 @@ class AppContainer(
         appContext = context.applicationContext
         if (dbRef == null) {
             dbRef = Room.databaseBuilder(context.applicationContext, BabyBuddyDatabase::class.java, BabyBuddyDatabase.NAME)
+                // T1: TRUNCATE journal, not WAL. Single-process, tiny write volume — WAL buys
+                // nothing here, and its snapshot-per-read-connection semantics are the prime
+                // suspect for the device-only "timeline flow serves a frozen snapshot" failure
+                // (suspend reads stayed fresh, the flow did not). TRUNCATE removes that class.
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .build()
         }
     }
@@ -153,7 +159,12 @@ class AppContainer(
                 authExpiredMirror = true
                 sessionStore.setSessionExpired(true)
             },
-            onDrainActiveChange = { drainActive.value = it },
+            onDrainActiveChange = { active ->
+                drainActive.value = active
+                // T1: a drain moves rows between sync states (PENDING→SYNCED, FAILED badges);
+                // re-render the timeline on drain end even if Room's invalidation signal is lost.
+                if (!active) eventRepository.nudgeTimeline()
+            },
             onEntryFailed = { localUuid ->
                 if (!entryFailedEvents.tryEmit(localUuid)) {
                     // Never drop the resolution signal; a small replay tail covers slow collectors.

@@ -38,8 +38,34 @@ class EventRepository(
     private val eventDao get() = db.eventDao()
     private val outboxDao get() = db.outboxDao()
 
+    /**
+     * T1: local write-boundary signal for the timeline. Room's own invalidation is the primary
+     * reactivity path, but on device we observed the timeline flow silently stop delivering fresh
+     * results (suspend reads on the same database stayed fresh — duplicate guard saw the new row,
+     * the flow did not; child-switch/restart resubscribed and "fixed" it). Robolectric cannot
+     * reproduce it (journal mode/connection pool differ), so the UI must not depend on that
+     * signal alone: every local write nudges a re-query through this flow.
+     */
+    val timelineWrites = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+    )
+
+    /** Fire-and-forget write marker; safe from any thread/coroutine. */
+    fun nudgeTimeline() {
+        timelineWrites.tryEmit(Unit)
+    }
+
+    /**
+     * The timeline is UI source of truth: Room's invalidated-observed flow PLUS a re-query on
+     * every local write boundary (create/edit/delete/retry/refresh/drain). Duplicate emissions
+     * are harmless — the uiState StateFlow dedupes structurally.
+     */
     fun observeTimeline(childId: Long): Flow<List<Event>> =
-        eventDao.observeTimeline(childId).map { rows -> rows.map { it.toModel() } }
+        kotlinx.coroutines.flow.merge(
+            eventDao.observeTimeline(childId),
+            timelineWrites.map { eventDao.timeline(childId) },
+        ).map { rows -> rows.map { it.toModel() } }
 
     /** Newest same-type entry for the child — the duplicate guard's probe (spec §3.7). */
     suspend fun latestByType(childId: Long, type: EventType): Event? =
@@ -92,6 +118,7 @@ class EventRepository(
             )
         )
         drainInBackground()
+        nudgeTimeline()
         return entity.toModel()
     }
 
@@ -139,6 +166,7 @@ class EventRepository(
             )
         )
         drainInBackground()
+        nudgeTimeline()
     }
 
     /**
@@ -164,6 +192,7 @@ class EventRepository(
             )
         }
         drainInBackground()
+        nudgeTimeline()
     }
 
     /** FAILED entry resolution "Retry" (spec §6.2): re-queue and go PENDING. */
@@ -186,6 +215,7 @@ class EventRepository(
             )
         )
         drainInBackground()
+        nudgeTimeline()
     }
 
     // -- Server refresh -----------------------------------------------------------
@@ -226,6 +256,7 @@ class EventRepository(
                 }
             }
             eventDao.upsertAll(merged)
+            nudgeTimeline() // server pull changed local rows — re-render even if invalidation is lost
             RefreshResult.Success
         } catch (e: ApiException) {
             if (e.status == 401 || e.status == 403) {
