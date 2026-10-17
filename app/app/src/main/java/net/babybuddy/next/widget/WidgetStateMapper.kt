@@ -22,6 +22,16 @@ object WidgetStateMapper {
 
     data class RunningTimerState(val kind: EventType, val elapsedText: String)
 
+    /**
+     * T7 (Priya): a timer running for ANOTHER child — "Zoe's nap · 32m". Isolation of data is
+     * right; isolation of awareness is a forgotten-nap factory.
+     */
+    data class CrossChildTimerState(
+        val kind: EventType,
+        val childFirstName: String,
+        val elapsedText: String,
+    )
+
     /** One row of the CareDashboard widget ("Last feed · 12m ago · 120 mL"). */
     data class CareRow(
         val type: EventType,
@@ -34,6 +44,8 @@ object WidgetStateMapper {
         val childName: String? = null,
         val rows: List<CareRow>,
         val running: RunningTimerState?,
+        /** T7: quiet cross-child running line; null = nothing to show. */
+        val crossChild: CrossChildTimerState? = null,
     )
 
     /** Short on-button labels (UX spec §6: Sleep / Bottle / Diaper / Pump). */
@@ -101,6 +113,36 @@ object WidgetStateMapper {
         EventType.PUMPING -> "Last pump"
         EventType.NOTE -> "Last note"
         EventType.TUMMY_TIME -> "Last tummy time"
+    }
+
+    /** Friendly noun for the cross-child line — "Zoe's [nap]" (T7). */
+    fun friendlyNoun(type: EventType): String = when (type) {
+        EventType.FEEDING -> "feed"
+        EventType.CHANGE -> "diaper change"
+        EventType.SLEEP -> "nap"
+        EventType.NOTE -> "note"
+        EventType.PUMPING -> "pump"
+        EventType.TUMMY_TIME -> "tummy time"
+    }
+
+    /**
+     * T7: the first timer running for a child OTHER than [childId], phrased as
+     * "[firstName]'s [noun]" + minute-granular elapsed ("Zoe's nap", "32m"). Null when no
+     * other-child timer runs (the line must not render). Unknown child name degrades to
+     * "Another child" rather than lying about whose it is.
+     */
+    fun crossChildTimer(
+        timers: List<RunningTimer>,
+        childId: Long,
+        otherChildFirstName: String?,
+        nowMillis: Long,
+    ): CrossChildTimerState? {
+        val other = timers.firstOrNull { it.childId != childId } ?: return null
+        return CrossChildTimerState(
+            kind = other.kind,
+            childFirstName = otherChildFirstName?.ifBlank { null } ?: "Another child",
+            elapsedText = elapsedMinutesText(nowMillis - other.startedAtMillis),
+        )
     }
 
     /**

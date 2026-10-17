@@ -232,4 +232,47 @@ class WidgetStateMapperTest {
         assertEquals(EventType.FEEDING, state.running!!.kind)
         assertEquals("1h 06m", state.running!!.elapsedText)
     }
+
+    // -- T7: cross-child running line ---------------------------------------------------
+
+    @Test
+    fun `cross-child timer line names the other child kind and elapsed`() {
+        val cross = WidgetStateMapper.crossChildTimer(
+            timers = listOf(
+                timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5), // own child: ignored
+                timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 32),
+            ),
+            childId = 1,
+            otherChildFirstName = "Zoe",
+            nowMillis = now,
+        )
+        assertEquals(EventType.SLEEP, cross!!.kind)
+        assertEquals("Zoe", cross.childFirstName)
+        assertEquals("32m", cross.elapsedText)
+    }
+
+    @Test
+    fun `cross-child line is null when only this child's timer runs`() {
+        val cross = WidgetStateMapper.crossChildTimer(
+            timers = listOf(timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5)),
+            childId = 1,
+            otherChildFirstName = "Zoe",
+            nowMillis = now,
+        )
+        assertEquals(null, cross)
+    }
+
+    @Test
+    fun `cross-child line with unknown child name degrades without lying`() {
+        val cross = WidgetStateMapper.crossChildTimer(
+            timers = listOf(timer(EventType.PUMPING, childId = 2, startedMinutesAgo = 7)),
+            childId = 1,
+            otherChildFirstName = null,
+            nowMillis = now,
+        )
+        assertEquals("Another child", cross!!.childFirstName)
+        assertEquals("7m", cross.elapsedText)
+        assertEquals("pump", WidgetStateMapper.friendlyNoun(EventType.PUMPING))
+        assertEquals("nap", WidgetStateMapper.friendlyNoun(EventType.SLEEP))
+    }
 }
