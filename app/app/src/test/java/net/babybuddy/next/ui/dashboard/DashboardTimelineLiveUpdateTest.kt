@@ -263,4 +263,43 @@ class DashboardTimelineLiveUpdateTest {
         assertEquals(SyncState.FAILED, rowFinal?.syncState)
         assertNotNull(rowFinal?.failureReason)
     }
+
+    @Test
+    fun `edit sheet shows the translated failure reason, never the raw server line (T6)`() = runBlocking {
+        viewModel.refresh()
+        advance()
+        withTimeout(10_000) { while (latest.value.timeline.none { it.type == EventType.SLEEP }) { advance(); delay(50) } }
+        val target = latest.value.timeline.first { it.type == EventType.SLEEP }
+
+        // Rejected edit -> the row is FAILED with the raw server reason stored.
+        container.eventRepository.edit(
+            target.localUuid,
+            target.toDraft().copy(startMillis = target.startMillis - 900_000),
+        )
+        val outcome = container.drainer.drain()
+        advance()
+        assertEquals(
+            "drain must mark the rejected edit FAILED (outcome=$outcome)",
+            SyncState.FAILED,
+            container.eventRepository.event(target.localUuid)?.syncState,
+        )
+
+        // Open the Quick Edit sheet on the FAILED row (the row tap path).
+        viewModel.onTimelineRowTapped(container.eventRepository.event(target.localUuid)!!)
+        withTimeout(10_000) {
+            while (latest.value.editState == null) { advance(); delay(50) }
+        }
+        val sheetReason = latest.value.editState!!.failureReason
+        assertNotNull("FAILED entry's sheet must carry a failure reason", sheetReason)
+        assertTrue(
+            "sheet reason must be parent language, got: $sheetReason",
+            sheetReason!!.contains("overlaps"),
+        )
+        for (rawFragment in listOf("intersect", "Conflicting entry", "non_field_errors", "<a href")) {
+            assertTrue(
+                "sheet reason must not contain raw server-speak '$rawFragment', got: $sheetReason",
+                !sheetReason.contains(rawFragment, ignoreCase = true),
+            )
+        }
+    }
 }

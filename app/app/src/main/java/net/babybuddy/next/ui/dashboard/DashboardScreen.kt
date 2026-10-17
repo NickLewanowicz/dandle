@@ -293,6 +293,7 @@ fun DashboardScreen(
             event = edit.event,
             draft = edit.draft,
             validationReason = viewModel.editValidationReason(edit),
+            failureReason = edit.failureReason,
             onDraftChange = viewModel::onEditDraftChange,
             onStartStepped = viewModel::onEditStartStepped,
             onEndStepped = viewModel::onEditEndStepped,

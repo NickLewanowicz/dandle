@@ -75,6 +75,7 @@ fun QuickEditSheet(
     event: Event,
     draft: EventDraft,
     validationReason: String?,
+    failureReason: String? = null,
     onDraftChange: ((EventDraft) -> EventDraft) -> Unit,
     onStartStepped: (Long) -> Unit,
     onEndStepped: (Long) -> Unit,
@@ -139,8 +140,9 @@ fun QuickEditSheet(
             }
 
             if (isFailed) {
-                // Failure banner (UX spec §4): the server's reason, untranslated here — the
-                // parent-language translation lives in the failure dialog.
+                // Failure banner (UX spec §4, T6): the same parent-language translation the
+                // failure dialog shows — never the raw server line (robot-speak, and its times
+                // are rendered in the SERVER's timezone, not the user's).
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = MaterialTheme.shapes.small,
@@ -159,7 +161,7 @@ fun QuickEditSheet(
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                         )
                         Text(
-                            event.failureReason ?: "The server rejected this entry.",
+                            failureReason ?: "The server rejected this entry.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(start = 6.dp),

@@ -60,6 +60,11 @@ data class EditState(
     /** Snapshot as opened — the timeline row itself keeps live-syncing underneath. */
     val event: Event,
     val draft: EventDraft,
+    /**
+     * T6: parent-language reason when the entry is FAILED (same translation the failure dialog
+     * uses — never the raw server line; times rendered device-local from the loaded clash row).
+     */
+    val failureReason: String? = null,
 )
 
 /** Failure dialog state (spec §6.2): the FAILED entry plus its parent-language reason. */
@@ -673,7 +678,15 @@ class DashboardViewModel(
         net.babybuddy.next.log.BbLog.d(TAG_UI, "edit open ${event.type.name} ${event.localUuid}")
         viewModelScope.launch {
             val stored = eventRepo.event(event.localUuid) ?: return@launch
-            editState.value = EditState(event = stored, draft = stored.toDraft())
+            editState.value = EditState(
+                event = stored,
+                draft = stored.toDraft(),
+                failureReason = if (stored.syncState == SyncState.FAILED) {
+                    presentFailure(stored).reason
+                } else {
+                    null
+                },
+            )
         }
     }
 
@@ -775,9 +788,14 @@ class DashboardViewModel(
         viewModelScope.launch { onFailureBadgeTappedInternal(event) }
     }
 
-    /** Shared by the badge tap and the proactive (P1-3) server-rejection surfacing. */
-    private suspend fun onFailureBadgeTappedInternal(event: Event) {
-        if (event.syncState != SyncState.FAILED) return
+    /** Parent-language presentation of a rejection: translated reason + loaded clash row. */
+    private data class FailurePresentation(val reason: String, val clashLocalUuid: String?)
+
+    /**
+     * Shared by the failure dialog (badge tap + the P1-3 proactive surfacing) and the Quick Edit
+     * sheet's failure banner (T6): one translation, so the same entry reads the same everywhere.
+     */
+    private suspend fun presentFailure(event: Event): FailurePresentation {
         var clash: Event? = null
         val conflictServerId = event.conflictServerId
         val conflictUiPath = event.conflictUiPath
@@ -792,8 +810,7 @@ class DashboardViewModel(
                 } ?: eventRepo.event(serverLocalUuid(type, conflictServerId))
             }
         }
-        failureDialog.value = FailureDialogState(
-            event = event,
+        return FailurePresentation(
             reason = FailureMessage.translate(
                 reason = event.failureReason,
                 conflictUiPath = conflictUiPath,
@@ -801,6 +818,16 @@ class DashboardViewModel(
                 clash = clash,
             ),
             clashLocalUuid = clash?.localUuid,
+        )
+    }
+
+    private suspend fun onFailureBadgeTappedInternal(event: Event) {
+        if (event.syncState != SyncState.FAILED) return
+        val presentation = presentFailure(event)
+        failureDialog.value = FailureDialogState(
+            event = event,
+            reason = presentation.reason,
+            clashLocalUuid = presentation.clashLocalUuid,
         )
     }
 
