@@ -133,11 +133,12 @@ private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>, 
         modifier = GlanceModifier.fillMaxSize().padding(2.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val context = LocalContext.current
         if (wide) {
             Row(modifier = GlanceModifier.fillMaxSize()) {
                 slots.forEachIndexed { index, slot ->
                     Box(modifier = GlanceModifier.defaultWeight()) {
-                        SlotCell(slot, compact = true)
+                        SlotCell(context, slot, compact = true)
                     }
                 }
             }
@@ -147,7 +148,7 @@ private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>, 
                     Row(modifier = GlanceModifier.defaultWeight()) {
                         rowSlots.forEach { slot ->
                             Box(modifier = GlanceModifier.defaultWeight()) {
-                                SlotCell(slot, compact = false)
+                                SlotCell(context, slot, compact = false)
                             }
                         }
                         repeat(2 - rowSlots.size) {
@@ -161,13 +162,17 @@ private fun QuickActionsContent(slots: List<WidgetStateMapper.QuickActionSlot>, 
 }
 
 @Composable
-private fun SlotCell(slot: WidgetStateMapper.QuickActionSlot, compact: Boolean) {
+private fun SlotCell(
+    context: Context,
+    slot: WidgetStateMapper.QuickActionSlot,
+    compact: Boolean,
+) {
     val colors = GlanceTheme.colors
     val modifier = when {
         slot.running -> GlanceModifier
             .background(colors.secondaryContainer)
             .then(WidgetActions.openAppModifier())
-        else -> GlanceModifier.clickable(slotAction(slot.type))
+        else -> GlanceModifier.clickable(slotAction(context, slot.type))
     }
     Box(
         modifier = GlanceModifier.fillMaxSize().padding(3.dp).then(modifier),
@@ -196,9 +201,7 @@ private fun SlotCell(slot: WidgetStateMapper.QuickActionSlot, compact: Boolean) 
 }
 
 /** Idle timer slots start in place; everything else deep-links into the app. */
-private fun slotAction(type: EventType): androidx.glance.action.Action = when (type) {
+private fun slotAction(context: Context, type: EventType): androidx.glance.action.Action = when (type) {
     EventType.SLEEP -> actionRunCallback<WidgetSleepStartAction>()
-    else -> actionStartActivity<net.babybuddy.next.MainActivity>(
-        parameters = actionParametersOf(WidgetActions.PARAM_TYPE to type.name)
-    )
+    else -> WidgetActions.openPanelAction(context, type)
 }

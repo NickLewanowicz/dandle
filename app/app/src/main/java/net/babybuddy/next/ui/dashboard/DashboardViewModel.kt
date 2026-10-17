@@ -9,6 +9,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -136,6 +139,9 @@ class DashboardViewModel(
     /** A save the duplicate guard is holding until the user picks "Add anyway". */
     private var heldSave: (suspend () -> Unit)? = null
 
+    /** BbLog tag — MUST precede the init blocks (the deep-link collector logs at construction). */
+    private val TAG_UI = net.babybuddy.next.log.BbLog.TAG_UI
+
     // -- Connectivity (offline is a normal path; reconnection re-kicks the drain) -------
 
     private val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -159,6 +165,29 @@ class DashboardViewModel(
         viewModelScope.launch {
             activeChildId.value = container.sessionStore.sessionFlow.first().activeChildId
             restoreOpenPanel()
+        }
+        // Widget deep links (spec §7.1): StateFlow holds the request across cold starts and
+        // login gates; consuming runs the exact in-app tap semantics. The request can arrive
+        // before children load, so wait for the child list before acting (bounded — a request
+        // for a childless server is consumed as a no-op instead of stranding).
+        viewModelScope.launch {
+            net.babybuddy.next.widget.WidgetDeepLink.panelRequest.collect { type ->
+                if (type == null) return@collect
+                net.babybuddy.next.log.BbLog.d(TAG_UI, "deep link panel ${type.name}")
+                val children = withTimeoutOrNull(10_000) {
+                    childRepo.children.first { it.isNotEmpty() }
+                }
+                // The tap semantics read the resolved active child from uiState — wait for the
+                // combine to publish it (children -> active child -> uiState is ordered but the
+                // collector resumes between those steps).
+                val child = withTimeoutOrNull(10_000) {
+                    uiState.first { it.activeChild != null }.activeChild
+                }
+                if (children != null && child != null) {
+                    onQuickActionTap(type)
+                }
+                net.babybuddy.next.widget.WidgetDeepLink.consume()
+            }
         }
         // Fresh start with no persisted selection: adopt the first child (spec §2 "default =
         // first child, MUST persist"). Without this the header DISPLAYS the fallback child but
@@ -530,6 +559,7 @@ class DashboardViewModel(
     }
 
     private suspend fun openPanelFor(type: EventType, childId: Long) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "openPanelFor ${type.name} child=$childId")
         // One editor at a time (original app): persist the outgoing panel closed, keep values.
         openPanel.value?.takeIf { it.type != type }?.let { current ->
             quickActions.savePanel(childId, current.type.name, current.draft.copy(open = false))
@@ -538,6 +568,7 @@ class DashboardViewModel(
         quickActions.savePanel(childId, type.name, draft)
         val timer = if (type.isTimed) timerRepo.findRunning(type, childId) else null
         openPanel.value = OpenPanel(type, draft, timer)
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "openPanel set ${type.name} timer=${timer?.localId}")
     }
 
     /** Stored field values for this child+type; feeding defaults learn per child (spec §3.1). */
@@ -796,8 +827,6 @@ class DashboardViewModel(
 
     private fun currentLogId(): String =
         editState.value?.let { "${it.event.type.name} ${it.event.localUuid}" } ?: "none"
-
-    private val TAG_UI = net.babybuddy.next.log.BbLog.TAG_UI
 
     companion object {
         const val TIMELINE_PAGE = 30

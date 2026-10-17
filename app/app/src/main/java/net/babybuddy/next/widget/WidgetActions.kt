@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.Intent
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.updateAll
@@ -37,20 +35,26 @@ object WidgetActions {
 
     const val ACTION_SLEEP_TOGGLE = "SLEEP_TOGGLE"
 
-    fun openPanelParameters(type: EventType): ActionParameters =
-        actionParametersOf(PARAM_TYPE to type.name)
-
-    val PARAM_TYPE = ActionParameters.Key<String>("type")
-
     /** Deep link: open the app with this quick-action panel pre-opened. */
-    fun openPanelModifier(type: EventType): GlanceModifier =
-        GlanceModifier.clickable(
-            actionStartActivity<MainActivity>(openPanelParameters(type))
+    fun openPanelAction(context: Context, type: EventType): androidx.glance.action.Action {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra(EXTRA_OPEN_PANEL, type.name)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return androidx.glance.appwidget.action.actionStartActivity(
+            intent,
+            androidx.glance.action.actionParametersOf(),
         )
+    }
+
+    fun openPanelModifier(context: Context, type: EventType): GlanceModifier =
+        GlanceModifier.clickable(openPanelAction(context, type))
 
     /** Open the plain app (timers strip shows the running timer). */
     fun openAppModifier(): GlanceModifier =
-        GlanceModifier.clickable(actionStartActivity<MainActivity>())
+        GlanceModifier.clickable(
+            androidx.glance.action.actionStartActivity<MainActivity>()
+        )
 
     fun openPanelIntent(context: Context, type: EventType): Intent =
         Intent(context, MainActivity::class.java).apply {

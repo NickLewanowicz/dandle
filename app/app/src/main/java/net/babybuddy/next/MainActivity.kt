@@ -26,13 +26,10 @@ import net.babybuddy.next.ui.theme.BabyBuddyNextTheme
 
 class MainActivity : ComponentActivity() {
 
-    /** Widget deep link (spec §7.1): quick-action panel to pre-open, consumed by the dashboard. */
-    private var openPanelRequest by mutableStateOf<net.babybuddy.next.domain.model.EventType?>(null)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as App).container
-        openPanelRequest = openPanelFromIntent(intent)
+        openPanelFromIntent(intent)
         enableEdgeToEdge()
         setContent {
             BabyBuddyNextTheme {
@@ -51,11 +48,7 @@ class MainActivity : ComponentActivity() {
                         )
                         .testTag("app_root"),
                 ) {
-                    RootNavigation(
-                        container = container,
-                        openPanelRequest = openPanelRequest,
-                        onPanelRequestConsumed = { openPanelRequest = null },
-                    )
+                    RootNavigation(container = container)
                 }
             }
         }
@@ -64,20 +57,21 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // singleTop: widget deep links reuse this instance.
-        openPanelRequest = openPanelFromIntent(intent)
+        openPanelFromIntent(intent)
     }
 
-    private fun openPanelFromIntent(intent: Intent?): net.babybuddy.next.domain.model.EventType? =
-        intent?.getStringExtra(net.babybuddy.next.widget.WidgetActions.EXTRA_OPEN_PANEL)
-            ?.let { type -> runCatching { net.babybuddy.next.domain.model.EventType.valueOf(type) }.getOrNull() }
+    /** Parses the widget deep link into the deep-link channel (no-op when absent). */
+    private fun openPanelFromIntent(intent: Intent?) {
+        val type = intent?.getStringExtra(net.babybuddy.next.widget.WidgetActions.EXTRA_OPEN_PANEL)
+            ?.let { raw -> runCatching { net.babybuddy.next.domain.model.EventType.valueOf(raw) }.getOrNull() }
+        if (type != null) {
+            net.babybuddy.next.widget.WidgetDeepLink.requestPanel(type)
+        }
+    }
 }
 
 @Composable
-private fun RootNavigation(
-    container: net.babybuddy.next.data.AppContainer,
-    openPanelRequest: net.babybuddy.next.domain.model.EventType?,
-    onPanelRequestConsumed: () -> Unit,
-) {
+private fun RootNavigation(container: net.babybuddy.next.data.AppContainer) {
     val session by container.sessionStore.sessionFlow.collectAsStateWithLifecycle(initialValue = null)
 
     // Freeze the start destination on the first session emission so later session changes

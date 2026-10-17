@@ -78,8 +78,9 @@ class CareDashboardWidget : GlanceAppWidget() {
         }
 
         provideContent {
+            val context = LocalContext.current
             GlanceTheme {
-                CareDashboardContent(state)
+                CareDashboardContent(context, state)
             }
         }
     }
@@ -110,7 +111,7 @@ class CareDashboardWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 @Composable
-private fun CareDashboardContent(state: WidgetStateMapper.CareDashboardState) {
+private fun CareDashboardContent(context: Context, state: WidgetStateMapper.CareDashboardState) {
     val colors = GlanceTheme.colors
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(8.dp),
@@ -122,7 +123,7 @@ private fun CareDashboardContent(state: WidgetStateMapper.CareDashboardState) {
                 label = row.label,
                 detail = listOfNotNull(row.sinceText, row.detailText).joinToString(" · "),
                 accent = false,
-                action = WidgetActions.openPanelModifier(row.type),
+                action = WidgetActions.openPanelModifier(context, row.type),
             )
         }
         state.running?.let { running ->

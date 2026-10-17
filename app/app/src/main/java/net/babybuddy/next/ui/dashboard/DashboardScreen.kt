@@ -62,9 +62,6 @@ fun DashboardScreen(
     container: AppContainer,
     onSignedOut: () -> Unit,
     onSignIn: () -> Unit = {},
-    /** Widget deep link (spec §7.1): quick-action panel to pre-open, then consumed. */
-    openPanelRequest: net.babybuddy.next.domain.model.EventType? = null,
-    onPanelRequestConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val viewModel = viewModel { DashboardViewModel(container, context) }
@@ -95,20 +92,6 @@ fun DashboardScreen(
                 DashboardEvent.SignedOut -> onSignedOut()
             }
         }
-    }
-
-    // Widget deep link (spec §7.1): run the exact in-app tap semantics once children resolve.
-    LaunchedEffect(openPanelRequest) {
-        val type = openPanelRequest ?: return@LaunchedEffect
-        var waited = 0
-        while (state.activeChild == null && waited < 5_000) {
-            delay(100)
-            waited += 100
-        }
-        if (state.activeChild != null) {
-            viewModel.onQuickActionTap(type)
-        }
-        onPanelRequestConsumed()
     }
 
     LaunchedEffect(state.showLongPressHint) {
