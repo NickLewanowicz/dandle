@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -103,39 +104,63 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .testTag(TestTags.LOGIN_SERVER_URL),
                 )
-                OutlinedTextField(
-                    value = state.username,
-                    onValueChange = viewModel::onUsernameChange,
-                    label = { Text("Username") },
-                    singleLine = true,
-                    isError = state.banner == LoginBanner.BAD_CREDENTIALS,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.LOGIN_USERNAME),
-                )
-                OutlinedTextField(
-                    value = state.password,
-                    onValueChange = viewModel::onPasswordChange,
-                    label = { Text("Password") },
-                    singleLine = true,
-                    isError = state.banner == LoginBanner.BAD_CREDENTIALS,
-                    visualTransformation =
-                        if (state.passwordVisible) VisualTransformation.None
-                        else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.LOGIN_PASSWORD),
-                )
+                if (!state.apiKeyMode) {
+                    OutlinedTextField(
+                        value = state.username,
+                        onValueChange = viewModel::onUsernameChange,
+                        label = { Text("Username") },
+                        singleLine = true,
+                        isError = state.banner == LoginBanner.BAD_CREDENTIALS,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_USERNAME),
+                    )
+                    OutlinedTextField(
+                        value = state.password,
+                        onValueChange = viewModel::onPasswordChange,
+                        label = { Text("Password") },
+                        singleLine = true,
+                        isError = state.banner == LoginBanner.BAD_CREDENTIALS,
+                        visualTransformation =
+                            if (state.passwordVisible) VisualTransformation.None
+                            else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_PASSWORD),
+                    )
+                } else {
+                    // T8 (Priya): self-hosters mint API keys — let them paste one; the server
+                    // validates it against /api/children/ exactly like the password path.
+                    OutlinedTextField(
+                        value = state.apiKey,
+                        onValueChange = viewModel::onApiKeyChange,
+                        label = { Text("API key") },
+                        singleLine = true,
+                        isError = state.banner == LoginBanner.BAD_CREDENTIALS,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_API_KEY),
+                    )
+                }
 
                 when (state.banner) {
                     LoginBanner.UNREACHABLE -> ErrorBanner(TestTags.LOGIN_ERROR_BANNER, "Couldn't reach the server — check the URL and your connection.")
-                    LoginBanner.BAD_CREDENTIALS -> ErrorBanner(TestTags.LOGIN_ERROR_BANNER, "Wrong username or password.")
+                    LoginBanner.BAD_CREDENTIALS -> ErrorBanner(
+                        TestTags.LOGIN_ERROR_BANNER,
+                        if (state.apiKeyMode) "The server rejected that API key."
+                        else "Wrong username or password.",
+                    )
                     LoginBanner.NO_CHILDREN -> ErrorBanner(TestTags.LOGIN_ERROR_BANNER, "No children found. Create one in the Baby Buddy web app, then retry.")
                     LoginBanner.HTTP_ERROR -> ErrorBanner(
                         TestTags.LOGIN_ERROR_BANNER,
@@ -163,6 +188,21 @@ fun LoginScreen(
                     } else {
                         Text("Sign in")
                     }
+                }
+
+                // T8 (Priya): self-hosters mint API keys for scripts — offer the paste path
+                // without making it the default (Elena's first screen stays username+password).
+                TextButton(
+                    onClick = viewModel::onApiKeyModeToggle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(TestTags.LOGIN_ADVANCED_TOGGLE),
+                ) {
+                    Text(
+                        if (state.apiKeyMode) "Use username and password instead"
+                        else "Advanced: paste an API key",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
 

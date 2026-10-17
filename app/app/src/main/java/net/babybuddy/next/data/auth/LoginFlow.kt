@@ -70,6 +70,69 @@ class LoginFlow(
             }
         }
 
+    /**
+     * T8 (Priya): self-hosters mint API keys for scripts — let them paste one instead of
+     * handing over a password. The key is validated exactly like password login's last step:
+     * `GET /api/children/` with `Authorization: Token <key>` (200 + count > 0 = in), then a
+     * best-effort profile read for a display name. Saves the SAME session shape as form login.
+     */
+    suspend fun loginWithToken(rawUrl: String, apiKey: String): LoginResult =
+        withContext(Dispatchers.IO) {
+            val server = normalizeServerUrl(rawUrl)
+            try {
+                tokenChecked(server, apiKey.trim())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LoginResult.Failure(LoginError.Unreachable)
+            }
+        }
+
+    private suspend fun tokenChecked(server: NormalizedServerUrl, apiKey: String): LoginResult {
+        if (apiKey.isEmpty()) return LoginResult.Failure(LoginError.BadCredentials)
+        val base = server.url
+
+        // -- Validation: children list, token-authenticated (the password path's step 4) ----
+        val childrenResponse = client.newCall(
+            Request.Builder()
+                .url("$base/api/children/?limit=1")
+                .get()
+                .header("Authorization", "Token $apiKey")
+                .build()
+        ).execute()
+        childrenResponse.use { children ->
+            when {
+                children.code == 401 || children.code == 403 ->
+                    return LoginResult.Failure(LoginError.BadCredentials)
+                !children.isSuccessful ->
+                    return LoginResult.Failure(LoginError.HttpError(children.code))
+            }
+            val page = runCatching {
+                json.decodeFromString<PaginatedDto<ChildDto>>(children.body?.string().orEmpty())
+            }.getOrNull() ?: return LoginResult.Failure(LoginError.HttpError(children.code))
+            if (page.count == 0) return LoginResult.Failure(LoginError.NoChildren)
+
+            // -- Display name: profile read is best-effort; the login works without it. ----
+            val username = runCatching {
+                client.newCall(
+                    Request.Builder()
+                        .url("$base/api/profile")
+                        .get()
+                        .header("Authorization", "Token $apiKey")
+                        .build()
+                ).execute()
+            }.getOrNull()?.use { profile ->
+                runCatching {
+                    json.decodeFromString<ProfileDto>(profile.body?.string().orEmpty())
+                }.getOrNull()?.user?.username
+            }.orEmpty().ifBlank { "API key" }
+
+            sessionStore.saveLogin(serverUrl = base, apiKey = apiKey, username = username)
+            net.babybuddy.next.log.BbLog.d(TAG, "pasted key stored (user=$username)")
+            return LoginResult.Success(server, apiKey)
+        }
+    }
+
     private suspend fun loginChecked(
         server: NormalizedServerUrl,
         username: String,

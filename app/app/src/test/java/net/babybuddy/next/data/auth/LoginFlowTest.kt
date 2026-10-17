@@ -147,6 +147,99 @@ class LoginFlowTest {
         assertFalse(session.sessionExpired)
     }
 
+    // -- T8: pasted API key path ---------------------------------------------------
+
+    /** Token-path dispatcher: children validation + optional profile + optional key status. */
+    private fun tokenDispatcher(
+        childrenStatus: Int = 200,
+        childrenCount: Int = 1,
+        withProfile: Boolean = true,
+    ) = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            val path = request.requestUrl!!.encodedPath
+            return when {
+                path == "/api/children/" -> MockResponse()
+                    .setResponseCode(childrenStatus)
+                    .setHeader("Date", dateHeaderFor(localNow + 5_000))
+                    .setBody(
+                        if (childrenStatus == 200) {
+                            """{"count":$childrenCount,"next":null,"previous":null,"results":[{"id":1,"first_name":"Emma","last_name":"Stone","birth_date":"2025-01-02","birth_time":"08:30","slug":"emma-stone"}]}"""
+                        } else {
+                            """{"detail":"Invalid token."}"""
+                        }
+                    )
+                path == "/api/profile" && withProfile -> MockResponse()
+                    .setResponseCode(200)
+                    .setBody(
+                        """{"user":{"id":1,"username":"admin","first_name":"","last_name":"","email":"","is_staff":true},"language":"en-US","timezone":"UTC","api_key":"ignored"}"""
+                    )
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+    }
+
+    @Test
+    fun `pasted api key validates via children and persists the session (T8)`() = runTest {
+        server.dispatcher = tokenDispatcher()
+        val store = sessionStore()
+        val result = flow(loginClient(ServerClock(Clock.fixed(localNow))), store)
+            .loginWithToken(server.url("/").toString(), "MINTEDKEY123")
+
+        assertTrue("expected Success, got $result", result is LoginResult.Success)
+        assertEquals("MINTEDKEY123", (result as LoginResult.Success).apiKey)
+
+        // First request validates the key with the children list; token auth on the wire.
+        val children = server.takeRequest()
+        assertEquals("/api/children/", children.requestUrl!!.encodedPath)
+        assertEquals("Token MINTEDKEY123", children.getHeader("Authorization"))
+
+        // Profile is best-effort (display name only).
+        val profile = server.takeRequest()
+        assertEquals("/api/profile", profile.requestUrl!!.encodedPath)
+        assertEquals("Token MINTEDKEY123", profile.getHeader("Authorization"))
+
+        // The persisted session matches the form-login shape exactly.
+        val session = store.sessionFlow.first()
+        assertEquals("MINTEDKEY123", session.apiKey)
+        assertEquals("admin", session.username)
+        assertTrue(
+            "session serverUrl should be the mock server root, got ${session.serverUrl}",
+            session.serverUrl == server.url("/").toString().trimEnd('/'),
+        )
+        assertFalse(session.sessionExpired)
+    }
+
+    @Test
+    fun `pasted api key rejected by the server maps to BadCredentials (T8)`() = runTest {
+        server.dispatcher = tokenDispatcher(childrenStatus = 401)
+        val result = flow(loginClient(ServerClock(Clock.fixed(localNow))), sessionStore())
+            .loginWithToken(server.url("/").toString(), "WRONGKEY")
+
+        assertTrue("expected Failure, got $result", result is LoginResult.Failure)
+        assertEquals(LoginError.BadCredentials, (result as LoginResult.Failure).error)
+    }
+
+    @Test
+    fun `pasted api key with zero children maps to NoChildren (T8)`() = runTest {
+        server.dispatcher = tokenDispatcher(childrenCount = 0)
+        val result = flow(loginClient(ServerClock(Clock.fixed(localNow))), sessionStore())
+            .loginWithToken(server.url("/").toString(), "MINTEDKEY123")
+
+        assertTrue(result is LoginResult.Failure)
+        assertEquals(LoginError.NoChildren, (result as LoginResult.Failure).error)
+    }
+
+    @Test
+    fun `unreachable server on the token path maps to Unreachable (T8)`() = runTest {
+        val url = server.url("/").toString()
+        server.shutdown()
+        val result = flow(loginClient(ServerClock(Clock.fixed(localNow))), sessionStore())
+            .loginWithToken(url, "MINTEDKEY123")
+
+        assertTrue(result is LoginResult.Failure)
+        assertEquals(LoginError.Unreachable, (result as LoginResult.Failure).error)
+    }
+
     @Test
     fun `server clock offset is captured from Date headers`() = runTest {
         server.dispatcher = happyDispatcher()

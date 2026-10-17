@@ -39,6 +39,9 @@ data class LoginUiState(
     /** Shown when the banner is SESSION_EXPIRED: fields arrive pre-filled from the session. */
     val sessionPrefill: Boolean = false,
     val cleartextDialogVisible: Boolean = false,
+    /** T8: "Advanced: paste an API key" — skips the username/password form entirely. */
+    val apiKeyMode: Boolean = false,
+    val apiKey: String = "",
 ) {
     /** Live normalization hint — shown only while it differs from the typed text (UX spec §1). */
     val normalizedServer: NormalizedServerUrl?
@@ -50,7 +53,11 @@ data class LoginUiState(
     val isCleartext: Boolean get() = normalizedServer?.isCleartext == true
 
     val canSubmit: Boolean
-        get() = serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank() && !submitting
+        get() = when {
+            submitting -> false
+            apiKeyMode -> serverUrl.isNotBlank() && apiKey.isNotBlank()
+            else -> serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+        }
 }
 
 sealed interface LoginEvent {
@@ -117,6 +124,15 @@ class LoginViewModel(
         it.copy(passwordVisible = !it.passwordVisible)
     }
 
+    /** T8: toggle the "Advanced: paste an API key" mode (fields swap, banner clears). */
+    fun onApiKeyModeToggle() = _uiState.update {
+        it.copy(apiKeyMode = !it.apiKeyMode, banner = null, sessionPrefill = false, apiKey = "")
+    }
+
+    fun onApiKeyChange(value: String) = _uiState.update {
+        it.copy(apiKey = value, banner = null, sessionPrefill = false)
+    }
+
     fun submit() {
         val state = _uiState.value
         if (!state.canSubmit) return
@@ -124,13 +140,13 @@ class LoginViewModel(
             _uiState.update { it.copy(cleartextDialogVisible = true) }
             return
         }
-        doLogin()
+        if (state.apiKeyMode) doTokenLogin() else doLogin()
     }
 
     fun onCleartextContinue() {
         cleartextAcknowledged = true
         _uiState.update { it.copy(cleartextDialogVisible = false) }
-        doLogin()
+        if (_uiState.value.apiKeyMode) doTokenLogin() else doLogin()
     }
 
     fun onCleartextCancel() {
@@ -147,22 +163,34 @@ class LoginViewModel(
                 username = state.username,
                 password = state.password,
             )
-            when (result) {
-                is LoginResult.Success -> {
-                    _uiState.update { it.copy(submitting = false, banner = null) }
-                    _events.tryEmit(LoginEvent.SignedIn)
+            handleLoginResult(result)
+        }
+    }
+
+    private fun doTokenLogin() {
+        val state = _uiState.value
+        _uiState.update { it.copy(submitting = true, banner = null) }
+        viewModelScope.launch {
+            handleLoginResult(loginFlow.loginWithToken(rawUrl = state.serverUrl, apiKey = state.apiKey))
+        }
+    }
+
+    private fun handleLoginResult(result: LoginResult) {
+        when (result) {
+            is LoginResult.Success -> {
+                _uiState.update { it.copy(submitting = false, banner = null) }
+                _events.tryEmit(LoginEvent.SignedIn)
+            }
+            is LoginResult.Failure -> {
+                val status = (result.error as? LoginError.HttpError)?.status ?: 0
+                val banner = when (result.error) {
+                    LoginError.Unreachable -> LoginBanner.UNREACHABLE
+                    LoginError.BadCredentials -> LoginBanner.BAD_CREDENTIALS
+                    LoginError.NoChildren -> LoginBanner.NO_CHILDREN
+                    is LoginError.HttpError -> LoginBanner.HTTP_ERROR
                 }
-                is LoginResult.Failure -> {
-                    val status = (result.error as? LoginError.HttpError)?.status ?: 0
-                    val banner = when (result.error) {
-                        LoginError.Unreachable -> LoginBanner.UNREACHABLE
-                        LoginError.BadCredentials -> LoginBanner.BAD_CREDENTIALS
-                        LoginError.NoChildren -> LoginBanner.NO_CHILDREN
-                        is LoginError.HttpError -> LoginBanner.HTTP_ERROR
-                    }
-                    _uiState.update {
-                        it.copy(submitting = false, banner = banner, httpStatus = status)
-                    }
+                _uiState.update {
+                    it.copy(submitting = false, banner = banner, httpStatus = status)
                 }
             }
         }

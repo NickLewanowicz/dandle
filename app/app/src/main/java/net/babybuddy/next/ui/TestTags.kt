@@ -13,6 +13,8 @@ object TestTags {
     const val LOGIN_SUBMIT = "login/submit"
     const val LOGIN_ERROR_BANNER = "login/error_banner"
     const val LOGIN_CLEARTEXT_DIALOG = "login/cleartext_dialog"
+    const val LOGIN_ADVANCED_TOGGLE = "login/advanced_toggle"
+    const val LOGIN_API_KEY = "login/api_key"
 
     // Dashboard (UX spec §2)
     const val DASHBOARD = "dashboard"
