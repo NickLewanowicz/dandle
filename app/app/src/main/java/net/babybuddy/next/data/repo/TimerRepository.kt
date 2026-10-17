@@ -85,19 +85,24 @@ class TimerRepository(
 
     /**
      * Stops the timer and saves the entry (start = timer start, end = stop time — spec §3).
-     * The entry goes through the normal local-first create path; the server timer (if any) is
-     * deleted best-effort. Use [discard] to stop without saving.
+     * T2: a panel "started X min ago" adjustment ([EventDraft.startAdjustMillis]) backdates the
+     * START only — the user is correcting when tracking actually began; the stop time and the
+     * resulting duration math are unchanged. The entry goes through the normal local-first
+     * create path; the server timer (if any) is deleted best-effort. Use [discard] to stop
+     * without saving.
      */
     suspend fun stopAndSave(timer: RunningTimer, draft: EventDraft) {
         require(draft.type == timer.kind)
         val end = serverClock.nowMillis()
+        val start = (timer.startedAtMillis - draft.startAdjustMillis).coerceAtMost(end)
         net.babybuddy.next.log.BbLog.d(
             TAG,
-            "stop+save ${timer.kind.name} localId=${timer.localId} elapsed=${end - timer.startedAtMillis}ms",
+            "stop+save ${timer.kind.name} localId=${timer.localId} elapsed=${end - timer.startedAtMillis}ms " +
+                "adjust=${draft.startAdjustMillis}ms",
         )
         eventRepository.create(
             draft.copy(
-                startMillis = timer.startedAtMillis,
+                startMillis = start,
                 endMillis = end.coerceAtLeast(timer.startedAtMillis),
             )
         )

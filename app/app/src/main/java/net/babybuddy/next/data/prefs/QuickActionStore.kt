@@ -39,6 +39,8 @@ data class PanelDraft(
     val milestone: String = "",
     // Quick note
     val text: String = "",
+    // T2: timed panels — "started X min ago" (0 = started now). Clamped by the VM.
+    val startedMinutesAgo: Int = 0,
 )
 
 /** Learned last-used feeding type+method for one child (spec §3.1, spec v0.2). */

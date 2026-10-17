@@ -535,6 +535,29 @@ class DashboardViewModel(
 
     fun onPanelTextChange(text: String) = updateDraft(EventType.NOTE) { it.copy(text = text) }
 
+    // -- T2: "started X min ago" adjust on timed panels (spec §5 panel time-adjust) ----------
+
+    /** Stepper: [minutesAgoDelta] > 0 backdates ("−15m" = started 15 minutes earlier). */
+    fun onPanelStartAdjustStepped(minutesAgoDelta: Long) {
+        val panel = openPanel.value ?: return
+        if (!panel.type.isTimed) return
+        updateDraft(null) { draft ->
+            draft.copy(
+                startedMinutesAgo = (draft.startedMinutesAgo + minutesAgoDelta.toInt())
+                    .coerceIn(0, MAX_STARTED_AGO_MINUTES),
+            )
+        }
+    }
+
+    /** Absolute set from the platform time picker: stored as whole minutes ago. */
+    fun onPanelStartTimePicked(millis: Long) {
+        val panel = openPanel.value ?: return
+        if (!panel.type.isTimed) return
+        val now = container.serverClock.nowMillis()
+        val minutes = ((now - millis) / 60_000L).coerceIn(0L, MAX_STARTED_AGO_MINUTES.toLong())
+        updateDraft(null) { it.copy(startedMinutesAgo = minutes.toInt()) }
+    }
+
     private fun updateDraft(type: EventType?, transform: (PanelDraft) -> PanelDraft) {
         val panel = openPanel.value ?: return
         if (type != null && panel.type != type) return
@@ -679,6 +702,10 @@ class DashboardViewModel(
     override fun onMilestoneChange(text: String) = onPanelMilestoneChange(text)
 
     override fun onTextChange(text: String) = onPanelTextChange(text)
+
+    override fun onStartAdjustStepped(minutesAgoDelta: Long) = onPanelStartAdjustStepped(minutesAgoDelta)
+
+    override fun onStartTimePicked(millis: Long) = onPanelStartTimePicked(millis)
 
     // -- Timeline -------------------------------------------------------------------
 
@@ -912,11 +939,15 @@ class DashboardViewModel(
 
     private fun PanelDraft.toEventDraft(type: EventType, childId: Long, now: Long): EventDraft {
         val amount = amountText.trim().replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0)
+        val startAdjust = startedMinutesAgo * 60_000L
         return EventDraft(
             type = type,
             childId = childId,
-            startMillis = now,
+            // T2: the panel's "started X min ago" backdates the start; the timer save path
+            // applies it against the timer start (duration rules unchanged).
+            startMillis = now - startAdjust,
             endMillis = now, // timed saves override via TimerRepository.stopAndSave
+            startAdjustMillis = startAdjust,
             feedingType = feedingType,
             feedingMethod = feedingMethod,
             amount = when (type) {
@@ -946,5 +977,8 @@ class DashboardViewModel(
 
         /** T3: how long the "All synced" chip stays after a drain completes. */
         const val ALL_SYNCED_SETTLE_MS = 4_000L
+
+        /** T2: "started X min ago" clamp (a full day back covers every realistic correction). */
+        const val MAX_STARTED_AGO_MINUTES = 1440
     }
 }

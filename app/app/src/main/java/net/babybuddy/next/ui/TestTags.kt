@@ -48,6 +48,14 @@ object TestTags {
     const val PANEL_MILESTONE = "dashboard/panel/milestone"
     const val PANEL_TEXT = "dashboard/panel/text"
 
+    // T2: "started X min ago" adjust row on timed panels
+    const val PANEL_STARTED_AGO = "dashboard/panel/started_ago"
+    const val PANEL_STARTED_ADJUST = "dashboard/panel/started_adjust"
+    const val PANEL_STARTED_PICK = "dashboard/panel/started_pick"
+
+    /** Parametrized: "dashboard/panel/started_step/-15m" etc. */
+    fun startedAgoStep(label: String) = "dashboard/panel/started_step/$label"
+
     fun feedingTypeChip(wire: String) = "dashboard/panel/feeding_type/$wire"
 
     fun feedingMethodChip(wire: String) = "dashboard/panel/feeding_method/$wire"

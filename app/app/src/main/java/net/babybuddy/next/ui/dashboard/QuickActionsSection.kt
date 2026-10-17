@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,7 +29,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -154,6 +161,10 @@ interface QuickActionCallbacks {
     fun onNoteChange(text: String)
     fun onMilestoneChange(text: String)
     fun onTextChange(text: String)
+
+    /** T2: "started X min ago" adjust — [minutesAgoDelta] > 0 backdates the start. */
+    fun onStartAdjustStepped(minutesAgoDelta: Long)
+    fun onStartTimePicked(millis: Long)
 }
 
 /**
@@ -211,14 +222,21 @@ fun QuickActionPanel(
             }
 
             when (type) {
-                EventType.FEEDING -> FeedingFields(panel, callbacks)
+                EventType.FEEDING -> {
+                    StartedAgoRow(panel, nowMillis, callbacks)
+                    FeedingFields(panel, callbacks)
+                }
                 EventType.CHANGE -> DiaperFields(panel, callbacks)
-                EventType.SLEEP -> NoteField(
-                    value = panel.draft.noteText,
-                    onValueChange = callbacks::onNoteChange,
-                    label = "Note",
-                )
+                EventType.SLEEP -> {
+                    StartedAgoRow(panel, nowMillis, callbacks)
+                    NoteField(
+                        value = panel.draft.noteText,
+                        onValueChange = callbacks::onNoteChange,
+                        label = "Note",
+                    )
+                }
                 EventType.PUMPING -> {
+                    StartedAgoRow(panel, nowMillis, callbacks)
                     AmountField(
                         value = panel.draft.amountText,
                         onValueChange = callbacks::onAmountChange,
@@ -231,6 +249,7 @@ fun QuickActionPanel(
                     )
                 }
                 EventType.TUMMY_TIME -> {
+                    StartedAgoRow(panel, nowMillis, callbacks)
                     OutlinedTextField(
                         value = panel.draft.milestone,
                         onValueChange = callbacks::onMilestoneChange,
@@ -275,6 +294,103 @@ fun QuickActionPanel(
 }
 
 // -- Per-type fields -------------------------------------------------------------
+
+/**
+ * T2 (spec §5 panel time-adjust, Jordan/Elena): the timed-type panels start their timer at tap;
+ * reality often started earlier. One compact line — "Started 20m ago · Adjust" — expands to
+ * −15m/−5m/+5m/+15m nudges plus a plain time picker. The adjust backdates the START only;
+ * duration rules are unchanged (the created entry uses the adjusted start).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StartedAgoRow(
+    panel: OpenPanel,
+    nowMillis: Long,
+    callbacks: QuickActionCallbacks,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                startedAgoLabel(panel.draft.startedMinutesAgo),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(TestTags.PANEL_STARTED_AGO),
+            )
+            TextButton(
+                onClick = { expanded = !expanded },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                modifier = Modifier.testTag(TestTags.PANEL_STARTED_ADJUST),
+            ) {
+                Text(if (expanded) "Hide" else "Adjust", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        if (expanded) {
+            Row {
+                listOf(
+                    "−15m" to 15L,
+                    "−5m" to 5L,
+                    "+5m" to -5L,
+                    "+15m" to -15L,
+                ).forEach { (label, delta) ->
+                    TextButton(
+                        onClick = { callbacks.onStartAdjustStepped(delta) },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                        modifier = Modifier.testTag(TestTags.startedAgoStep(label)),
+                    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    onClick = { showPicker = true },
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    modifier = Modifier.testTag(TestTags.PANEL_STARTED_PICK),
+                ) { Text("Pick time", style = MaterialTheme.typography.labelLarge) }
+            }
+        }
+    }
+
+    if (showPicker) {
+        val zone = java.time.ZoneId.systemDefault()
+        val initial = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
+        val timeState = androidx.compose.material3.rememberTimePickerState(
+            initialHour = initial.hour,
+            initialMinute = initial.minute,
+        )
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            title = { Text("When did it start?") },
+            text = { androidx.compose.material3.TimePicker(state = timeState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPicker = false
+                    val picked = initial.toLocalDate()
+                        .atTime(timeState.hour, timeState.minute)
+                        .atZone(zone)
+                        .toInstant()
+                        .toEpochMilli()
+                    callbacks.onStartTimePicked(picked)
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+/** "just now" / "20m ago" / "1h 5m ago" — relative is what a tired parent needs (Jordan). */
+internal fun startedAgoLabel(minutesAgo: Int): String = when {
+    minutesAgo <= 0 -> "Started just now"
+    minutesAgo < 60 -> "Started ${minutesAgo}m ago"
+    else -> {
+        val h = minutesAgo / 60
+        val m = minutesAgo % 60
+        if (m == 0) "Started ${h}h ago" else "Started ${h}h ${m}m ago"
+    }
+}
 
 @Composable
 private fun FeedingFields(panel: OpenPanel, callbacks: QuickActionCallbacks) {

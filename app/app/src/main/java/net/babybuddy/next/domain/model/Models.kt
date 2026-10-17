@@ -87,6 +87,12 @@ data class EventDraft(
     val color: String? = null,
     val noteText: String? = null,
     val milestone: String? = null,
+    /**
+     * T2: "started X min ago" panel adjustment — how much later than the carried start the
+     * entry actually began (0 = no adjust). Applied by the timer save path so a panel
+     * "started 20 min ago" backdates the created entry without touching duration rules.
+     */
+    val startAdjustMillis: Long = 0,
 )
 
 /** A running timer (spec §2 active-timers strip / §3 quick actions). */

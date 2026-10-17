@@ -168,6 +168,36 @@ class DashboardWidgetSaveLiveUpdateTest {
     }
 
     @Test
+    fun `panel started-ago adjustment backdates the saved entry (T2)`() = runBlocking {
+        awaitChildLoaded()
+
+        // Timed panel: the tap starts the timer and opens the panel (existing semantics).
+        viewModel.onQuickActionTap(EventType.SLEEP)
+        withTimeout(10_000) {
+            while (latest.value.openPanel?.type != EventType.SLEEP) { advance(); delay(50) }
+        }
+
+        // "He actually went down 20 minutes ago" — two nudges of the adjust row.
+        viewModel.onStartAdjustStepped(15)
+        viewModel.onStartAdjustStepped(5)
+        // The IO-thread collector hands the new uiState over asynchronously — poll, don't single-read.
+        withTimeout(10_000) {
+            while (latest.value.openPanel?.draft?.startedMinutesAgo != 20) { advance(); delay(50) }
+        }
+        assertEquals(20, latest.value.openPanel?.draft?.startedMinutesAgo)
+
+        viewModel.savePanel()
+        awaitTimelineRow(EventType.SLEEP, "adjusted sleep entry must appear instantly")
+
+        val row = latest.value.timeline.first()
+        val now = System.currentTimeMillis()
+        assertTrue(
+            "entry start must be backdated ~20m (got ${java.time.Instant.ofEpochMilli(row.startMillis)})",
+            row.startMillis in (now - 25 * 60_000L)..(now - 19 * 60_000L),
+        )
+    }
+
+    @Test
     fun `timeline reconciliation nudge re-queries after a write`() = runBlocking {
         awaitChildLoaded()
         advance()

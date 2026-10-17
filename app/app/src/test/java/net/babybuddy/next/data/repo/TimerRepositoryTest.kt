@@ -170,6 +170,32 @@ class TimerRepositoryTest {
     }
 
     @Test
+    fun `panel started-ago adjustment backdates only the entry start (T2)`() = runTest {
+        responses += timerCreatedResponse(12, "2025-10-09T03:31:30Z")
+        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
+        responses += MockResponse().setResponseCode(204) // timer delete on save
+
+        val adjust = 20 * 60_000L
+        timerRepo.stopAndSave(
+            timer,
+            EventDraft(
+                type = EventType.SLEEP,
+                childId = 1,
+                startMillis = 0, // overridden: timer start minus the panel adjustment
+                endMillis = 0,   // overridden by the server's now
+                noteText = "nap that started early",
+                startAdjustMillis = adjust,
+            ),
+        )
+
+        val saved = db.eventDao().observeTimeline(1).first().single()
+        assertEquals("start = timer start backdated by the adjust", timer.startedAtMillis - adjust, saved.startMillis)
+        assertEquals("end stays the stop time (duration rules unchanged)", serverNow, saved.endMillis)
+        assertEquals(serverNow - saved.startMillis, saved.endMillis - saved.startMillis)
+        assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
+    }
+
+    @Test
     fun `discard removes the timer without logging anything`() = runTest {
         val timer = timerRepo.start(EventType.SLEEP, childId = 1)
         timerRepo.discard(timer)

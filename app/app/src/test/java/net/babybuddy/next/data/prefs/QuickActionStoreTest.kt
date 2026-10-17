@@ -70,6 +70,17 @@ class QuickActionStoreTest {
     }
 
     @Test
+    fun `panel drafts keep the started-minutes-ago adjust (T2)`() = runTest {
+        val store = newStore()
+        store.savePanel(1, "SLEEP", PanelDraft(open = true, startedMinutesAgo = 20))
+        assertEquals(20, store.panel(1, "SLEEP")!!.startedMinutesAgo)
+        // Drafts stored before the field existed (no key) read the default, not garbage.
+        assertEquals(0, store.panel(1, "FEEDING", )?.startedMinutesAgo ?: 0)
+        store.savePanel(1, "SLEEP", PanelDraft(open = true))
+        assertEquals(0, store.panel(1, "SLEEP")!!.startedMinutesAgo)
+    }
+
+    @Test
     fun `successful save clears the draft`() = runTest {
         val store = newStore()
         store.savePanel(1, "FEEDING", PanelDraft(open = true, amountText = "120"))
