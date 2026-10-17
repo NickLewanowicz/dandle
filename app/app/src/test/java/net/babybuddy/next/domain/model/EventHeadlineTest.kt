@@ -59,6 +59,11 @@ class EventHeadlineTest {
             "Wet (Yellow)",
             event(EventType.CHANGE) { copy(wet = true, solid = false, color = "yellow") },
         )
+        // Server stores "" for "no color" — no empty parens (seen in seeded data).
+        assertEquals(
+            "Wet",
+            event(EventType.CHANGE) { copy(wet = true, solid = false, color = "") },
+        )
     }
 
     @Test

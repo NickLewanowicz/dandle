@@ -160,6 +160,19 @@ class DashboardViewModel(
             activeChildId.value = container.sessionStore.sessionFlow.first().activeChildId
             restoreOpenPanel()
         }
+        // Fresh start with no persisted selection: adopt the first child (spec §2 "default =
+        // first child, MUST persist"). Without this the header DISPLAYS the fallback child but
+        // the timeline queries a null id → an empty dashboard despite server data.
+        viewModelScope.launch {
+            childRepo.children.collect { children ->
+                if (activeChildId.value == null) {
+                    children.firstOrNull()?.let { first ->
+                        activeChildId.value = first.id
+                        container.sessionStore.setActiveChild(first.id)
+                    }
+                }
+            }
+        }
         try {
             connectivity?.registerNetworkCallback(
                 NetworkRequest.Builder()

@@ -26,7 +26,9 @@ object EventHeadline {
                 solid -> "Solid"
                 else -> "Diaper change"
             }
-            val color = event.color?.let { " (${it.replaceFirstChar { c -> c.uppercase() }})" }.orEmpty()
+            val color = event.color?.takeIf { it.isNotBlank() }
+                ?.let { " (${it.replaceFirstChar { c -> c.uppercase() }})" }
+                .orEmpty()
             base + color
         }
         EventType.SLEEP -> "Sleep"
