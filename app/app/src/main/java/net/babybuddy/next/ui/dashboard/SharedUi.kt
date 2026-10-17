@@ -74,12 +74,21 @@ sealed interface SyncChipState {
     data object Offline : SyncChipState
     data object Syncing : SyncChipState
     data class Failed(val count: Int) : SyncChipState
+
+    /** T3: transient settle after a drain completes — the visible "caught up" moment. */
+    data object AllSynced : SyncChipState
 }
 
-fun syncChipState(isOnline: Boolean, syncing: Boolean, failedCount: Int): SyncChipState = when {
+fun syncChipState(
+    isOnline: Boolean,
+    syncing: Boolean,
+    failedCount: Int,
+    allSynced: Boolean = false,
+): SyncChipState = when {
     failedCount > 0 -> SyncChipState.Failed(failedCount)
     !isOnline -> SyncChipState.Offline
     syncing -> SyncChipState.Syncing
+    allSynced -> SyncChipState.AllSynced
     else -> SyncChipState.Hidden
 }
 
@@ -136,6 +145,24 @@ fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
                 }
             }
 
+            // T3: the calm "caught up" moment after queued entries land (settles a few seconds).
+            SyncChipState.AllSynced -> Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.testTag(TestTags.DASHBOARD_SYNC_CHIP),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        "All synced ✓",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
+
             is SyncChipState.Failed -> Surface(
                 onClick = onTap,
                 shape = MaterialTheme.shapes.small,
@@ -165,8 +192,9 @@ fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
 }
 
 /**
- * Per-entry sync badge (UX spec §5): SYNCED renders nothing; PENDING is a muted clock +
- * "Will sync"; FAILED is the app's only filled badge (errorContainer pill, tap → failure
+ * Per-entry sync badge (UX spec §5, T3): SYNCED renders nothing; PENDING is a tonal pill —
+ * a real badge, not bare muted text (Elena looked for the promised "Will sync" mark and found
+ * none; it must read at arm's length); FAILED is the filled errorContainer pill (tap → failure
  * dialog). Badge transitions fade at 150 ms (motion budget).
  */
 @Composable
@@ -174,22 +202,28 @@ fun SyncBadge(state: SyncState, modifier: Modifier = Modifier, onTapFailed: () -
     Crossfade(targetState = state, animationSpec = tween(150), label = "sync-badge", modifier = modifier) { current ->
         when (current) {
             SyncState.SYNCED -> {}
-            SyncState.PENDING -> Row(
-                verticalAlignment = Alignment.CenterVertically,
+            SyncState.PENDING -> Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.testTag(TestTags.BADGE_PENDING),
             ) {
-                Icon(
-                    painterResource(R.drawable.ic_bb_clock),
-                    contentDescription = null,
-                    modifier = Modifier.size(12.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Will sync",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_bb_clock),
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Text(
+                        "Will sync",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(start = 3.dp),
+                    )
+                }
             }
 
             SyncState.FAILED -> Surface(

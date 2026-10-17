@@ -33,6 +33,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okio.Path.Companion.toPath
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -301,5 +302,38 @@ class DashboardTimelineLiveUpdateTest {
                 !sheetReason.contains(rawFragment, ignoreCase = true),
             )
         }
+    }
+
+    @Test
+    fun `drain completion settles an all-synced chip that clears after a few seconds (T3)`() = runBlocking {
+        advance()
+        assertFalse(latest.value.showAllSynced)
+
+        // Drain start -> end (offline rows landing is exactly this path on device).
+        container.drainActive.value = true
+        testDispatcher.scheduler.runCurrent() // run due-now tasks, do NOT advance virtual time
+        assertFalse("no settle while the drain is running", latest.value.showAllSynced)
+
+        container.drainActive.value = false
+        // Wait for the settle to propagate through the uiState combine (due-now pumping only,
+        // so the 4s settle timer stays pending).
+        withTimeout(10_000) {
+            while (!latest.value.showAllSynced) {
+                testDispatcher.scheduler.runCurrent()
+                delay(50)
+            }
+        }
+        assertTrue("drain completion must settle the all-synced chip", latest.value.showAllSynced)
+
+        // The settle is transient: virtual 4s later the chip is gone again. (The clear must
+        // reach `latest` through the IO-thread collector, so poll rather than single-read.)
+        val deadline = System.currentTimeMillis() + 10_000
+        while (latest.value.showAllSynced && System.currentTimeMillis() < deadline) {
+            testDispatcher.scheduler.advanceTimeBy(1_000)
+            testDispatcher.scheduler.runCurrent()
+            advance()
+            Thread.sleep(25)
+        }
+        assertFalse("the settle must clear", latest.value.showAllSynced)
     }
 }

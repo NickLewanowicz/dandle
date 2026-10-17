@@ -135,7 +135,7 @@ fun DashboardScreen(
                     onSignOut = { showSignOutDialog = true },
                     onHelp = { showHelpDialog = true },
                     onAbout = { showAboutDialog = true },
-                    syncChip = syncChipState(state.isOnline, state.syncing, state.failedCount),
+                    syncChip = syncChipState(state.isOnline, state.syncing, state.failedCount, state.showAllSynced),
                     onSyncChipTap = {
                         viewModel.syncNow()
                         // P1-3: the "N failed" chip also reveals the failed entries (UX §5).

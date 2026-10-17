@@ -94,6 +94,8 @@ data class DashboardUiState(
     val refreshing: Boolean = false,
     /** Any sync activity (refresh or outbox drain) — drives "Syncing…". */
     val syncing: Boolean = false,
+    /** T3: transient "All synced" settle after a completed drain. */
+    val showAllSynced: Boolean = false,
     val failedCount: Int = 0,
     val unsentCount: Int = 0,
     val sessionExpired: Boolean = false,
@@ -132,6 +134,10 @@ class DashboardViewModel(
     private val editState = MutableStateFlow<EditState?>(null)
     private val failureDialog = MutableStateFlow<FailureDialogState?>(null)
     private val showLongPressHint = MutableStateFlow(false)
+
+    /** T3: the "All synced" chip settles for a few seconds after a drain completes. */
+    private val allSyncedVisible = MutableStateFlow(false)
+    private var allSyncedSettleJob: kotlinx.coroutines.Job? = null
 
     // Pagination (spec §2.4: load older on scroll)
     private val visibleCount = MutableStateFlow(TIMELINE_PAGE)
@@ -203,15 +209,14 @@ class DashboardViewModel(
                 if (type == null) return@collect
                 net.babybuddy.next.log.BbLog.d(TAG_UI, "deep link stop ${type.name}")
                 val ready = awaitDashboardReady()
-                val timer = ready
-                    ?.let { uiState.value.runningTimers.firstOrNull { it.kind == type } }
+                // Fresh DB read, not the (possibly lagging) UI list: the tap must hit the timer.
+                val timer = ready?.activeChild?.let { timerRepo.findRunning(type, it.id) }
                 if (timer != null) {
                     requestStopGuard(timer)
                 } else if (ready != null) {
                     net.babybuddy.next.log.BbLog.d(
                         TAG_UI,
-                        "deep link stop: no running ${type.name} timer " +
-                            "(running=${uiState.value.runningTimers.map { it.kind }}) — fallback to quick action",
+                        "deep link stop: no running ${type.name} timer — fallback to quick action",
                     )
                     onQuickActionTap(type)
                 }
@@ -229,6 +234,25 @@ class DashboardViewModel(
                         container.sessionStore.setActiveChild(first.id)
                     }
                 }
+            }
+        }
+        // T3 (UX spec §5): the "caught up" moment — when a drain completes (offline rows landed
+        // or the queue drained), settle an "All synced" chip for a few seconds. Skipped while
+        // offline (a NetworkDown drain synced nothing — the Offline chip keeps speaking).
+        viewModelScope.launch {
+            var previous = false // drainActive starts false; settle only on a true->false edge
+            container.drainActive.collect { active ->
+                if (previous && !active) {
+                    if (isOnline.value) {
+                        allSyncedVisible.value = true
+                        allSyncedSettleJob?.cancel()
+                        allSyncedSettleJob = viewModelScope.launch {
+                            kotlinx.coroutines.delay(ALL_SYNCED_SETTLE_MS)
+                            allSyncedVisible.value = false
+                        }
+                    }
+                }
+                previous = active
             }
         }
         try {
@@ -285,6 +309,7 @@ class DashboardViewModel(
         val isOnline: Boolean,
         val refreshing: Boolean,
         val loadingOlder: Boolean,
+        val allSynced: Boolean,
     )
 
     /** Panel/dialog tail of the state (kept as one flow to stay within combine's arity). */
@@ -312,8 +337,9 @@ class DashboardViewModel(
             isOnline,
             refreshing,
             loadingOlder,
-        ) { session, online, refreshing, loadingOlder ->
-            Combined2(session, online, refreshing, loadingOlder)
+            allSyncedVisible,
+        ) { session, online, refreshing, loadingOlder, allSynced ->
+            Combined2(session, online, refreshing, loadingOlder, allSynced)
         },
         activeChildId.flatMapLatest { id ->
             if (id == null) flowOf(emptyList()) else eventRepo.observeTimeline(id)
@@ -348,6 +374,7 @@ class DashboardViewModel(
             isOnline = sessionCore.isOnline,
             refreshing = sessionCore.refreshing,
             syncing = sessionCore.refreshing || core.drainActive,
+            showAllSynced = sessionCore.allSynced,
             failedCount = core.failedCount,
             unsentCount = core.unsentCount,
             sessionExpired = sessionCore.session.sessionExpired,
@@ -916,5 +943,8 @@ class DashboardViewModel(
         const val TIMELINE_PAGE = 30
         const val TIMELINE_PAGE_PER_TYPE = 20
         const val INITIAL_FETCH_LIMIT_PER_TYPE = 50
+
+        /** T3: how long the "All synced" chip stays after a drain completes. */
+        const val ALL_SYNCED_SETTLE_MS = 4_000L
     }
 }
