@@ -2,7 +2,7 @@
 
 A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source self-hosted baby tracker — rebuilt from scratch by an AI-driven team, with a couple of creature comforts the original Android app never had.
 
-**Status: feature-complete beta, in QA.** The app builds, installs, and runs against a real Baby Buddy server; automated QA is documenting the flows in `docs/flows/new-app/` with screenshot evidence.
+**Status: beta — QA-accepted (0 P0/P1/P2 open), not yet published.** The app builds, installs, and runs against a real Baby Buddy server; every flow is documented in [`docs/flows/new-app/`](docs/flows/new-app/) with screenshot evidence, and the acceptance pass is recorded in [`99-qa-findings.md`](docs/flows/new-app/99-qa-findings.md).
 
 ## Why this exists
 
