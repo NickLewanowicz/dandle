@@ -123,7 +123,13 @@ fun DashboardScreen(
                     onHelp = { showHelpDialog = true },
                     onAbout = { showAboutDialog = true },
                     syncChip = syncChipState(state.isOnline, state.syncing, state.failedCount),
-                    onSyncChipTap = viewModel::syncNow,
+                    onSyncChipTap = {
+                        viewModel.syncNow()
+                        // P1-3: the "N failed" chip also reveals the failed entries (UX §5).
+                        viewModel.firstFailedLocalUuid()?.let { failedUuid ->
+                            viewLastEntryUuid = failedUuid
+                        }
+                    },
                 )
 
                 if (state.sessionExpired) {
@@ -178,7 +184,7 @@ fun DashboardScreen(
                         }
                     },
                     onFailureBadge = viewModel::onFailureBadgeTapped,
-                    onLoadOlder = viewModel::loadOlder,
+                    onLoadOlder = { viewModel.loadOlder() },
                     scrollToUuid = viewLastEntryUuid,
                     modifier = Modifier.weight(1f),
                 )

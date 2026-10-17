@@ -58,6 +58,12 @@ class AppContainer(
     /** True while an outbox drain is running — feeds the SyncStatusChip (UX spec §5). */
     val drainActive = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /**
+     * Emits the localUuid of every entry the server just REJECTED (400-class) — P1-3: the
+     * dashboard surfaces the failure dialog proactively instead of waiting for a badge tap.
+     */
+    val entryFailedEvents = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+
     // In-memory mirrors of session state for OkHttp/worker threads (no blocking DataStore reads).
     @Volatile
     private var apiKeyMirror: String? = null
@@ -148,6 +154,11 @@ class AppContainer(
                 sessionStore.setSessionExpired(true)
             },
             onDrainActiveChange = { drainActive.value = it },
+            onEntryFailed = { localUuid ->
+                if (!entryFailedEvents.tryEmit(localUuid)) {
+                    // Never drop the resolution signal; a small replay tail covers slow collectors.
+                }
+            },
         )
     }
 

@@ -26,6 +26,7 @@ import net.babybuddy.next.data.AppContainer
 import net.babybuddy.next.data.prefs.FeedingDefault
 import net.babybuddy.next.data.prefs.PanelDraft
 import net.babybuddy.next.data.repo.EventRepository
+import net.babybuddy.next.data.mapper.serverLocalUuid
 import net.babybuddy.next.data.sync.SyncWorker
 import net.babybuddy.next.domain.DuplicateGuard
 import net.babybuddy.next.domain.FailureMessage
@@ -166,6 +167,14 @@ class DashboardViewModel(
             activeChildId.value = container.sessionStore.sessionFlow.first().activeChildId
             restoreOpenPanel()
         }
+        // P1-3: a server-rejected write surfaces the failure dialog proactively (spec §3.8/§6.2)
+        // — the user must never have to hunt for a badge to learn a save was rejected.
+        viewModelScope.launch {
+            container.entryFailedEvents.collect { localUuid ->
+                val event = eventRepo.event(localUuid) ?: return@collect
+                onFailureBadgeTappedInternal(event)
+            }
+        }
         // Widget deep links (spec §7.1): StateFlow holds the request across cold starts and
         // login gates; consuming runs the exact in-app tap semantics. The request can arrive
         // before children load, so wait for the child list before acting (bounded — a request
@@ -254,6 +263,8 @@ class DashboardViewModel(
         val prompt: DuplicatePrompt?,
         val edit: EditState?,
         val failure: FailureDialogState?,
+        /** Render window (rows shown); an INPUT of the combine so growth re-emits. */
+        val window: Int,
     )
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -282,8 +293,9 @@ class DashboardViewModel(
             duplicatePrompt,
             editState,
             failureDialog,
-        ) { panel, prompt, edit, failure ->
-            UiTail(panel, prompt, edit, failure)
+            visibleCount,
+        ) { panel, prompt, edit, failure, window ->
+            UiTail(panel, prompt, edit, failure, window)
         },
     ) { core, sessionCore, timeline, tail ->
         val storedId = activeChildId.value ?: sessionCore.session.activeChildId
@@ -291,12 +303,11 @@ class DashboardViewModel(
         val childTimers = core.timers.filter { it.childId == (active?.id ?: it.childId) }
         // Open panels only make sense for the active child.
         val panelForChild = tail.panel?.takeIf { it.timer == null || it.timer.childId == active?.id }
-        if (timeline.size != totalTimelineCount.value) totalTimelineCount.value = timeline.size
         DashboardUiState(
             loading = false,
             children = core.children,
             activeChild = active,
-            timeline = timeline.take(visibleCount.value),
+            timeline = timeline.take(tail.window),
             totalTimelineCount = timeline.size,
             loadingOlder = sessionCore.loadingOlder,
             runningTimers = childTimers,
@@ -608,29 +619,36 @@ class DashboardViewModel(
     // -- Timeline -------------------------------------------------------------------
 
     /**
-     * Paged older-load (spec §2.4): first reveal more local rows; once local data is exhausted,
-     * pull a larger slice per type from the server. Two consecutive empty fetches mark the
-     * end of history for this session.
+     * Paged older-load (spec §2.4), P1-1/P1-3 fix: the render window is an INPUT of the uiState
+     * combine, so growing it re-emits immediately; the decision keys off totalTimelineCount (the
+     * full local query size) — NEVER the windowed count (a windowed-size comparison is circular
+     * and wedged the window at its initial size, hiding edited/new rows beyond it). Once local
+     * rows are exhausted, pull a larger per-type slice from the server; two consecutive empty
+     * fetches mark the end of history for this session.
      */
-    fun loadOlder(visibleItemCount: Int) {
+    fun loadOlder() {
         if (loadingOlder.value || starvedOlderLoads >= 2) return
-        if (visibleCount.value < visibleItemCount) {
-            visibleCount.value += TIMELINE_PAGE
+        val state = uiState.value
+        if (state.timeline.size < state.totalTimelineCount) {
+            visibleCount.value += TIMELINE_PAGE // more local rows to reveal
             return
         }
         viewModelScope.launch {
             loadingOlder.value = true
-            val before = totalTimelineCount.value
-            fetchedLimitPerType += TIMELINE_PAGE_PER_TYPE
-            val result = eventRepo.refresh(limitPerType = fetchedLimitPerType)
-            val grew = totalTimelineCount.value > before
-            starvedOlderLoads = if (result is EventRepository.RefreshResult.Success && !grew) {
-                starvedOlderLoads + 1
-            } else {
-                0
+            try {
+                val before = state.totalTimelineCount
+                fetchedLimitPerType += TIMELINE_PAGE_PER_TYPE
+                val result = eventRepo.refresh(limitPerType = fetchedLimitPerType)
+                val grew = uiState.value.totalTimelineCount > before
+                starvedOlderLoads = if (result is EventRepository.RefreshResult.Success && !grew) {
+                    starvedOlderLoads + 1
+                } else {
+                    0
+                }
+                visibleCount.value += TIMELINE_PAGE
+            } finally {
+                loadingOlder.value = false
             }
-            visibleCount.value += TIMELINE_PAGE
-            loadingOlder.value = false
         }
     }
 
@@ -747,34 +765,41 @@ class DashboardViewModel(
     /** FAILED badge tap → parent-language reason + resolution actions. */
     fun onFailureBadgeTapped(event: Event) {
         net.babybuddy.next.log.BbLog.d(TAG_UI, "failure dialog ${event.localUuid}")
-        if (event.syncState != SyncState.FAILED) return
-        viewModelScope.launch {
-            var clash: Event? = null
-            val conflictServerId = event.conflictServerId
-            val conflictUiPath = event.conflictUiPath
-            if (conflictServerId != null && conflictUiPath != null) {
-                // Conflict refs carry the web path ("tummy-time"); match either spelling.
-                val type = EventType.entries.firstOrNull {
-                    it.uiPath == conflictUiPath || it.apiPath == conflictUiPath
-                }
-                if (type != null) {
-                    clash = uiState.value.timeline.firstOrNull {
-                        it.type == type && it.serverId == conflictServerId
-                    }
-                }
-            }
-            failureDialog.value = FailureDialogState(
-                event = event,
-                reason = FailureMessage.translate(
-                    reason = event.failureReason,
-                    conflictUiPath = conflictUiPath,
-                    conflictServerId = conflictServerId,
-                    clash = clash,
-                ),
-                clashLocalUuid = clash?.localUuid,
-            )
-        }
+        viewModelScope.launch { onFailureBadgeTappedInternal(event) }
     }
+
+    /** Shared by the badge tap and the proactive (P1-3) server-rejection surfacing. */
+    private suspend fun onFailureBadgeTappedInternal(event: Event) {
+        if (event.syncState != SyncState.FAILED) return
+        var clash: Event? = null
+        val conflictServerId = event.conflictServerId
+        val conflictUiPath = event.conflictUiPath
+        if (conflictServerId != null && conflictUiPath != null) {
+            // Conflict refs carry the web path ("tummy-time"); match either spelling.
+            val type = EventType.entries.firstOrNull {
+                it.uiPath == conflictUiPath || it.apiPath == conflictUiPath
+            }
+            if (type != null) {
+                clash = uiState.value.timeline.firstOrNull {
+                    it.type == type && it.serverId == conflictServerId
+                } ?: eventRepo.event(serverLocalUuid(type, conflictServerId))
+            }
+        }
+        failureDialog.value = FailureDialogState(
+            event = event,
+            reason = FailureMessage.translate(
+                reason = event.failureReason,
+                conflictUiPath = conflictUiPath,
+                conflictServerId = conflictServerId,
+                clash = clash,
+            ),
+            clashLocalUuid = clash?.localUuid,
+        )
+    }
+
+    /** P1-3: the first FAILED row in the loaded timeline, for scroll-to-failed from the chip. */
+    fun firstFailedLocalUuid(): String? =
+        uiState.value.timeline.firstOrNull { it.syncState == SyncState.FAILED }?.localUuid
 
     fun dismissFailureDialog() {
         failureDialog.value = null

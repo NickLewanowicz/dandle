@@ -48,6 +48,8 @@ class OutboxDrainer(
     private val onAuthExpired: suspend () -> Unit,
     /** Drain-activity signal for the header's SyncStatusChip (UX spec §5). */
     private val onDrainActiveChange: (Boolean) -> Unit = {},
+    /** P1-3: localUuid of an entry the server just rejected (400-class) — proactive dialog. */
+    private val onEntryFailed: (String) -> Unit = {},
 ) {
 
     /** BbLog tag for sync-engine logs (see net.babybuddy.next.log.BbLog). */
@@ -256,6 +258,8 @@ class OutboxDrainer(
                 conflictServerId = validation?.conflictingEntry?.serverId,
                 updatedAt = clock.nowMillis(),
             )
+            // Callback AFTER the row is marked (the UI reads the FAILED state in the callback).
+            onEntryFailed(op.localUuid)
             outboxDao.delete(op.id)
             return OpResult.Continue
         }
@@ -282,6 +286,7 @@ class OutboxDrainer(
             return OpResult.Continue // server hiccup; keep draining the rest, retry later
         }
         // Other 4xx (unexpected): terminally fail the entry like a 400.
+        onEntryFailed(op.localUuid)
         eventDao.updateSyncState(
             localUuid = op.localUuid,
             syncState = SyncState.FAILED.name,

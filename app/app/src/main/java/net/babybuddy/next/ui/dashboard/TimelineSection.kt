@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.animateContentSize
 import net.babybuddy.next.domain.ElapsedTimeFormatter
+import net.babybuddy.next.domain.TimelineDayGroups
 import net.babybuddy.next.domain.model.Event
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.EventHeadline
@@ -43,8 +44,6 @@ import net.babybuddy.next.ui.TestTags
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.util.Locale
 
 private val timeOfDayFormat = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -62,7 +61,7 @@ fun TimelineSection(
     onTapRow: (Event) -> Unit,
     onLongPressRow: (Event) -> Unit,
     onFailureBadge: (Event) -> Unit,
-    onLoadOlder: (visibleCount: Int) -> Unit,
+    onLoadOlder: () -> Unit,
     modifier: Modifier = Modifier,
     scrollToUuid: String? = null,
 ) {
@@ -79,12 +78,13 @@ fun TimelineSection(
             listState.animateScrollToItem(index)
         }
     }
-    // Paged older-load: when the last visible item closes in on the end of the window, ask
-    // the ViewModel for more (it reveals local rows first, then fetches older pages).
+    // Paged older-load: when the list cannot scroll FURTHER DOWN (the true end of the rendered
+    // window — P1-1/P1-3 fix: a windowed-size comparison wedged the window at its initial size,
+    // hiding new/edited rows beyond it), ask the ViewModel for more.
     LaunchedEffect(events.size) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .collect { last ->
-                if (events.isNotEmpty() && last >= events.size - 3) onLoadOlder(events.size)
+        snapshotFlow { listState.canScrollForward }
+            .collect { canScrollForward ->
+                if (events.isNotEmpty() && !canScrollForward) onLoadOlder()
             }
     }
 
@@ -263,21 +263,16 @@ private fun TimelineRow(
     }
 }
 
+/**
+ * Day groups are DEVICE-LOCAL calendar days (P1-2 fix): the old UTC-epoch-day grouping split a
+ * single local day into duplicate headers whenever the rows straddled UTC midnight.
+ */
 private fun needsHeader(events: List<Event>, event: Event): Boolean {
+    val zone = ZoneId.systemDefault()
     val index = events.indexOf(event)
-    if (index == 0) return true
-    val prev = events[index - 1]
-    return !java.time.LocalDate.ofEpochDay(prev.startMillis / 86_400_000)
-        .equals(java.time.LocalDate.ofEpochDay(event.startMillis / 86_400_000))
+    val prev = if (index == 0) null else events[index - 1]
+    return TimelineDayGroups.needsNewLocalDay(prev?.startMillis, event.startMillis, zone)
 }
 
-fun dayLabel(epochMillis: Long): String {
-    val zone = ZoneId.systemDefault()
-    val date = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
-    val today = java.time.LocalDate.now(zone)
-    return when (date) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
-        else -> date.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + date.dayOfMonth
-    }
-}
+fun dayLabel(epochMillis: Long): String =
+    TimelineDayGroups.label(epochMillis, ZoneId.systemDefault(), java.time.LocalDate.now(ZoneId.systemDefault()))

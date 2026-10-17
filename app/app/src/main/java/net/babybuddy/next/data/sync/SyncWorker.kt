@@ -50,8 +50,14 @@ class SyncWorker(
                 )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .build()
-            WorkManager.getInstance(context)
-                .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.KEEP, request)
+            runCatching {
+                WorkManager.getInstance(context)
+                    .enqueueUniqueWork(UNIQUE_NAME, ExistingWorkPolicy.KEEP, request)
+            }.onFailure {
+                // WorkManager uninitialized (Robolectric app boots): the drain still runs via
+                // the write-path one-shot; nothing to schedule in tests.
+                android.util.Log.w("BB/SYNC", "WorkManager unavailable, drain not scheduled")
+            }
         }
     }
 }
