@@ -82,3 +82,20 @@ After a data wipe, login's request chain omits `GET /api/timers/` (verified in a
 ## What was left running / final demo state
 
 - App logged in (Milo active), both widgets placed and live, ~15 fresh events across all six types on the server (feeding, diapers incl. wet+solid+color+amount, sleep, notes, pumping 12 min, tummy time), no timers running, server up, airplane mode off. The "1 failed" chip reflects the parked failed edit ops from finding #3 and was deliberately left as evidence.
+
+---
+
+## Resolution (Maintainer, 2026-10-17)
+
+All P1 and P2 findings were fixed with regression tests and re-verified on the emulator (evidence: `docs/screenshots/new-app/70-fixes/`):
+
+| Finding | Fix commit | Root cause (one line) |
+|---|---|---|
+| P1-1 timeline not live | `1004ab2` | Render window was a value-read inside the uiState combine with a circular older-load check — window wedged at 30 rows |
+| P1-2 duplicate "Today" | `1004ab2` | Day groups computed in UTC-epoch-day while labels rendered device-local |
+| P1-3 rejected edit swallowed | `1004ab2` | Frozen window hid the row + no proactive failure surfacing + chip only drained; now `onEntryFailed` → failure dialog, chip scrolls to failed row |
+| P2-4 panel ✕ skipped stop guard | `5e2670d` | `onClosePanel` bypassed `requestStopGuard` |
+| P2-5 nap row launched app | `8257abf` | Deep-linked through an activity instead of the broadcast path |
+| P3-8 missing dialog/sheet tags | `87471ee` | Tags added |
+
+**Updated verdict: shippable beta.** 0 P0 · 0 P1 · 0 P2 open. Remaining P3 items are cosmetic and tracked above.
