@@ -32,6 +32,9 @@ class TimerRepository(
 
     private val timerDao get() = db.timerDao()
 
+    /** BbLog tag for timer lifecycle logs (see net.babybuddy.next.log.BbLog). */
+    private val TAG = net.babybuddy.next.log.BbLog.TAG_TIMER
+
     fun observeRunning(): Flow<List<RunningTimer>> =
         timerDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
@@ -59,6 +62,7 @@ class TimerRepository(
                 createdAtMillis = clock.nowMillis(),
             )
         )
+        net.babybuddy.next.log.BbLog.d(TAG, "start ${kind.name} child=$childId localId=$localId at=$startedAt")
         // Best-effort server timer (so it shows on the web); silent when offline.
         try {
             val created = apiProvider().createTimer(
@@ -83,6 +87,10 @@ class TimerRepository(
     suspend fun stopAndSave(timer: RunningTimer, draft: EventDraft) {
         require(draft.type == timer.kind)
         val end = serverClock.nowMillis()
+        net.babybuddy.next.log.BbLog.d(
+            TAG,
+            "stop+save ${timer.kind.name} localId=${timer.localId} elapsed=${end - timer.startedAtMillis}ms",
+        )
         eventRepository.create(
             draft.copy(
                 startMillis = timer.startedAtMillis,
@@ -94,6 +102,7 @@ class TimerRepository(
 
     /** Stops without logging anything (the >10s "Discard" path — spec §3). */
     suspend fun discard(timer: RunningTimer) {
+        net.babybuddy.next.log.BbLog.d(TAG, "discard ${timer.kind.name} localId=${timer.localId}")
         removeTimer(timer)
     }
 
@@ -129,6 +138,7 @@ class TimerRepository(
             for (timer in serverAppTimers) {
                 if (timer.id in trackedServerIds) continue
                 val kind = EventType.entries.first { it.serverTimerName == timer.name }
+                net.babybuddy.next.log.BbLog.d(TAG, "restore ${kind.name} serverId=${timer.id}")
                 timerDao.insert(
                     TimerEntity(
                         id = 0,

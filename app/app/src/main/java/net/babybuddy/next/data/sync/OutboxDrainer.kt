@@ -50,6 +50,9 @@ class OutboxDrainer(
     private val onDrainActiveChange: (Boolean) -> Unit = {},
 ) {
 
+    /** BbLog tag for sync-engine logs (see net.babybuddy.next.log.BbLog). */
+    private val TAG = net.babybuddy.next.log.BbLog.TAG_SYNC
+
     sealed interface Outcome {
         /** Every op either landed or terminally failed; outbox empty or fully processed. */
         data object Completed : Outcome
@@ -67,8 +70,15 @@ class OutboxDrainer(
     suspend fun drain(): Outcome = mutex.withLock {
         onDrainActiveChange(true)
         try {
-            if (isAuthPaused()) return Outcome.PausedAuth
-            return drainOnce()
+            if (isAuthPaused()) {
+                net.babybuddy.next.log.BbLog.d(TAG, "drain paused (auth expired)")
+                return Outcome.PausedAuth
+            }
+            val ops = outboxDao.snapshot()
+            net.babybuddy.next.log.BbLog.d(TAG, "drain start (${ops.size} queued)")
+            val outcome = drainOnce()
+            net.babybuddy.next.log.BbLog.d(TAG, "drain end: $outcome")
+            return outcome
         } finally {
             onDrainActiveChange(false)
         }
@@ -83,6 +93,7 @@ class OutboxDrainer(
                 outboxDao.delete(op.id)
                 continue
             }
+            net.babybuddy.next.log.BbLog.d(TAG, "dispatch #${op.id} ${op.opType} ${op.entityType}")
             val result = try {
                 when (op.opType) {
                     OpTypes.CREATE -> processCreate(op, event!!)
@@ -233,6 +244,10 @@ class OutboxDrainer(
             // Server rejected the content — permanent for this payload. Badge the entry,
             // drop the op (spec §6.2: FAILED is user-resolvable; never blocks other entries).
             val validation = e.validation
+            net.babybuddy.next.log.BbLog.d(
+                TAG,
+                "op #${op.id} ${op.opType} rejected: ${validation?.displayReason ?: e.rawBody?.take(200)}",
+            )
             eventDao.updateSyncState(
                 localUuid = op.localUuid,
                 syncState = SyncState.FAILED.name,

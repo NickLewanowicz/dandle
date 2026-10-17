@@ -294,6 +294,7 @@ class DashboardViewModel(
     // -- Child selection -----------------------------------------------------------
 
     fun selectChild(childId: Long) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "child switch -> $childId")
         val outgoing = openPanel.value
         val previousChildId = activeChildId.value
         openPanel.value = null // panels are per-child; it reopens from that child's draft
@@ -325,6 +326,7 @@ class DashboardViewModel(
 
     /** SyncStatusChip tap (UX spec §5): force a drain + fresh pull. */
     fun syncNow() {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "sync now (chip tap)")
         SyncWorker.enqueue(appContext)
         refresh()
     }
@@ -333,6 +335,7 @@ class DashboardViewModel(
 
     fun onQuickActionTap(type: EventType) {
         val child = uiState.value.activeChild ?: return
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "quick action ${type.name} child=${child.id}")
         if (type.isTimed) {
             val running = uiState.value.runningTimers.firstOrNull { it.kind == type }
             when {
@@ -436,6 +439,7 @@ class DashboardViewModel(
         val panel = openPanel.value ?: return
         val child = uiState.value.activeChild ?: return
         if (!isPanelSaveEnabled(panel)) return
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "panel save ${panel.type.name} child=${child.id}")
         val now = container.serverClock.nowMillis()
         val draft = panel.draft.toEventDraft(panel.type, child.id, now)
         viewModelScope.launch {
@@ -452,6 +456,7 @@ class DashboardViewModel(
 
     /** Stop + save from the timer strip card or the stop-guard dialog. */
     fun saveRunningTimer(timer: RunningTimer) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "strip save ${timer.kind.name} localId=${timer.localId}")
         val childId = timer.childId
         val now = container.serverClock.nowMillis()
         viewModelScope.launch {
@@ -468,6 +473,7 @@ class DashboardViewModel(
     }
 
     fun discardTimer(timer: RunningTimer) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "strip discard ${timer.kind.name} localId=${timer.localId}")
         viewModelScope.launch {
             timerRepo.discard(timer)
             val panel = openPanel.value?.takeIf { it.type == timer.kind }
@@ -479,6 +485,7 @@ class DashboardViewModel(
     }
 
     fun onDuplicateAdd() {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "duplicate prompt: add")
         duplicatePrompt.value = null
         val save = heldSave
         heldSave = null
@@ -488,6 +495,7 @@ class DashboardViewModel(
     }
 
     fun onDuplicateDismiss() {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "duplicate prompt: dismiss")
         duplicatePrompt.value = null
         heldSave = null
     }
@@ -591,6 +599,7 @@ class DashboardViewModel(
 
     /** Row tap → the sheet (spec §4.2). Never more fields than the quick action itself. */
     fun onTimelineRowTapped(event: Event) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "edit open ${event.type.name} ${event.localUuid}")
         viewModelScope.launch {
             val stored = eventRepo.event(event.localUuid) ?: return@launch
             editState.value = EditState(event = stored, draft = stored.toDraft())
@@ -660,6 +669,7 @@ class DashboardViewModel(
 
     /** Save → PATCH online or queued edit op offline; row updates in place (spec §5). */
     fun saveEdit() {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "edit save ${currentLogId()}")
         val current = editState.value ?: return
         if (editValidationReason(current) != null) return
         val uuid = current.event.localUuid
@@ -669,6 +679,7 @@ class DashboardViewModel(
 
     /** FAILED entry "Retry" (spec §6.2): re-queues the op; badge → PENDING. */
     fun retryEvent(localUuid: String) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "entry retry $localUuid")
         editState.value = null
         failureDialog.value = null
         viewModelScope.launch { eventRepo.retry(localUuid) }
@@ -676,6 +687,7 @@ class DashboardViewModel(
 
     /** Delete with confirm (UI owns the confirm dialog); local-only for never-synced rows. */
     fun deleteEvent(localUuid: String) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "entry delete $localUuid")
         editState.value = null
         failureDialog.value = null
         viewModelScope.launch { eventRepo.delete(localUuid) }
@@ -685,6 +697,7 @@ class DashboardViewModel(
 
     /** FAILED badge tap → parent-language reason + resolution actions. */
     fun onFailureBadgeTapped(event: Event) {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "failure dialog ${event.localUuid}")
         if (event.syncState != SyncState.FAILED) return
         viewModelScope.launch {
             var clash: Event? = null
@@ -728,6 +741,7 @@ class DashboardViewModel(
     // -- Session ----------------------------------------------------------------------
 
     fun signOut() {
+        net.babybuddy.next.log.BbLog.d(TAG_UI, "sign out")
         viewModelScope.launch {
             container.signOut()
             _events.tryEmit(DashboardEvent.SignedOut)
@@ -761,6 +775,11 @@ class DashboardViewModel(
             milestone = if (type == EventType.TUMMY_TIME) milestone.trim().ifBlank { null } else null,
         )
     }
+
+    private fun currentLogId(): String =
+        editState.value?.let { "${it.event.type.name} ${it.event.localUuid}" } ?: "none"
+
+    private val TAG_UI = net.babybuddy.next.log.BbLog.TAG_UI
 
     companion object {
         const val TIMELINE_PAGE = 30

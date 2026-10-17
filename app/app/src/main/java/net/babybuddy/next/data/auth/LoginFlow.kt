@@ -55,6 +55,9 @@ class LoginFlow(
     private val sessionStore: SessionStore,
 ) {
 
+    /** BbLog tag for the login dance (see net.babybuddy.next.log.BbLog). */
+    private val TAG = net.babybuddy.next.log.BbLog.TAG_LOGIN
+
     suspend fun login(rawUrl: String, username: String, password: String): LoginResult =
         withContext(Dispatchers.IO) {
             val server = normalizeServerUrl(rawUrl)
@@ -84,6 +87,7 @@ class LoginFlow(
             val csrfCookie = cookies["csrftoken"] ?: return LoginResult.Failure(LoginError.HttpError(resp.code))
             val csrfToken = extractCsrfInput(resp.body?.string())
                 ?: return LoginResult.Failure(LoginError.HttpError(resp.code))
+            net.babybuddy.next.log.BbLog.d(TAG, "csrf fetched (${resp.code})")
 
             // -- Step 2: form login (no redirect follow; 3xx + sessionid = OK) ----
             val form = FormBody.Builder()
@@ -103,6 +107,7 @@ class LoginFlow(
             loginPostResponse.use { post ->
                 val postCookies = parseSetCookies(post)
                 val sessionCookie = postCookies["sessionid"]
+                net.babybuddy.next.log.BbLog.d(TAG, "form posted status=${post.code} session=${sessionCookie != null}")
                 if (post.code == 403 || post.isSuccessful) {
                     // 403 = bad csrf/credentials; a 200 re-render of the login form = bad creds
                     // (research doc §3.1: "403 → Invalid username or password").
@@ -121,6 +126,7 @@ class LoginFlow(
                         .build()
                 ).execute()
                 profileResponse.use { profile ->
+                    net.babybuddy.next.log.BbLog.d(TAG, "profile fetched (${profile.code})")
                     when {
                         profile.code == 401 || profile.code == 403 ->
                             return LoginResult.Failure(LoginError.BadCredentials)
@@ -163,6 +169,7 @@ class LoginFlow(
                             apiKey = apiKey,
                             username = username,
                         )
+                        net.babybuddy.next.log.BbLog.d(TAG, "key stored for user=$username")
                         return LoginResult.Success(server, apiKey)
                     }
                 }

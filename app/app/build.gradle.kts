@@ -73,6 +73,8 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
+    // BB/API request logging (BbLog-gated; see net.babybuddy.next.log.BbLog).
+    implementation(libs.okhttp.logging)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

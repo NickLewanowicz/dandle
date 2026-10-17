@@ -72,6 +72,9 @@ class AppContainer(
         .followRedirects(false)
         .followSslRedirects(false)
         .addInterceptor(ServerClockInterceptor(serverClock))
+        .apply {
+            if (net.babybuddy.next.BuildConfig.DEBUG) addInterceptor(debugLogInterceptor())
+        }
         .build()
 
     /** Client for token-authenticated API calls. */
@@ -79,7 +82,26 @@ class AppContainer(
         .addInterceptor(AuthInterceptor { apiKeyMirror })
         .addInterceptor(ServerClockInterceptor(serverClock))
         .addInterceptor(BaseUrlInterceptor { serverUrlMirror })
+        .apply {
+            if (net.babybuddy.next.BuildConfig.DEBUG) addInterceptor(debugLogInterceptor())
+        }
         .build()
+
+    /**
+     * BB/API request logging (debug builds only; BbLog gates output). BODY level with the
+     * Authorization header redacted and every line truncated to ~2KB.
+     */
+    private fun debugLogInterceptor(): okhttp3.logging.HttpLoggingInterceptor {
+        val interceptor = okhttp3.logging.HttpLoggingInterceptor { message ->
+            net.babybuddy.next.log.BbLog.d(
+                net.babybuddy.next.log.BbLog.TAG_API,
+                message.take(MAX_LOG_LINE_CHARS),
+            )
+        }
+        interceptor.level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+        interceptor.redactHeader("Authorization")
+        return interceptor
+    }
 
     val api: BabyBuddyApi = Retrofit.Builder()
         // Placeholder; BaseUrlInterceptor rewrites scheme/host/port from the session.
@@ -176,5 +198,10 @@ class AppContainer(
                 authExpiredMirror = session.sessionExpired
             }
         }
+    }
+
+    companion object {
+        /** BB/API log lines are truncated to ~2KB (review + product logging rules). */
+        private const val MAX_LOG_LINE_CHARS = 2_048
     }
 }
