@@ -8,81 +8,107 @@ breast-side badge spec. Glyph XML implementation and code are the android-engine
 
 **Deliverable:** `docs/design/launcher-mark.png` — 512×512 RGBA (content ≥432px,
 clean alpha edges, 1px feather). Readability strip: `docs/design/launcher-mark-preview.png`
-(48 / 96 / 192 px). Candidate record: `docs/design/candidates/candidate-1..6.png`.
+(48 / 96 / 192 px). Candidate record with model labels: `docs/design/candidates/`.
+
+**Current mark = ROUND 2 winner** (`gpt-image-2-candidate-1.png`, generated with
+`openai/gpt-image-2` at medium quality): a cream crescent moon cradling a leaning
+baby bottle — cream body, indigo outline + collar (`#3F51B5`), warm amber nipple
+accent, on exact `#808080`. Flat 3-tone (within brief's "max 3 tones"), no text,
+no shadow, no border. Owner feedback on the round-1 flux-schnell mark ("pretty
+ugly, too simple a model") triggered round 2.
 
 ### 1.1 Generation
 
-- **Model:** `black-forest-labs/flux-schnell` (Replicate), 1 image per prompt, 1:1,
-  PNG, 4 steps, `go_fast`. Chosen for cost (~$0.003/image) and flat-graphic strength.
-- **Spend:** 6 images × $0.003 = **$0.018** (of the ≤$0.25 asset budget). All 6
-  predictions succeeded; no billable failures (rate-limit 429s were rejected before
-  prediction creation, retried with backoff). Exact prediction times: 0.61s, 0.62s,
-  0.61s, 0.63s, 0.61s, 0.60s. No cost field is returned per prediction; the figure
-  uses Replicate's published $0.003/image price for this model.
-- **Token handling:** read at runtime from `~/Documents/Projects/ai-image-transformer/.env`
-  (`REPLICATE_API_TOKEN`); never printed, never copied into the repo.
+**Round 2 (current)** — models `openai/gpt-image-2` and `recraft-ai/recraft-v3(-svg)`:
 
-**Base prompt** (shared by all 6 candidates):
+- 7 prompt runs (+1 schema-failed retry), all via the Replicate API with the token
+  from `~/Documents/Projects/ai-image-transformer/.env` (read at runtime; never
+  printed, never committed).
+- **Spend accounting:** recraft-v3 raster 2 × $0.04 = $0.08 (price confirmed on
+  replicate.com/pricing, "$0.04 / output image"); recraft-v3-svg 2 runs (model-page
+  price $0.08/image → $0.16; price is JS-rendered, not API-readable — worst-case
+  bound used); gpt-image-2 1 medium + 2 low succeeded (OpenAI published image API
+  pricing mirrored by the Replicate proxy: ≈$0.064 medium, ≈$0.018 low → ≈$0.10);
+  1 further gpt-image-2 run failed at validation (`background: transparent` is not
+  supported by the model) — failed before generation, not billed.
+- **Round-2 spend: ≈ $0.34 (worst case). Round-1 spend: $0.018 (6 × flux-schnell
+  @ $0.003). TOTAL: ≈ $0.36 of the $0.70 cap** (≤ $0.70 even with generous
+  pricing error bars).
 
-> Simple flat app icon design: a single motif of a crescent moon cradling a baby
-> bottle. One simple rounded shape, minimal, flat 2-tone vector style, colors indigo
-> (#3F51B5) and cream (#FFF8E7) only. Centered composition. Solid uniform mid-gray
-> (#808080) background covering the entire frame. No text, no letters, no numbers,
-> no watermark, no photorealism, no busy gradients, no extra elements. Icon-appropriate
-> for a mobile launcher icon, must read clearly at small sizes (48dp).
+**Base prompt** (all round-2 candidates; composition varied per candidate):
 
-**Composition variations** (appended, one per candidate):
+> Professional minimal logo design for a mobile app launcher icon: a single unified
+> motif of a crescent moon cradling a baby bottle. Flat vector style, geometric,
+> clean, modern, premium brand quality. Colors: indigo (#3F51B5) and cream (#FFF8E7),
+> at most one subtle accent tone. Centered composition. [composition clause] Solid
+> uniform flat mid-gray (#808080) background filling the entire canvas. No text, no
+> letters, no photorealism, no drop shadow, no border, no extra elements. Must read
+> clearly at small sizes (48dp).
 
-1. Crescent moon on the left, bottle resting in its curve, tilted slightly right.
-2. Crescent moon opens upward like a cradle, bottle nestled horizontally in the arc.
-3. Large thick crescent wrapping around a small upright bottle at center.
-4. Thin elegant crescent under an upright bottle, bottle standing in the crescent's bowl.
-5. Crescent moon on the right, bottle tucked into its curve, tilted slightly left.
-6. Crescent and bottle interlocked as one continuous rounded silhouette.
+Composition clauses: (a) direct crescent+bottle; (b) negative-space variant — "a baby
+bottle inside a rounded indigo squircle where the crescent moon appears only as a
+subtle negative-space cutout" (owner asked to try subtler crescents).
 
-(Note: flux reorders composition freely; the rendered results do not map 1:1 to the
-variation text. Judge the output, not the prompt.)
+**Model notes / gotchas (for future rounds):**
 
-### 1.2 Candidate review & winner
+- `openai/gpt-image-2` (Replicate): `openai_api_key` optional — billed through the
+  Replicate token. **`background: transparent` is NOT supported** (prediction fails
+  with `invalid_value`). Solid-bg + keying works; medium quality produced the best
+  mark; instruction-following ("no text") held perfectly.
+- `recraft-ai/recraft-v3` (raster): Replicate deployment has NO `vector_illustration`
+  style (valid: `any`, `realistic_image*`, `digital_illustration*`); added TEXT to
+  the image despite "no text" ("APP - LAUCHER ICON") — unreliable for logo marks.
+- `recraft-ai/recraft-v3-svg`: real SVG output (kept as vector source in
+  `candidates/`), but styles are limited to line-art family (`any`, `engraving`,
+  `line_art`, `line_circuit`, `linocut`) → output skews line-art/sticker, not flat
+  2-tone fill. Also: Replicate "png" outputs from recraft models arrive as WebP
+  bytes; convert before use.
 
-| Candidate | Verdict |
-|---|---|
-| 1 | Drop shadow + 3rd tone + odd milk-blob artifact → rejected |
-| 2 | Clean flat but collar has slit artifacts; reads "bottle in front of moon", not cradled → runner-up |
-| 3 | Cleanest read, but single-tone (cream only, no indigo) → runner-up |
-| 4 | Circular badge, 3–4 tones, thin white bottle outline would vanish at 48px → runner-up (busy) |
-| 5 | Background not uniform (white tile corners) → unusable for clean keying |
-| **6** | **Winner: true 2-tone (indigo bottle + cream crescent/cap/nipple), cradle composition, no shadow, no extra elements** |
+**Round 2 candidate review (all viewed):**
 
-Winner rationale: it is the only candidate that is simultaneously (a) genuinely
-2-tone in the brief's palette family, (b) a single legible "moon cradles bottle"
-motif, and (c) artifact-free. It survives the squint test at 48px: silhouette =
-crescent + upright bottle, no detail loss (verified in `launcher-mark-preview.png`).
+| Candidate | Model | Verdict |
+|---|---|---|
+| 1 | gpt-image-2 (medium) | **WINNER** — professional, cohesive, true cradle composition, 3 clean tones |
+| 3 | gpt-image-2 (low) | runner-up — strong indigo crescent but adds a heart accent (greeting-card vibe) |
+| 4 | gpt-image-2 (low, negative-space) | runner-up — clean squircle tile; crescent reduced to a bug on the bottle, and full-bleed tile complicates adaptive-icon use |
+| svg-1 | recraft-v3-svg | reject — moon FACE + stars, clip-art kitsch |
+| svg-2 | recraft-v3-svg | runner-up — elegant line art, but sticker-like; ticks too fine for 48dp |
+| 1 | recraft-v3 (raster) | reject — contains TEXT ("APP - LAUCHER ICON") |
+| 2 | recraft-v3 (raster) | runner-up — professional flat circle badge, but long-shadow style reads dated |
+
+**Round 1 (superseded)** — `black-forest-labs/flux-schnell`, 6 candidates, $0.018;
+winner kept at `candidates/round1-winner-flux-schnell.png`, all six at
+`candidates/flux-schnell-candidate-1..6.png`. Owner verdict: too simple/ugly —
+schnell retired from mark generation.
+
+### 1.2 Winner rationale (round 2)
+
+`gpt-image-2-candidate-1` is the only candidate that hits the owner's bar on every
+axis: professional and cohesive (reads like a deliberate brand mark, not generated
+filler); single legible "moon cradles bottle" motif; exactly 3 tones (cream/indigo/
+amber — brief allows one accent); survives the squint test at 48dp (silhouette =
+crescent + upright bottle with collar); zero artifacts (no text, shadow, border,
+or extra elements — gpt-image-2 followed every negative constraint).
 
 ### 1.3 Background removal pipeline (reproducible)
 
-Script logic (run ad hoc via PIL; the winner only — candidates are kept as-is):
+Same as round 1, with a 3-tone palette snap (run ad hoc via PIL):
 
-1. Flood-fill from all four image edges over pixels within RGB distance 30 of the
-   sampled background (104,132,173) — connectivity prevents eating same-hued
-   pixels inside the motif.
-2. Alpha: 255 for all non-flood pixels **except** a 2px boundary ring, which ramps
-   on background distance (unmix `fg = (px − (1−a)·bg) / a`) for antialiased edges.
-   (First attempt ramped alpha over the whole motif and made the bottle body
-   semi-transparent — its blue is close to the gray-blue background in RGB space.
-   Hard-interior + ring-only ramp fixes this.)
-3. Palette snap to exactly two tones: cream `#FFF8E7` and indigo `#5C6BC0`
-   (Material Indigo 400, same family as `#3F51B5`). Boundary-ring pixels inherit
-   the palette label of the nearest interior pixel (prevents a dark hairline
-   fringe where bg-blend pixels misclassify).
-4. Alpha feather: 0.7px Gaussian (≈1px feather per spec).
-5. Crop to content bbox, square-pad, scale content to 90% of a 512×512 canvas.
+1. Flood-fill from all four edges over pixels within RGB distance 26 of the
+   background (128,128,128 — gpt-image-2 rendered #808080 essentially exactly).
+2. Alpha 255 for all non-flood pixels except a 2px boundary ring (ramp + bg unmix).
+3. Palette snap to exactly three tones: cream `#FFF8E7`, indigo `#3F51B5`, amber
+   `#F7D68C` (sampled accent). Interior pixels classify by nearest palette color;
+   ring pixels inherit the nearest interior label (prevents fringe).
+4. Alpha feather 0.7px Gaussian; crop to bbox; square-pad; content scaled to 90%
+   of a 512×512 canvas.
 
 ### 1.4 Downstream (android-engineer)
 
-Ship as adaptive-icon foreground from this PNG (or vector-trace it if the engineer
-prefers) + monochrome layer (single-tone silhouette of the same mark). Dark-bg and
-light-bg composites verified; edges are standard 1px antialiasing, no halo.
+Ship as adaptive-icon foreground from this PNG (or vector-trace) + monochrome
+layer (single-tone silhouette). Verified on light and dark composites; 48px zoom
+check passed (crescent, collar, nipple all legible). SVG sources for the
+recraft-svg candidates exist in `candidates/` if a vector base is ever wanted.
 
 ## 2. Vector action glyph grid rules (Brief 03 §2.1 — binding for all six glyphs)
 
