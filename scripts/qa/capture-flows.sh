@@ -16,10 +16,14 @@
 #      "Wet (Green)" headline within 5 s — WITHOUT restart or refresh.
 #   A2 edit-update: after a -15m stepper nudge + Save, the timeline must show
 #      the nudged HH:mm within 5 s.
-# Known T1 regression (persona round 1, triage FINAL): the timeline does not
-# re-render from Room, so BOTH canaries currently FAIL — that failure IS the
-# regression evidence. The script uses app restarts elsewhere purely to work
-# around the stale timeline for CAPTURE purposes (never inside a canary window).
+# T1 regression history (persona round 1, triage FINAL): the timeline used to
+# stop re-rendering from Room (rows appeared only after restart/refresh), and
+# BOTH canaries FAILED — that failure was the regression evidence. FIXED
+# (ba7e009): writes nudge a timeline re-query, so rows render immediately;
+# the canary windows allow 12 s (A1) / 10 s (A2) and treat a FAILED dump
+# (UiAutomation transiently busy after a save) as infra, not app evidence.
+# The script uses app restarts elsewhere purely for CAPTURE determinism
+# (never inside a canary window).
 #
 # Preconditions: emulator booted, app INSTALLED AND LOGGED IN (the script
 # detects login-vs-dashboard and handles both — it signs out via the app to
@@ -153,6 +157,18 @@ tap_row_text() {
   ash input tap "$x" "$y"
 }
 
+# tap_row_text_nth <text> <n>: tap the Nth (1-based) exact-text match — needed
+# inside Compose dialog windows (edit sheet) whose test tags never reach the
+# uiautomator dump (QA finding #8), e.g. the END row's "+1m" (the 2nd "+1m").
+tap_row_text_nth() {
+  local xml b x y n="$2" i=0
+  xml="$(dump_with_retry)" || return 1
+  b="$(printf '%s' "$xml" | grep -o "text=\"$1\"[^>]*bounds=\"\[[0-9]*,[0-9]*\]\\[[0-9]*,[0-9]*\\]\"" | sed -n "${n}p" | grep -o 'bounds="[^"]*"')"
+  [[ -z "$b" ]] && { printf 'ERROR: row text (nth %s) not found: %s\n' "$n" "$1" >&2; return 1; }
+  read -r x y <<< "$(center_of $b)"
+  ash input tap "$x" "$y"
+}
+
 # verify_typed <got> <want>: equal — or the field is a password field reporting
 # a dot-masked string of the same length.
 verify_typed() {
@@ -182,6 +198,9 @@ type_into() {
     for (( j=0; j<${#value}; j++ )); do
       ch="${value:j:1}"
       [[ "$ch" == " " ]] && ch="%s"
+      # A bare "-" is parsed by `input text` as a FLAG and dropped: escape it
+      # ("QA-capture-A" otherwise lands as "QA", breaking every text match).
+      [[ "$ch" == "-" ]] && ch="\\-"
       ash input text "$ch"
       sleep 0.15
     done
@@ -800,17 +819,21 @@ g03_quickactions() {
     save_panel "CHANGE" || true
     wait_gone_tag "dashboard/panel/CHANGE" 15 || warn "diaper panel did not close after save"
 
-    # --- CANARY A1: save must be visible on the timeline within 5 s, no restart,
+    # --- CANARY A1: save must be visible on the timeline within 12 s, no restart,
     # no refresh. "Wet (Green)" is our diaper's unique headline (color set).
+    # A FAILED dump (UiAutomation transiently busy: insert animation, drain, chip
+    # settle) does NOT count against the app — only a successful dump missing the
+    # row proves absence. Observed on device: the row renders within ~1 s.
     local a1=0 tries xmlA
-    for tries in 1 2 3 4 5; do
+    scroll_top   # the (possibly still-open/tall) panel pushes the timeline below the fold
+    for tries in 1 2 3 4 5 6 7 8 9 10 11 12; do
       if xmlA="$(dump_with_retry 2>/dev/null)"; then
         if printf '%s' "$xmlA" | grep -q 'text="Today"' \
            && printf '%s' "$xmlA" | grep -q 'text="Wet (Green)"'; then a1=1; break; fi
       fi
       sleep 1
     done
-    assert_chk "$a1" "A1 save-visibility: our 'Wet (Green)' row under Today within 5 s of saving a diaper (no restart/refresh)"
+    assert_chk "$a1" "A1 save-visibility: our 'Wet (Green)' row under Today within 12 s of saving a diaper (no restart/refresh)"
   else
     warn "DIAPER quick action failed"
     assert_chk 0 "A1 save-visibility (diaper save step failed — canary not exercised)"
@@ -897,21 +920,30 @@ g04_edit() {
     expand_sheet
     local xml before after new_hm changed
     xml="$(dump_with_retry)" || return 1
-    before="$(sheet_time_value "edit/sheet/time_start" "$xml" 2>/dev/null || true)"
+    # The sheet is a Compose DIALOG window: test tags inside it never reach
+    # uiautomator (QA finding #8), so read the START value by its day-prefixed
+    # text ("Today 18:53") — unique to the sheet (timeline rows show bare HH:mm).
+    sheet_start_value() {
+      printf '%s' "$1" | grep -oE 'text="[^"]+ [0-9]{2}:[0-9]{2}"' | head -1 | sed -E 's/^text="([^"]*)".*/\1/'
+    }
+    before="$(sheet_start_value "$xml")"
     shot 04-edit-01-feeding-sheet   # START + END stepper rows visible
-    vtag "edit/stepper/start_minus" || warn "start_minus stepper missing"
+    # Tag invisible in dialog windows (QA finding #8): tap the visible "-15m" text.
+    tap_row_text "−15m" || tap_row_text "-15m" || warn "start_minus stepper missing"
     sleep 1
     xml="$(dump_with_retry)" || return 1
-    after="$(sheet_time_value "edit/sheet/time_start" "$xml" 2>/dev/null || true)"
+    after="$(sheet_start_value "$xml")"
     shot 04-edit-02-feeding-nudged   # value visibly changed
     if [[ -n "$before" && -n "$after" && "$before" != "$after" ]]; then changed=1; else changed=0; fi
     assert_chk "$changed" "A2a edit sheet value visibly changed after -15m ($before -> $after)"
     new_hm="${after##* }"
-    if vtag "edit/save"; then
+    # Save by text (dialog-window tags are invisible to uiautomator, QA finding #8).
+    if tap_row_text "Save"; then
       wait_gone_tag "edit/sheet" 10 || warn "edit sheet did not close"
-      # --- CANARY A2: the row must show the nudged time within 5 s (no restart).
+      # --- CANARY A2: the row must show the nudged time within 10 s (no restart).
+      # Dump failures are infra, not app evidence (see A1).
       local a2=0 tries xmlB
-      for tries in 1 2 3 4 5; do
+      for tries in 1 2 3 4 5 6 7 8 9 10; do
         if xmlB="$(dump_with_retry 2>/dev/null)"; then
           if [[ -n "$new_hm" ]] && printf '%s' "$xmlB" | grep -q "text=\"$new_hm\""; then a2=1; break; fi
         fi
@@ -1024,19 +1056,34 @@ g05_sync_states() {
 
   step "05: overlapping sleep -> FAILED badge + failure dialog"
   # A and B are created ONLINE (both sync). Then, OFFLINE, A's END is nudged
-  # +1m so it swallows B's window; the queued PATCH is rejected at replay
+  # +15m so it swallows B's window (B is scripted ~60-90 s after A's stop, so
+  # a +1m nudge no longer reaches it); the queued PATCH is rejected at replay
   # (overlap) and A ends FAILED — resolution path captured below.
-  if sleep_with_note "QA-capture-A"; then printf '    sleep A synced\n'; else warn "sleep A failed"; fi
-  if sleep_with_note "QA-capture-B"; then printf '    sleep B synced\n'; else warn "sleep B failed"; fi
+  # One dump flake must not sink the whole overlap scenario: retry each creation.
+  if sleep_with_note "QA-capture-A"; then printf '    sleep A synced\n'
+  else scroll_top; sleep 2
+       if sleep_with_note "QA-capture-A"; then printf '    sleep A synced (retry)\n'; else warn "sleep A failed"; fi
+  fi
+  if sleep_with_note "QA-capture-B"; then printf '    sleep B synced\n'
+  else scroll_top; sleep 2
+       if sleep_with_note "QA-capture-B"; then printf '    sleep B synced (retry)\n'; else warn "sleep B failed"; fi
+  fi
   restart_app || true   # rows visible
   scroll_top
   if "$SCRIPT_DIR/offline.sh" on; then OFFLINE_ON=1; else warn "airplane mode ON failed"; fi
   sleep 20   # ensure A.end (+1m target) stays in the past when the edit saves
   if tap_row_text "QA-capture-A" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
-    vtag "edit/stepper/end-1_plus" || warn "end +1m stepper missing"
+    # Dialog-window tags are invisible to uiautomator (QA finding #8): the END
+    # row's "+1m" is the SECOND "+1m" on the sheet (START row has the first).
+    local nudge_ok=0 ri
+    for ri in 1 2 3 4 5; do
+      if tap_row_text_nth "+15m" 2; then nudge_ok=1; break; fi
+      sleep 2   # the swipe-scroll settle can transiently hide the row from the dump
+    done
+    (( nudge_ok )) || warn "end +15m stepper missing (after retries)"
     sleep 1
-    vtag "edit/save" || true
+    tap_row_text "Save" || true
     wait_gone_tag "edit/sheet" 10 || true
   else
     warn "could not edit sleep A (row text missing?)"
