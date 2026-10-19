@@ -58,8 +58,9 @@ text_of() {
   printf '%s' "$m" | sed -E 's/^text="(.*)" resource-id=.*/\1/'
 }
 
-# center_of x1 y1 x2 y2 -> "x y"
-center_of() { echo $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); }
+# center_of x1 y1 x2 y2 -> "x y" (rc=1 unless exactly 4 non-empty coords, so a
+# caller that lost its bounds gets a loud failure downstream, not `( + ) / 2`)
+center_of() { (( $# == 4 )) || return 1; echo $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); }
 
 # tap_tag <resource-id>: fresh dump, resolve center, tap. rc=1 if tag missing.
 tap_tag() {

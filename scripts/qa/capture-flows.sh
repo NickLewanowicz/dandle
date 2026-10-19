@@ -59,6 +59,13 @@ source "$SCRIPT_DIR/lib.sh"
 dump_with_retry() {
   local i xml="" delay
   for i in 1 2 3 4 5 6 7 8 9 10; do
+    # rm before each attempt: a FAILED `uiautomator dump` (idle timeout on a
+    # ticking counter, wedged UiAutomation) leaves the PREVIOUS dump file in
+    # place, and reading it back serves a STALE tree that passes the
+    # <hierarchy check below — every consumer then reasons about a screen
+    # that no longer exists (mis-taps, phantom "tag not on screen", panels
+    # that "never closed"). 2026-10-19: this poisoned whole run sections.
+    ash rm -f "$UI_DUMP_REMOTE" >/dev/null 2>&1
     xml="$(ash uiautomator dump "$UI_DUMP_REMOTE" >/dev/null 2>&1 && ash cat "$UI_DUMP_REMOTE" 2>/dev/null | tr -d '\r')" || xml=""
     if [[ "$xml" == *"<hierarchy"* ]]; then
       printf '%s' "$xml"
@@ -137,6 +144,12 @@ bounds_by_text_all() {
 tap_text() {
   local xml="$1" text="$2" nth="${3:-1}" x1 y1 x2 y2 x y n=0
   while read -r x1 y1 x2 y2; do
+    # When the text is absent, the empty here-string still yields ONE empty
+    # line that `read` accepts with all vars empty — tapping "" "" throws on
+    # device and returning 0 here made callers believe a phantom tap landed
+    # (2026-10-19: sign-out "succeeded", the confirmation never appeared, g01
+    # burned its full retry). Skip bounds lines that are not 4 numbers.
+    [[ -z "$x1" || -z "$x2" ]] && continue
     n=$((n + 1))
     if (( n == nth )); then
       read -r x y <<< "$(center_of "$x1" "$y1" "$x2" "$y2")"
@@ -573,9 +586,15 @@ pick_time() {
   read -r x0 y0 <<< "$top"; read -r x30 y30 <<< "$bottom"
   cx=$(( (x0 + x30) / 2 )); cy=$(( (y0 + y30) / 2 )); r=$(( (y30 - y0) / 2 ))
   read -r mx my <<< "$(python3 -c "import math; a=math.radians((int('$mm')+0.7)*6-90); print(int($cx+$r*math.cos(a)), int($cy+$r*math.sin(a)))")"
-  # A tap snaps to the nearest 5-minute label; a short DRAG that ends on the
-  # target angle selects the exact minute (verified on device).
-  ash input swipe "$x30" "$y30" "$mx" "$my" 400
+  # Drag from the 5-minute label NEAREST the target (an arc of <=2.5 min). The
+  # original fixed 30-label start made the straight swipe chord cut toward the
+  # dial center for far targets and/or fling the dial: target :59 landed :00
+  # (hour flipped), target :17 landed +2..+3 — long drags are unusable. A short
+  # rim-hugging drag selects the exact minute (a tap alone snaps to 5-min).
+  local anch ax ay
+  anch=$(( ( (10#$mm + 2) / 5 * 5 ) % 60 ))
+  read -r ax ay <<< "$(python3 -c "import math; a=math.radians(($anch+0.7)*6-90); print(int($cx+$r*math.cos(a)), int($cy+$r*math.sin(a)))")"
+  ash input swipe "$ax" "$ay" "$mx" "$my" 400
   sleep 1
   tap_row_text "OK" || return 1
   sleep 1
@@ -644,6 +663,9 @@ find_row_text() {
   local text="$1" mode="${2:-exact}" i
   scroll_top   # newest rows live at the top; look there before scrolling down
   for i in 1 2 3 4 5 6; do
+    # Rows can also sit ABOVE the viewport (an over-scrolled/stale scroll from
+    # the previous screen): re-anchor to the top mid-loop before scrolling on.
+    if (( i == 4 )); then scroll_top; fi
     if [[ "$mode" == "like" ]]; then
       tap_row_text_like "$text" && return 0
     else
@@ -1722,12 +1744,15 @@ g01_login || { warn "g01 failed — one full retry after a fresh login"
   ash am force-stop "$PKG" 2>/dev/null || true
   bash "$SCRIPT_DIR/fresh-install-login.sh" >/dev/null 2>&1 || true
   g01_login; }
-g02_dashboard
-g03_quickactions
-g04_edit
-g05_sync_states
-g06_widgets
-g07_help
+# Each group is internally best-effort (its own warns/asserts); a group-level
+# failure must never kill the run under set -e — g04_edit returns 1 on a dump
+# failure and that used to skip ALL later groups' canaries (2026-10-19).
+g02_dashboard || true
+g03_quickactions || true
+g04_edit || true
+g05_sync_states || true
+g06_widgets || true
+g07_help || true
 
 api_cleanup
 
