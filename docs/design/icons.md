@@ -76,6 +76,29 @@ paths); stroke 1.4dp for this glyph (2dp merged the pair into a solid shield).
 
 Spend: $0 (all hand-drawn; recraft used only for the launcher in round 4).
 
+### 2.1 Round 6 — feeding side variants via gpt-image-2 img2img (FINAL, SHIPPED)
+
+The hand-drawn breast-pair curves kept closing into a heart/shield at 24dp
+(six visual iterations), and recraft-v3-svg line_art output detailed
+illustrations unusable at icon size. Owner direction: feed the ORIGINAL
+app's icon into gpt-image-2 as input and have it generate the variants.
+
+- Pipeline: original `left_breast.svg` / `right_breast.svg` /
+  `feeding-breast.svg` rendered to PNG (qlmanage) -> `gpt-image-2` img2img
+  ("convert to clean minimal line icon, keep composition, dashed/solid
+  distinction, corner letter") -> PIL: autocrop, luminance->alpha, square
+  pad -> `drawable-nodpi/ic_bb_feeding_{left,right,both}.png` (256px,
+  tintable; the drawable XMLs from the first attempt were removed).
+- Results are clean minimal line icons preserving the original composition:
+  crossing curves, dashed = unfed side, bold corner L/R, center tick for
+  both. The QA matcher note stands: swatch labels render with a leading
+  space (`" Black"`), matchers use substring.
+- Spend: 3 x gpt-image-2 (1024, ~$0.064 each? billed as runs) ≈ **$0.19**.
+  Cumulative ≈ **$0.79 of $1**.
+- Two real QA bugs fixed while landing (see 1d816b4): stale-dump serving in
+  `dump_with_retry` (dump file now rm'd before each attempt) and
+  `tap_text`/`center_of` phantom-success on empty bounds.
+
 ## 3. Spend
 
 - Round 4: recraft-v3 raster 4 × $0.04 = **$0.16**; recraft-v3-svg 1 × $0.08 =
