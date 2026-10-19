@@ -54,6 +54,7 @@ import net.babybuddy.next.ui.dialogTestTags
 import net.babybuddy.next.ui.dashboard.ChoiceChipRow
 import net.babybuddy.next.ui.dashboard.DiaperSwatches
 import net.babybuddy.next.ui.dashboard.dayLabel
+import net.babybuddy.next.ui.dashboard.feedingAmountHint
 import net.babybuddy.next.ui.dashboard.iconRes
 import java.time.Instant
 import java.time.ZoneId
@@ -283,7 +284,7 @@ private fun TypeFields(
 ) {
     when (type) {
         EventType.FEEDING -> {
-            EditAmount(draft.amount, "mL — optional for nursing") { value ->
+            EditAmount(draft.amount, feedingAmountHint(draft.feedingMethod)) { value ->
                 onDraftChange { it.copy(amount = value) }
             }
             Text("Type", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))

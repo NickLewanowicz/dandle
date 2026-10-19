@@ -37,20 +37,33 @@ object WidgetStateMapper {
         val elapsedText: String,
     )
 
-    /** One row of the CareDashboard widget ("Last feed · 12m ago · 120 mL"). */
+    /**
+     * One row of the CareDashboard widget. timeText is a CLOCK time (or a start–end
+     * range for long timed entries) — relative "3h" rots between widget refreshes and
+     * under-reports age (Priya, persona round 2).
+     */
     data class CareRow(
         val type: EventType,
         val label: String,
-        val sinceText: String,
+        val timeText: String,
         val detailText: String?,
     )
 
     data class CareDashboardState(
         val childName: String? = null,
+        /** "Asleep since 13:05 · 1h 10m" — the first thing an at-work parent checks. */
+        val runningSince: RunningSinceState? = null,
         val rows: List<CareRow>,
         val running: RunningTimerState?,
         /** T7: quiet cross-child running line; null = nothing to show. */
         val crossChild: CrossChildTimerState? = null,
+    )
+
+    /** The running timer phrased as STATE ("Asleep since 13:05"), not an action. */
+    data class RunningSinceState(
+        val kind: EventType,
+        val sinceText: String,
+        val elapsedText: String,
     )
 
     /** Short on-button labels (UX spec §6: Sleep / Bottle / Diaper / Pump). */
@@ -125,14 +138,21 @@ object WidgetStateMapper {
             CareRow(
                 type = type,
                 label = rowLabel(type),
-                sinceText = sinceText(nowMillis - event.endMillis),
+                timeText = entryTimeText(event, nowMillis),
                 detailText = detailText(event),
             )
         }
         val running = timers.firstOrNull { it.childId == childId }?.let {
             RunningTimerState(it.kind, elapsedMinutesText(nowMillis - it.startedAtMillis))
         }
-        return CareDashboardState(childName = childName, rows = rows, running = running)
+        val runningSince = timers.firstOrNull { it.childId == childId }?.let {
+            RunningSinceState(
+                kind = it.kind,
+                sinceText = clockTime(it.startedAtMillis),
+                elapsedText = elapsedMinutesText(nowMillis - it.startedAtMillis),
+            )
+        }
+        return CareDashboardState(childName = childName, runningSince = runningSince, rows = rows, running = running)
     }
 
     fun rowLabel(type: EventType): String = when (type) {
@@ -188,9 +208,32 @@ object WidgetStateMapper {
             event.solid == true -> "Solid"
             else -> null
         }
-        EventType.SLEEP, EventType.TUMMY_TIME -> durationMinutesText(event.durationMillis)
-        EventType.NOTE -> null
+        // Sleep/tummy: the start–end range in timeText IS the duration — a separate
+        // "40m" next to it was redundant (and "0m · 0m" read as broken data, Priya).
+        EventType.SLEEP, EventType.TUMMY_TIME, EventType.NOTE -> null
     }
+
+    /**
+     * Clock time of an entry's END (or a start–end range when it ran >= 60 min or
+     * crossed local midnight) — the owner's timeline tweak, mirrored here. Clock
+     * times stay true even when the widget is minutes-stale; "3h" under-reports.
+     */
+    fun entryTimeText(event: Event, nowMillis: Long): String {
+        val zone = java.time.ZoneId.systemDefault()
+        val end = java.time.Instant.ofEpochMilli(event.endMillis).atZone(zone)
+        val start = java.time.Instant.ofEpochMilli(event.startMillis).atZone(zone)
+        val crossesMidnight = start.toLocalDate() != end.toLocalDate()
+        return if (event.type.isTimed && (event.endMillis - event.startMillis >= 3_600_000 || crossesMidnight)) {
+            "${clockTime(event.startMillis)}–${clockTime(event.endMillis)}"
+        } else {
+            clockTime(event.endMillis)
+        }
+    }
+
+    /** "13:05" in the device's zone (24h, matching the in-app timeline). */
+    fun clockTime(epochMillis: Long): String =
+        java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+            .format(java.time.Instant.ofEpochMilli(epochMillis).atZone(java.time.ZoneId.systemDefault()))
 
     /**
      * Minute-granular "time since" (UX spec §6: counters are minute-granular; staleness is

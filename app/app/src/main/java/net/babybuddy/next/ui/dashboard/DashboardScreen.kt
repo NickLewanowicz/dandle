@@ -5,13 +5,17 @@ import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -32,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,12 +44,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.babybuddy.next.data.AppContainer
+import net.babybuddy.next.domain.ElapsedTimeFormatter
 import net.babybuddy.next.domain.StopGuard
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
 import net.babybuddy.next.ui.TestTags
 import net.babybuddy.next.ui.dialogTestTags
 import net.babybuddy.next.ui.edit.QuickEditSheet
+
 
 /**
  * Dashboard (spec §2, owner rework U1): header (child name + chevron, sync chip, overflow), the
@@ -148,6 +155,9 @@ fun DashboardScreen(
                     childPresent = state.activeChild != null,
                     runningKinds = state.runningTimers.map { it.kind }.toSet(),
                     openType = state.openPanel?.type,
+                    runningElapsed = state.runningTimers.associate {
+                        it.kind to ElapsedTimeFormatter.durationShort(nowMillis - it.startedAtMillis)
+                    },
                     enabled = state.activeChild != null,
                     onTap = viewModel::onQuickActionTap,
                 )
@@ -227,30 +237,38 @@ fun DashboardScreen(
         AlertDialog(
             onDismissRequest = { stopDialog = null },
             title = { Text(StopGuard.DIALOG_TITLE) },
-            text = { Text(StopGuard.dialogBody(timer.kind.label, elapsed)) },
-            confirmButton = {
-                // Save is the emphasized action (spec v0.2) — most likely intent.
-                Button(
-                    onClick = {
-                        stopDialog = null
-                        viewModel.saveRunningTimer(timer)
-                    },
-                    modifier = Modifier.testTag(TestTags.STOP_DIALOG_SAVE),
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
+            confirmButton = {},
+            dismissButton = {},
+            text = {
+                Column {
+                    Text(StopGuard.dialogBody(timer.kind.label, elapsed))
+                    // Save fills its own row; Discard is moved to a subdued SECOND line
+                    // far from Save — a thumb-slip on an adjacent destructive button must
+                    // not erase a tracked nap (Jordan, persona round 2).
+                    Button(
                         onClick = {
                             stopDialog = null
-                            viewModel.discardTimer(timer)
+                            viewModel.saveRunningTimer(timer)
                         },
-                        modifier = Modifier.testTag(TestTags.STOP_DIALOG_DISCARD),
-                    ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
-                    TextButton(
-                        onClick = { stopDialog = null },
-                        modifier = Modifier.testTag(TestTags.STOP_DIALOG_KEEP),
-                    ) { Text("Keep") }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .testTag(TestTags.STOP_DIALOG_SAVE),
+                    ) { Text("Save") }
+                    Row(modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(
+                            onClick = { stopDialog = null },
+                            modifier = Modifier.testTag(TestTags.STOP_DIALOG_KEEP),
+                        ) { Text("Keep running") }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(
+                            onClick = {
+                                stopDialog = null
+                                viewModel.discardTimer(timer)
+                            },
+                            modifier = Modifier.testTag(TestTags.STOP_DIALOG_DISCARD),
+                        ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                    }
                 }
             },
             modifier = Modifier
@@ -362,7 +380,7 @@ private fun HeaderRow(
                             "▾",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp),
+                            modifier = Modifier.padding(start = 2.dp),
                         )
                     }
                 }

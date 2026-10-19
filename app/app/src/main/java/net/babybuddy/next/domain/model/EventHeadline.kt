@@ -2,8 +2,11 @@ package net.babybuddy.next.domain.model
 
 /**
  * Timeline headline formats — MUST be consistent app-wide (functional spec §4.1):
- * - Feeding: "Bottle · 120 mL" (method · amount; amount omitted when null or ≤ 0 — UX-review W9)
- * - Diaper:  "Wet" / "Solid" / "Wet + Solid" (+ color name)
+ * - Feeding: "Bottle · 120 mL" (method · amount; amount omitted when null or ≤ 0 — UX-review W9).
+ *            Non-breast-milk types are appended ("Bottle · Formula · 110 mL") — the method
+ *            alone erases the type for solid food and hides formula intake (Elena, round 2).
+ * - Diaper:  "Wet" / "Solid" / "Wet + Solid" (color is rendered ONCE, as the row's
+ *            swatch dot + label — never repeated inside the headline)
  * - Sleep:   "Sleep"
  * - Note:    first line of the note text
  * - Pumping: "Pump · 85 mL"
@@ -14,8 +17,13 @@ object EventHeadline {
     fun headline(event: Event): String = when (event.type) {
         EventType.FEEDING -> {
             val method = event.feedingMethod?.replaceFirstChar { it.uppercase() } ?: "Feed"
+            val type = event.feedingType
+                ?.takeIf { it.isNotBlank() && it != "breast milk" }
+                ?.replaceFirstChar { it.uppercase() }
+                ?.let { " · $it" }
+                .orEmpty()
             val amount = amountText(event)
-            "$method$amount"
+            "$method$type$amount"
         }
         EventType.CHANGE -> {
             val wet = event.wet == true
@@ -26,10 +34,9 @@ object EventHeadline {
                 solid -> "Solid"
                 else -> "Diaper change"
             }
-            val color = event.color?.takeIf { it.isNotBlank() }
-                ?.let { " (${it.replaceFirstChar { c -> c.uppercase() }})" }
-                .orEmpty()
-            base + color
+            // Color is deliberately NOT in the headline: the row renders the swatch dot +
+            // color label once (a second copy here read "Wet (Green) ● Green" — Elena/UX round 2).
+            base
         }
         EventType.SLEEP -> "Sleep"
         EventType.NOTE -> event.noteText?.lineSequence()?.firstOrNull().orEmpty().ifBlank { "Note" }

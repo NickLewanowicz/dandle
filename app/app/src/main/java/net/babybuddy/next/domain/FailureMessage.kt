@@ -16,8 +16,10 @@ import java.time.format.DateTimeFormatter
  */
 object FailureMessage {
 
-    // Locale pinned so times read identically everywhere (localization is a polish-pass job).
-    private val rangeFormat = DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)
+    // Localized SHORT time format: follows the device 12/24h setting, so the failure
+    // dialog speaks the same time dialect as the timeline rows (HH:mm vs "1:15 PM" was
+    // two dialects in one moment — Elena, persona round 2).
+    private val rangeFormat = DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
     private val clashInReason = Regex("""Conflicting entry:\s*(.+?)\s*\((.+?)\s*-\s*(.+?)\)\s*""")
 
     /**

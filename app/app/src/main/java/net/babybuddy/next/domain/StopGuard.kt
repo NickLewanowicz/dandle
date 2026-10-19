@@ -20,21 +20,22 @@ object StopGuard {
     const val DIALOG_TITLE = "Stop timer?"
 
     /**
-     * Dialog body, e.g. "You've been tracking Sleep for 12:34." — clock style matches the
-     * running panel (HH:MM:ss once an hour or more is involved, otherwise M:SS).
+     * Dialog body, e.g. "You've been tracking Sleep for 16 sec." Durations are SPELLED
+     * ("4 min 12 sec") — the old clock style ("0:16") was unreadable as minutes-vs-seconds
+     * at 3am (Jordan, persona round 2).
      */
     fun dialogBody(label: String, elapsedMillis: Long): String =
-        "You've been tracking $label for ${clockText(elapsedMillis)}."
+        "You've been tracking $label for ${spokenText(elapsedMillis)}."
 
-    private fun clockText(elapsedMillis: Long): String {
+    private fun spokenText(elapsedMillis: Long): String {
         val totalSeconds = elapsedMillis.coerceAtLeast(0) / 1000
         val h = totalSeconds / 3600
         val m = (totalSeconds % 3600) / 60
         val s = totalSeconds % 60
-        return if (h > 0) {
-            String.format(Locale.US, "%d:%02d:%02d", h, m, s)
-        } else {
-            String.format(Locale.US, "%d:%02d", m, s)
+        return when {
+            h > 0 -> "${h} h ${m} min ${s} sec"
+            m > 0 -> "${m} min ${s} sec"
+            else -> "${s} sec"
         }
     }
 }

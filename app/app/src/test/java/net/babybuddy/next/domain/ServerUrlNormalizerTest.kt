@@ -61,14 +61,16 @@ class ElapsedTimeFormatterTest {
     }
 
     @Test
-    fun `duration short per UX spec`() {
-        assertEquals("0s", ElapsedTimeFormatter.durationShort(0))
-        assertEquals("45s", ElapsedTimeFormatter.durationShort(45_000))
-        assertEquals("59s", ElapsedTimeFormatter.durationShort(59_999))
+    fun `duration short per UX spec (persona round 2)`() {
+        // Sub-minute floors to "<1m": second precision read as noise or a sync bug.
+        assertEquals("<1m", ElapsedTimeFormatter.durationShort(0))
+        assertEquals("<1m", ElapsedTimeFormatter.durationShort(45_000))
+        assertEquals("<1m", ElapsedTimeFormatter.durationShort(59_999))
         assertEquals("12m", ElapsedTimeFormatter.durationShort(12 * 60 * 1000L))
         assertEquals("59m", ElapsedTimeFormatter.durationShort(59 * 60_000L + 59_999))
-        assertEquals("1h 05m", ElapsedTimeFormatter.durationShort((3600 + 5 * 60) * 1000L))
-        assertEquals("2h 00m", ElapsedTimeFormatter.durationShort(7_200_000))
+        // No minute zero-pad ("1h 05m" padded a zero that added noise).
+        assertEquals("1h 5m", ElapsedTimeFormatter.durationShort((3600 + 5 * 60) * 1000L))
+        assertEquals("2h", ElapsedTimeFormatter.durationShort(7_200_000))
         assertEquals("3h 30m", ElapsedTimeFormatter.durationShort((3 * 3600 + 30 * 60) * 1000L))
     }
 }

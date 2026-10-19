@@ -54,9 +54,9 @@ class EventHeadlineTest {
     }
 
     @Test
-    fun `diaper appends the color when set`() {
+    fun `diaper does NOT append the color (rendered once as the row swatch)`() {
         assertEquals(
-            "Wet (Yellow)",
+            "Wet",
             event(EventType.CHANGE) { copy(wet = true, solid = false, color = "yellow") },
         )
         // Server stores "" for "no color" — no empty parens (seen in seeded data).

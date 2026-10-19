@@ -715,10 +715,15 @@ class DashboardViewModel(
         val timer = if (type.isTimed) timerRepo.findRunning(type, childId) else null
         // The tap path and the auto-open collector can both open the same card within the same
         // second (timer insert → observeRunning → auto-open, while the tap's own open is still
-        // suspended on DataStore). Whoever lands second must NOT replace a live panel: the user
-        // may already have typed into it. The first open wins; its draft stays.
-        openPanel.value?.takeIf { it.type == type }?.let {
-            net.babybuddy.next.log.BbLog.d(TAG_UI, "openPanelFor ${type.name}: already open, keeping live draft")
+        // suspended on DataStore). Whoever lands second must NOT replace the user's live
+        // DRAFT — but it MUST adopt the freshly-loaded timer: the losing panel may have been
+        // built before the timer row committed (timer=null → the card would never render).
+        openPanel.value?.takeIf { it.type == type }?.let { existing ->
+            net.babybuddy.next.log.BbLog.d(
+                TAG_UI,
+                "openPanelFor ${type.name}: already open, keeping live draft, timer ${timer?.localId ?: existing.timer?.localId}",
+            )
+            openPanel.value = existing.copy(timer = existing.timer ?: timer)
             return
         }
         openPanel.value = OpenPanel(type, draft, timer)

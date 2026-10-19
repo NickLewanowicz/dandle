@@ -137,14 +137,44 @@ class WidgetStateMapperTest {
         )
         val feed = state.rows.first { it.type == EventType.FEEDING }
         assertEquals("Last feed", feed.label)
-        assertEquals("12m", feed.sinceText)
+        // Priya (persona round 2): rows show CLOCK times — relative "12m" under-reports
+        // as the widget goes stale between refreshes.
+        assertEquals(WidgetStateMapper.clockTime(now - 12 * 60_000), feed.timeText)
         assertEquals("120 mL", feed.detailText)
-        assertEquals("34m", state.rows.first { it.type == EventType.CHANGE }.sinceText)
+        assertEquals(WidgetStateMapper.clockTime(now - 34 * 60_000), state.rows.first { it.type == EventType.CHANGE }.timeText)
         assertEquals("Wet", state.rows.first { it.type == EventType.CHANGE }.detailText)
-        assertEquals("2h", state.rows.first { it.type == EventType.SLEEP }.sinceText)
-        assertEquals("45m", state.rows.first { it.type == EventType.SLEEP }.detailText)
+        // Sleep <60m: bare end clock (the range starts at >=60m or midnight-crossing).
+        assertEquals(WidgetStateMapper.clockTime(now - 120 * 60_000), state.rows.first { it.type == EventType.SLEEP }.timeText)
+        // Duration detail dropped for timed rows — the time carries it now.
+        assertNull(state.rows.first { it.type == EventType.SLEEP }.detailText)
         assertEquals("85 mL", state.rows.first { it.type == EventType.PUMPING }.detailText)
         assertNull(state.running)
+    }
+
+    @Test
+    fun `long nap shows a start-end range and running timer reads as state`() {
+        val state = WidgetStateMapper.careDashboard(
+            events = listOf(
+                // 8h nap ending 30m ago (started 8.5h ago, duration 8h) — the overnight case.
+                event(EventType.SLEEP, endedMinutesAgo = 30, durationMinutes = 8 * 60),
+            ),
+            timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 45)),
+            childId = 1,
+            nowMillis = now,
+            visible = setOf(EventType.SLEEP),
+        )
+        val nap = state.rows.first { it.type == EventType.SLEEP }
+        val zone = java.time.ZoneId.systemDefault()
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+        val endClock = fmt.format(java.time.Instant.ofEpochMilli(now - 30 * 60_000).atZone(zone))
+        val startClock = fmt.format(java.time.Instant.ofEpochMilli(now - 30 * 60_000 - 8 * 60 * 60_000).atZone(zone))
+        assertEquals("${startClock}–${endClock}", nap.timeText)
+        assertNull(nap.detailText)
+        // Priya: the running row reads as STATE at the top, not as a stop button.
+        val since = state.runningSince!!
+        assertEquals(EventType.SLEEP, since.kind)
+        assertEquals(WidgetStateMapper.clockTime(now - 45 * 60_000), since.sinceText)
+        assertEquals("45m", since.elapsedText)
     }
 
     @Test
@@ -160,7 +190,13 @@ class WidgetStateMapperTest {
             visible = setOf(EventType.CHANGE, EventType.SLEEP),
         )
         assertEquals("Wet + Solid", state.rows.first { it.type == EventType.CHANGE }.detailText)
-        assertEquals("3h 05m", state.rows.first { it.type == EventType.SLEEP }.detailText)
+        // 185-minute nap: timeText is the start-end range (>=60m) — the range IS the duration.
+        val nap = state.rows.first { it.type == EventType.SLEEP }
+        assertEquals(
+            WidgetStateMapper.clockTime(now - 485 * 60_000) + "–" + WidgetStateMapper.clockTime(now - 300 * 60_000),
+            nap.timeText,
+        )
+        assertNull(nap.detailText)
     }
 
     @Test
@@ -201,7 +237,7 @@ class WidgetStateMapperTest {
             nowMillis = now,
             visible = setOf(EventType.PUMPING, EventType.FEEDING),
         )
-        assertEquals("9h", state.rows.first { it.type == EventType.PUMPING }.sinceText)
+        assertEquals(WidgetStateMapper.clockTime(now - 9 * 60 * 60_000), state.rows.first { it.type == EventType.PUMPING }.timeText)
         assertNull(state.rows.first { it.type == EventType.PUMPING }.detailText)
         assertNull(state.rows.first { it.type == EventType.FEEDING }.detailText)
     }

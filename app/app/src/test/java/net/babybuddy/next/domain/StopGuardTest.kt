@@ -27,17 +27,17 @@ class StopGuardTest {
     }
 
     @Test
-    fun `dialog body shows the type and mm-ss clock`() {
+    fun `dialog body spells the duration (no bare mm-ss clock)`() {
         assertEquals(
-            "You've been tracking Sleep for 12:34.",
+            "You've been tracking Sleep for 12 min 34 sec.",
             StopGuard.dialogBody("Sleep", (12 * 60 + 34) * 1000L),
         )
     }
 
     @Test
-    fun `dialog body switches to hour clock at one hour or more`() {
+    fun `dialog body includes hours when one hour or more`() {
         assertEquals(
-            "You've been tracking Feeding for 1:02:03.",
+            "You've been tracking Feeding for 1 h 2 min 3 sec.",
             StopGuard.dialogBody("Feeding", (3600 + 2 * 60 + 3) * 1000L),
         )
     }
@@ -45,7 +45,7 @@ class StopGuardTest {
     @Test
     fun `negative elapsed is clamped`() {
         assertEquals(
-            "You've been tracking Pumping for 0:00.",
+            "You've been tracking Pumping for 0 sec.",
             StopGuard.dialogBody("Pumping", -5_000),
         )
     }

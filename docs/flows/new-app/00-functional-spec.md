@@ -34,6 +34,8 @@ Layout, top to bottom (v0.4 — the grid NEVER moves; nothing dynamic renders ab
 2. **Quick actions grid**: exactly six buttons, this order: **Feeding, Diaper, Sleep, Notes, Pumping, Tummy time**. Icons are this app's own original artwork; a running or open type lights up in its semantic type color (§8) with a static running dot. **[P]**
 3. **Running-timer card** (only while a timer runs for this child; at most one card — one editor at a time, original-app semantics): rendered DIRECTLY BELOW the grid as the original app's "expanded top element of the list" — literally the timeline's first list item, so it scrolls with the timeline and a field being typed into is brought into view above the keyboard (the header and grid never move); the list reveals the card the moment a timer starts — type-colored icon tile, type label, live `H:MM:SS` counter, the type's fields at full width (Feeding: type/method/amount; Sleep: note; Pumping: amount+note; Tummy time: milestone+note), the compact "Started Xm ago · Adjust" line (§3), and an **icon-only check save** bottom-right. **No ✕ and no "Save"/"Running" words** — stopping is the type button's re-tap (§3 tap-to-stop). **[P look, N fields]**
 4. **Timeline**: most recent events (all six types), newest first, grouped by day ("Today", "Yesterday", date). Entry rows show a type-colored icon chip, headline (per type, §4.1), time-of-day, duration (for timed types), sync-state marking (§6.2). Pull-to-refresh MUST re-sync. Pagination: load older on scroll (server limit/offset). After a quick-action save the timeline scrolls so the new row is in view — the insert IS the confirmation.
+   - **Time formats (persona round 2)**: sub-minute durations render `<1m` (never bare seconds); hours render without zero-pad (`1h 5m`, `4h`); a timed entry lasting **≥ 60 min or crossing local midnight** shows its RANGE as the trailing time (`21:00–01:00`) with the duration on the second line — an overnight sleep must not require subtraction.
+   - The quick-action circle of a RUNNING type shows live status as its label (`Sleep · 12m`); the running card's save (icon-only check) sits in the card HEADER, always on screen.
 
 Diaper and Note creation open a **modal sheet** (§3.2/§3.4), the same UI family as Quick Edit; they never render inline.
 
@@ -44,8 +46,7 @@ Empty state (fresh server): friendly illustration + "Log your first event with a
 Common rules:
 - Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer and shows its card below the grid (§2.3); **tapping the same button again is tap-to-stop** — it runs the stop guard below (>10s dialog, ≤10s silent discard). Never a duplicate timer. **[P: exact original tap semantics, v0.4]**
 - The card's only action is the icon-only save (check). There is no discard/✕ on the card: discard = re-tap → Discard in the dialog.
-- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save is the emphasized (filled) action**; Keep timer and Discard are subdued text buttons. <10s → discard silently. **[P]** (original semantics, emphasis per user review)
-- Timer >10s stop → confirmation dialog ("Stop timer? Keep / Discard / Save"). <10s → discard silently. **[P]** (exact original semantics per existing-app flow docs)
+- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save** is a full-width filled button; below it, "Keep running" (left) and **Discard** (right, subdued) sit on a SECOND row — the destructive action must not sit adjacent to Save (thumb-slip = erased nap; persona round 2, Jordan). The body SPELLS durations ("2 min 52 sec", never bare "0:16"). <10s → discard silently. **[P: original semantics, v0.4 layout]**
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
 - Save = create entry with start = timer start, end = stop time. **[P]**
 - **"Started X min ago" adjust (timed panels) [N, v0.3]**: the four timer panels carry one compact line — "Started just now" / "Started 20m ago" — with an **Adjust** expander offering **−15m / −5m / +5m / +15m** nudges and a **Pick time** platform time picker. The adjust backdates the ENTRY START only (start = timer start − adjust, clamped to the stop time); end and duration rules are unchanged. Clamp 0..24h; a future start is unreachable by construction. The adjustment persists with the panel draft and applies to both the panel Save and the stop-dialog Save.
@@ -81,8 +82,11 @@ Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/Tum
 ## 4. Timeline entries
 
 ### 4.1 Headline formats (MUST be consistent app-wide)
-- Feeding: "Bottle · 120 mL" (method · amount) + duration
-- Diaper: "Wet" / "Solid" / "Wet + Solid" (+ color chip if set)
+- Feeding: "Bottle · 120 mL" (method · amount) + duration. Non-breast-milk types are appended
+  ("Bottle · Formula · 110 mL", "Parent fed · Solid food") — the method alone hides formula
+  intake and erases solid food (persona round 2, Elena).
+- Diaper: "Wet" / "Solid" / "Wet + Solid". The color is rendered ONCE per row (swatch dot +
+  color name next to the headline) — never repeated inside the headline text.
 - Sleep: "Sleep" + duration
 - Note: first line of note text, rendered **italic** (v0.4): note content is words, not a structured event — italics keep "Feeding interrupted" the note from reading as a feeding. Note previews on other types' rows are italic too.
 - Pumping: "Pump · 85 mL" + duration

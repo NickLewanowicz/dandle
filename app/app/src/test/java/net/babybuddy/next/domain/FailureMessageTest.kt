@@ -39,7 +39,14 @@ class FailureMessageTest {
             conflictServerId = 4,
             clash = clashEvent(),
         )
-        assertEquals("This overlaps the 1:15 PM–2:00 PM nap.", message)
+        // Format follows the DEVICE localized time (persona round 2: the dialog must
+        // speak the same dialect as the HH:mm timeline) — build the expectation with
+        // the same formatter instead of pinning a locale string.
+        val fmt = java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+        val zone = java.time.ZoneId.systemDefault()
+        val t1 = fmt.format(java.time.Instant.ofEpochMilli(clashEvent().startMillis).atZone(zone))
+        val t2 = fmt.format(java.time.Instant.ofEpochMilli(clashEvent().endMillis).atZone(zone))
+        assertEquals("This overlaps the $t1–$t2 nap.", message)
     }
 
     @Test

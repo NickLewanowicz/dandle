@@ -21,7 +21,6 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.getAppWidgetState
@@ -78,7 +77,7 @@ class CareDashboardWidget : GlanceAppWidget() {
         val prefs = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
         val childId = container.quickActionActions.activeChildId()
         val state = if (childId == null) {
-            WidgetStateMapper.CareDashboardState(rows = emptyList(), running = null)
+            WidgetStateMapper.CareDashboardState(rows = emptyList(), runningSince = null, running = null)
         } else {
             // W8: resolve the child name for the header from the Room snapshot.
             val childName = container.childRepository.children
@@ -170,33 +169,36 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 modifier = GlanceModifier.padding(bottom = 4.dp),
             )
         }
-        state.rows.forEach { row ->
-            // P2-5: the nap row STARTS the sleep timer via broadcast — the launcher stays
-            // foreground (matching the QuickActions sleep cell). When a sleep timer already
-            // runs, the broadcast opens the app (timers strip) so the guard is reachable.
-            val action = if (row.type == EventType.SLEEP) {
-                GlanceModifier.clickable(actionRunCallback<WidgetSleepStartAction>())
-            } else {
-                WidgetActions.openPanelModifier(context, row.type)
+        // Priya (persona round 2): "is she asleep RIGHT NOW" is the first check — the
+        // running row moves to the TOP and reads as STATE ("Asleep since 13:05 · 1h 10m"),
+        // not as a stop button. Tap still deep-links into the stop guard (T5 semantics).
+        state.runningSince?.let { runningSince ->
+            val verb = when (runningSince.kind) {
+                EventType.SLEEP -> "Asleep since"
+                EventType.FEEDING -> "Feeding since"
+                EventType.PUMPING -> "Pumping since"
+                EventType.TUMMY_TIME -> "Tummy time since"
+                else -> "Tracking since"
             }
             CareRow(
-                icon = row.type.iconRes(),
-                label = row.label,
-                detail = listOfNotNull(row.sinceText, row.detailText).joinToString(" · "),
-                accent = false,
-                action = action,
+                icon = runningSince.kind.iconRes(),
+                label = "$verb ${runningSince.sinceText}",
+                detail = runningSince.elapsedText,
+                accent = true,
+                action = WidgetActions.openStopTimerModifier(context, runningSince.kind),
                 relaxed = relaxed,
             )
         }
-        state.running?.let { running ->
+        state.rows.forEach { row ->
+            // Persona round 2 (Priya P2 fix): the info rows LOOK like information — a
+            // mis-tap on "Last nap" silently STARTED a nap timer for an awake baby. Rows
+            // now just open the app; starting/stopping lives on the tiles (lit state).
             CareRow(
-                icon = running.kind.iconRes(),
-                label = "Running: ${WidgetStateMapper.slotLabel(running.kind)}",
-                detail = "${running.elapsedText} — tap to stop",
-                accent = true,
-                // T5: the row says "tap to stop" — the tap now deep-links straight into the
-                // app's stop-guard dialog for this timer (widgets cannot host the dialog).
-                action = WidgetActions.openStopTimerModifier(context, running.kind),
+                icon = row.type.iconRes(),
+                label = row.label,
+                detail = listOfNotNull(row.timeText, row.detailText).joinToString(" · "),
+                accent = false,
+                action = WidgetActions.openAppModifier(),
                 relaxed = relaxed,
             )
         }

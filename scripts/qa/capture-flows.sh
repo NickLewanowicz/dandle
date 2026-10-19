@@ -13,7 +13,7 @@
 # instantly, edits must update rows, no restart needed):
 #   A1 save-visibility: after saving a diaper via the quick-action panel, the
 #      uiautomator dump must contain a "Today" timeline row showing our unique
-#      "Wet (Green)" headline within 5 s — WITHOUT restart or refresh.
+#      green-diaper row (swatch "Green") within 12 s — WITHOUT restart or refresh.
 #   A2 edit-update: after moving START one hour earlier through the native
 #      time picker (owner rework U6 — no steppers) + Save, the timeline row
 #      must show the new HH:mm within 10 s.
@@ -158,6 +158,27 @@ tap_row_text() {
   ash input tap "$x" "$y"
 }
 
+# bounds_by_text_like <xml> <substring>: bounds of the first text node whose
+# text CONTAINS the substring (used as an ERE fragment — pass literals). Needed
+# because the app embeds layout spacing INSIDE text nodes: the diaper row's
+# swatch renders as " Black" (TimelineSection prepends the gap after the color
+# dot), so an exact `text="Black"` never matches the dump.
+bounds_by_text_like() {
+  local m
+  m="$(printf '%s' "$1" | grep -oE "text=\"[^\"]*$2[^\"]*\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"" | head -1 || true)"
+  [[ -n "$m" ]] || return 1
+  printf '%s' "$m" | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/'
+}
+
+# tap_row_text_like <substring>: like tap_row_text but substring-matching.
+tap_row_text_like() {
+  local xml b x y
+  xml="$(dump_with_retry)" || return 1
+  b="$(bounds_by_text_like "$xml" "$1")" || { printf 'ERROR: row text (contains) not found: %s\n' "$1" >&2; return 1; }
+  read -r x y <<< "$(center_of $b)"
+  ash input tap "$x" "$y"
+}
+
 # tap_row_text_nth <text> <n>: tap the Nth (1-based) exact-text match — needed
 # inside Compose dialog windows (edit sheet) whose test tags never reach the
 # uiautomator dump (QA finding #8), e.g. the END row's "+1m" (the 2nd "+1m").
@@ -207,6 +228,7 @@ type_into() {
     done
     sleep 1
     got="$(text_of "$(dump_with_retry)" "$tag" 2>/dev/null || true)"
+    got="${got%$'\n'}"; got="${got%$'\r'}"   # a stray ENTER newline must not fail verify
     if verify_typed "$got" "$value"; then
       return 0
     fi
@@ -217,26 +239,27 @@ type_into() {
   return 1
 }
 
-hide_kb() {  # dismiss the IME via the field's own Done action and VERIFY.
-             # Every single-line field in the app maps Done -> clearFocus, so
-             # after ENTER nothing is focused and no later uiautomator pass can
-             # re-summon the keyboard. NO other key events: ESC/BACK act as
-             # "dismiss" on a bottom sheet or dialog window (observed: the
-             # create sheet vanished mid-step), and dumpsys' mInputShown lies
-             # in Gboard's zombie state, so a conditional ESC fires wrongly.
-  ash input keyevent 66
-  sleep 1.5
-  local i
-  for i in 1 2 3; do
+hide_kb() {  # dismiss the IME with ESC (111) and VERIFY it is gone.
+             # ESC hides the IME with no navigation side effect (BACK dismisses
+             # sheets; ENTER types a newline into multiline fields — both
+             # observed). The shown-flag can lie (Gboard zombie state), so the
+             # loop re-checks and re-fires ESC, then settles before returning.
+  local i=0
+  while :; do
     if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
-      sleep 1
+      ash input keyevent 111
+      sleep 2
+      i=$((i + 1))
+      (( i >= 4 )) && { warn "keyboard would not dismiss"; return 1; }
     else
       sleep 1
+      if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
+        continue   # it popped up after all - dismiss on the next pass
+      fi
+      sleep 1.5   # let the window un-resize before anything reads coordinates
       return 0
     fi
   done
-  warn "keyboard still reported shown after Done (continuing)"
-  return 0
 }
 
 # expand_sheet: the quick edit sheet opens HALF-expanded — its time rows,
@@ -316,9 +339,9 @@ sheet_time_value() {
 # vtag: reveal, then tap the already-resolved bounds — NOT a second dump. A
 # second uiautomator pass can re-show the IME for a focused text field and the
 # window re-shrinks mid-flight, so the tap misses (observed on device).
-vtag() {
+vtag() {  # vtag <tag> [allow_down]: sheets pass 0 (a down-drag dismisses them)
   local b x1 y1 x2 y2
-  b="$(reveal_tag "$1")" || return 1
+  b="$(reveal_tag "$1" "${2:-1}")" || return 1
   read -r x1 y1 x2 y2 <<< "$b"
   ash input tap "$(( (x1 + x2) / 2 ))" "$(( (y1 + y2) / 2 ))"
 }
@@ -339,10 +362,14 @@ save_panel() {
     hide_kb || true
     # Reveal the save once, then tap the RESOLVED coordinates (see reveal_tag).
     # The card is a list item (U2): its icon-only save may sit below the fold or
-    # below the keyboard.
-    local sb stag
-    if [[ "$type" == "CHANGE" || "$type" == "NOTE" ]]; then stag="dashboard/panel/save"; else stag="dashboard/timer/$type/save"; fi
-    sb="$(reveal_tag "$stag")" || { warn "no save path for $type ($stag)"; return 1; }
+    # below the keyboard. Sheets get up-drags only (a down-drag dismisses them).
+    local sb stag allow
+    if [[ "$type" == "CHANGE" || "$type" == "NOTE" ]]; then
+      stag="dashboard/panel/save"; allow=0
+    else
+      stag="dashboard/timer/$type/save"; allow=1
+    fi
+    sb="$(reveal_tag "$stag" "$allow")" || { warn "no save path for $type ($stag)"; return 1; }
     ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     sleep 3
     xml="$(dump_with_retry 2>/dev/null)" || return 0
@@ -446,7 +473,18 @@ restart_app() {  # force-stop + relaunch. The ONE reliable way to re-render the
   ash am force-stop "$PKG"
   sleep 3
   ash am start -n "$LAUNCHER_COMP" >/dev/null 2>&1 || true
-  wait_for_tag "dashboard" 30 2 >/dev/null || { warn "dashboard not visible after restart"; return 1; }
+  # A persisted-open create draft restores as a SHEET at launch (process-death
+  # restore is a feature) — its window hides every dashboard tag. Close it.
+  local ri
+  for ri in 1 2 3 4 5; do
+    if wait_for_tag "dashboard" 6 2 >/dev/null; then break; fi
+    if wait_for_tag "dashboard/panel/close" 3 2 >/dev/null; then
+      warn "restored create sheet after restart — closing it"
+      tap_tag "dashboard/panel/close" || true
+      sleep 2
+    fi
+  done
+  wait_for_tag "dashboard" 10 2 >/dev/null || { warn "dashboard not visible after restart"; return 1; }
   sleep 2
 }
 
@@ -554,7 +592,9 @@ reveal_tag() {
   # re-focuses), so a check taken before the dump reports a stale state and
   # the "found" bounds end up BEHIND the keyboard, where the tap lands on
   # Gboard. Same for the swipe: it must stay inside the visible area.
-  local tag="$1" i b y2 xml limit
+  # $2 = allow_down (default 1): cards (list items) may drag BOTH directions;
+  # sheets only UP (a down-drag dismisses them).
+  local tag="$1" allow_down="${2:-1}" i b b2 y2 xml limit
   for i in 1 2 3 4 5 6 7 8; do
     # First pass: let a freshly-opened sheet/card FINISH its slide-in — bounds
     # captured mid-animation belong to a layout that no longer exists.
@@ -578,26 +618,46 @@ reveal_tag() {
         fi
       fi
     fi
-    ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 45 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 35 / 100 ))" 300
+    # Direction by kind (alternating directions OSCILLATED on the card — each
+    # up-swipe undid the down-swipe — and never converged):
+    # - cards (timeline list items): DOWN drags only — they scroll toward the top
+    #   and bring the card header/save back after an IME scroll.
+    # - sheets: UP drags only (a down-drag dismisses a bottom sheet).
+    if (( allow_down == 1 )); then
+      ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 38 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 58 / 100 ))" 300
+    else
+      ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 45 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 28 / 100 ))" 300
+    fi
     sleep 2
   done
   warn "could not bring $tag on screen"
   return 1
 }
 
-# find_row_text <text> [n]: scroll the timeline (small drags) until the text is
-# in the dump, then tap it. Rows below the fold never reach uiautomator, and the
-# Today group is long after a full run — plain tap_row_text missed them.
+# find_row_text <text> [like]: scroll the timeline (small drags) until the text
+# is in the dump, then tap it. mode "like" taps the first node whose text
+# CONTAINS the substring — required for the diaper row, whose swatch text is
+# " Black" with a leading space (bounds_by_text_like). Rows below the fold never
+# reach uiautomator, and the Today group is long after a full run — plain
+# tap_row_text missed them.
 find_row_text() {
-  local text="$1" i
+  local text="$1" mode="${2:-exact}" i
   scroll_top   # newest rows live at the top; look there before scrolling down
   for i in 1 2 3 4 5 6; do
-    if tap_row_text "$text"; then return 0; fi
+    if [[ "$mode" == "like" ]]; then
+      tap_row_text_like "$text" && return 0
+    else
+      tap_row_text "$text" && return 0
+    fi
     ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 62 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 42 / 100 ))" 300
     sleep 1.5
     # A mid-scroll dump can miss a row that is actually present — re-look at
     # rest once per cycle before scrolling further.
-    if tap_row_text "$text"; then return 0; fi
+    if [[ "$mode" == "like" ]]; then
+      tap_row_text_like "$text" && return 0
+    else
+      tap_row_text "$text" && return 0
+    fi
   done
   warn "row text never found while scrolling: $text"
   return 1
@@ -884,6 +944,14 @@ g01_login() {
     # present, header not yet) — retry the tap a few times before giving up.
     local oi ov_ok=0
     for oi in 1 2 3 4 5; do
+      # A restored create sheet (persisted open draft) can cover the header —
+      # close it before each retry.
+      xml="$(dump_with_retry 2>/dev/null || true)" || xml=""
+      if [[ -n "$xml" ]] && bounds_of "$xml" "dashboard/panel/close" >/dev/null 2>&1; then
+        warn "restored create sheet covering the header — closing it"
+        tap_tag "dashboard/panel/close" || true
+        sleep 2
+      fi
       if tap_tag "dashboard/overflow" 2>/dev/null; then ov_ok=1; break; fi
       sleep 3
     done
@@ -962,10 +1030,10 @@ g03_quickactions() {
   step "03: FEEDING panel + type/method cascade"
   if open_timer_card FEEDING; then
     shot 03-quickactions-01-feeding-panel
-    vtag "dashboard/panel/feeding_type/formula" && sleep 1
+    vtag "dashboard/panel/feeding_type/formula" 1 && sleep 1
     shot 03-quickactions-02-feeding-cascade   # methods drop to bottle/parent fed/self fed
-    vtag "dashboard/panel/feeding_type/breast milk" || true
-    vtag "dashboard/panel/feeding_method/bottle" || true
+    vtag "dashboard/panel/feeding_type/breast milk" 1 || true
+    vtag "dashboard/panel/feeding_method/bottle" 1 || true
     vtype "dashboard/panel/amount" "149" && hide_kb
     save_panel "FEEDING" || true
     wait_gone_tag "dashboard/panel/FEEDING" 15 || warn "feeding panel did not close after save"
@@ -982,32 +1050,50 @@ g03_quickactions() {
     # 130px off). Text nodes in the sheet's window are stable once it is at
     # rest, and while the sheet is up they are unambiguous.
     shot 03-quickactions-03-diaper-sheet   # Save disabled: Wet/Solid both off
-    vtag "dashboard/panel/wet" || warn "wet toggle tap failed"
-    vtag "dashboard/panel/extra_options" && sleep 1.5
+    # Wet must END UP ON: the create draft persists across sessions (a previous
+    # run's leftover draft can open this sheet with Wet ALREADY checked, and a
+    # blind tap would switch it OFF, leaving Save disabled forever). The hint
+    # "Choose at least one of Wet or Solid." is the app's own validity signal —
+    # tap Wet only while it shows, then require it to disappear.
+    local wi hint_xml wet_ok=0
+    for wi in 1 2 3; do
+      hint_xml="$(dump_with_retry 2>/dev/null)" || hint_xml=""
+      if ! printf '%s' "$hint_xml" | grep -q 'Choose at least one of Wet or Solid'; then wet_ok=1; break; fi
+      vtag "dashboard/panel/wet" 0 || warn "wet toggle tap failed"
+      sleep 1
+    done
+    (( wet_ok )) || warn "wet toggle did not turn on (Save stays disabled)"
+    vtag "dashboard/panel/extra_options" 0 && sleep 1.5
     shot 03-quickactions-04-diaper-extra-options   # color chips + amount
-    vtag "dashboard/panel/color/green" || warn "green chip tap failed"
+    vtag "dashboard/panel/color/black" 0 || warn "black chip tap failed"
     vtype "dashboard/panel/amount" "73" && hide_kb
     # Collapse so Save is reachable (the row reads "Hide extra options" while
     # expanded — an exact-match tap on "Extra options" would silently miss).
-    vtag "dashboard/panel/extra_options" || true
+    vtag "dashboard/panel/extra_options" 0 || true
     save_panel "CHANGE" || true
     wait_gone_tag "dashboard/panel/CHANGE" 15 || warn "diaper panel did not close after save"
 
     # --- CANARY A1: save must be visible on the timeline within 12 s, no restart,
-    # no refresh. "Wet (Green)" is our diaper's unique headline (color set).
-    # A FAILED dump (UiAutomation transiently busy: insert animation, drain, chip
-    # settle) does NOT count against the app — only a successful dump missing the
-    # row proves absence. Observed on device: the row renders within ~1 s.
+    # no refresh. The color swatch label "Black" is our diaper's unique marker
+    # (v0.4 headlines no longer repeat the color; seed data has no black diapers).
+    # MATCH BY SUBSTRING: TimelineSection composes the swatch Text as " " + label
+    # (the space is the gap after the color dot), so the dump carries
+    # text=" Black" and an exact text="Black" NEVER matches — this exact-match
+    # grep is what silently failed every persona-round run while the save itself
+    # succeeded. A FAILED dump (UiAutomation transiently busy: insert animation,
+    # drain, chip settle) does NOT count against the app — only a successful dump
+    # missing the row proves absence. Observed on device: the row renders within
+    # ~1 s.
     local a1=0 tries xmlA
     scroll_top   # the (possibly still-open/tall) panel pushes the timeline below the fold
     for tries in 1 2 3 4 5 6 7 8 9 10 11 12; do
       if xmlA="$(dump_with_retry 2>/dev/null)"; then
         if printf '%s' "$xmlA" | grep -q 'text="Today"' \
-           && printf '%s' "$xmlA" | grep -q 'text="Wet (Green)"'; then a1=1; break; fi
+           && printf '%s' "$xmlA" | grep -q 'text="[^"]*Black"'; then a1=1; break; fi
       fi
       sleep 1
     done
-    assert_chk "$a1" "A1 save-visibility: our 'Wet (Green)' row under Today within 12 s of saving a diaper (no restart/refresh)"
+    assert_chk "$a1" "A1 save-visibility: our black-diaper row (swatch 'Black') under Today within 12 s of saving a diaper (no restart/refresh)"
   else
     warn "DIAPER quick action failed"
     assert_chk 0 "A1 save-visibility (diaper save step failed — canary not exercised)"
@@ -1017,7 +1103,7 @@ g03_quickactions() {
   step "03: duplicate guard (diaper saved seconds ago -> save again)"
   if tap_tag "dashboard/quick_action/CHANGE" && wait_for_tag "dashboard/panel/CHANGE" 15 2 >/dev/null; then
     sleep 2
-    vtag "dashboard/panel/wet" || true
+    vtag "dashboard/panel/wet" 0 || true
     save_panel "CHANGE" no-accept-dup || true   # pops the duplicate dialog - captured next
     if wait_for_tag "dashboard/duplicate_dialog" 10 2 >/dev/null; then
       shot 03-quickactions-05-duplicate-guard
@@ -1137,7 +1223,7 @@ g04_edit() {
   fi
 
   step "04: diaper sheet + delete-confirm dialog"
-  if find_row_text "Wet (Green)" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  if find_row_text "Black" like && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
     shot 04-edit-03-diaper-sheet   # Wet/Solid toggles + TIME row
     if vtag "edit/delete" && wait_for_tag "edit/delete_confirm" 10 2 >/dev/null; then
@@ -1149,7 +1235,7 @@ g04_edit() {
     tap_row_text "✕" || ash input keyevent 4   # close the sheet
     wait_gone_tag "edit/sheet" 8 || true
   else
-    warn "diaper row 'Wet (Green)' not found (was group 03 skipped?)"
+    warn "diaper row (black swatch) not found (was group 03 skipped?)"
   fi
 }
 
@@ -1234,15 +1320,17 @@ g05_sync_states() {
   step "05: overlapping sleep -> FAILED badge + failure dialog"
   # A and B are created ONLINE (both sync). Then, OFFLINE, B's START is moved
   # one minute EARLIER: start-moves are DURATION-PRESERVING (spec §5), so with
-  # A tracked ~90 s and B starting right after it, B's new window lands
-  # strictly inside A's — a guaranteed overlap, always in the PAST (an
+  # A tracked ~210 s and B starting right after it, B's new window lands
+  # strictly inside A's even when the minute-dial drag lands ±2 (a 90 s A made
+  # the chain knife-edge: ONLY original−1min overlapped, so every dial jitter
+  # silently killed the canary) — a guaranteed overlap, always in the PAST (an
   # END+1h edit of a just-created entry lands in the future and validation
   # correctly blocks the save — the scenario never reached the server). The
   # queued PATCH is rejected at replay (overlap) and B ends FAILED —
   # resolution path captured below.
-  if sleep_with_note "QA-capture-A" 90; then printf '    sleep A synced\n'
+  if sleep_with_note "QA-capture-A" 210; then printf '    sleep A synced\n'
   else scroll_top; sleep 2
-       if sleep_with_note "QA-capture-A" 90; then printf '    sleep A synced (retry)\n'; else warn "sleep A failed"; fi
+       if sleep_with_note "QA-capture-A" 210; then printf '    sleep A synced (retry)\n'; else warn "sleep A failed"; fi
   fi
   if sleep_with_note "QA-capture-B"; then printf '    sleep B synced\n'
   else scroll_top; sleep 2
@@ -1250,44 +1338,166 @@ g05_sync_states() {
   fi
   restart_app || true   # rows visible
   scroll_top
-  if "$SCRIPT_DIR/offline.sh" on; then OFFLINE_ON=1; else warn "airplane mode ON failed"; fi
-  sleep 5
-  if find_row_text "QA-capture-B" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  # save_edit_sheet: reveal the edit sheet's Save, tap it, and REQUIRE the sheet
+  # to close — the tap races the tick/IME re-layout more often here than
+  # anywhere else, so verify and retry. A silently-missed save breaks the whole
+  # overlap chain (B never moves -> never overlaps -> never FAILED), which is
+  # exactly what the previous one-shot reveal+tap did (2026-10-19 gate run:
+  # chain broke silently, "overlap -> FAILED badge" canary failed).
+  save_edit_sheet() {
+    local rb ri
+    for ri in 1 2 3; do
+      rb="$(reveal_tag "edit/save" 0 2>/dev/null)" || { warn "edit save not visible"; return 1; }
+      ash input tap $(( $(echo "$rb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$rb" | awk '{print int(($2+$4)/2)}') ))
+      sleep 3
+      if ! bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/sheet" >/dev/null; then return 0; fi
+    done
+    warn "edit sheet would not close after save"
+    return 1
+  }
+  # b_overlaps_a_on_server: HOST-SIDE truth — does any QA-capture-B sleep row
+  # intersect any QA-capture-A row on the server right now? The whole FAILED
+  # badge chain only fires if B's edited window actually lands inside A's (A is
+  # tracked only ~210 s now), so before retrying/failing we ask the server.
+  b_overlaps_a_on_server() {
+    bash "$SCRIPT_DIR/api.sh" GET /api/sleep/ 2>/dev/null | python3 -c '
+import json, sys
+from datetime import datetime
+
+def p(s):
+    return datetime.strptime(s.replace("Z", "+0000"), "%Y-%m-%dT%H:%M:%S%z")
+
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("NO-OVERLAP")
+    raise SystemExit
+a = [r for r in d.get("results", []) if r.get("notes") == "QA-capture-A"]
+b = [r for r in d.get("results", []) if r.get("notes") == "QA-capture-B"]
+hit = "NO-OVERLAP"
+for ra in a:
+    for rb in b:
+        try:
+            a0, a1 = p(ra["start"]), p(ra["end"])
+            b0, b1 = p(rb["start"]), p(rb["end"])
+        except Exception:
+            continue
+        if b0 < a1 and a0 < b1:
+            hit = "OVERLAP"
+print(hit)
+' 2>/dev/null
+  }
+
+  # overlap_edit_once: OFFLINE, move B's START to (original start − 1 min) — a
+  # duration-preserving move (spec §5) that puts B strictly inside A.s ~210 s
+  # window, so the drain's PATCH replay is guaranteed to be rejected. The
+  # minute-dial DRAG lands ±1 (observed), and a −2 landing puts B BEFORE A —
+  # no overlap, nothing to reject — so the picked value is VERIFIED against the
+  # sheet's START row and re-picked with a compensated target (max 4 tries);
+  # any landing 1..3 min before the original is accepted (all inside A).
+  overlap_edit_once() {
+    if ! "$SCRIPT_DIR/offline.sh" on; then warn "airplane mode ON failed"; return 1; fi
+    OFFLINE_ON=1
+    sleep 5
+    if ! { find_row_text "QA-capture-B" && wait_for_tag "edit/sheet" 10 2 >/dev/null; }; then
+      warn "could not edit sleep B (row text missing?)"
+      "$SCRIPT_DIR/offline.sh" off && OFFLINE_ON=0
+      return 1
+    fi
     expand_sheet
     local xmlE startv shh smm
     xmlE="$(dump_with_retry)" || true
     startv="$(sheet_time_value "$xmlE" 1)"; shh="${startv##* }"; smm="${shh#*:}"; shh="${shh%%:*}"
-    local omm="$smm"
-    if [[ "$shh" =~ ^[0-9]+$ ]]; then
-      smm=$(( 10#$smm - 1 )); if (( smm < 0 )); then smm=59; shh=$(( (10#$shh + 23) % 24 )); fi
-      pick_time "edit/sheet/time_start" "$shh" "$smm" || warn "start picker flow failed"
-    else
+    if [[ ! "$shh" =~ ^[0-9]+$ ]]; then
       warn "could not parse B's START value ($startv)"
+      "$SCRIPT_DIR/offline.sh" off && OFFLINE_ON=0
+      return 1
     fi
-    B_START_HH="$shh"; B_START_MM="$omm"   # resolve restores the ORIGINAL start
+    # Remember the ORIGINAL start once: the resolve step edits back to
+    # original+1min, and a retry must re-aim at the same absolute target (the
+    # row may already carry a shifted value from a first, missed pick).
+    if [[ -z "$B_START_HH" ]]; then B_START_HH="$shh"; B_START_MM="$smm"; fi
+    local w_hh=$(( 10#$B_START_HH )) w_mm=$(( 10#$B_START_MM - 1 ))
+    if (( w_mm < 0 )); then w_mm=59; w_hh=$(( (w_hh + 23) % 24 )); fi
+    # Accept band: the saved START must land STRICTLY inside A's window. A is
+    # tracked 210 s and B ~12 s, so any landing 1..3 minutes EARLIER than the
+    # original start overlaps. original−1min is the aim, but the dial drag's
+    # error is ±1..3 min and NOT reproducible, and insisting on exactly −1
+    # re-picks away in-band landings (observed 2026-10-19: targets 17/14/18,
+    # landings 20/16/20 — the 16 WAS inside A's window and got re-picked away).
+    local pi t_hh="$w_hh" t_mm="$w_mm" v di got_hh got_mm ok=0 d e
+    for pi in 1 2 3 4; do
+      pick_time "edit/sheet/time_start" "$t_hh" "$t_mm" || { warn "start picker flow failed"; break; }
+      v=""
+      for di in 1 2 3; do
+        xmlE="$(dump_with_retry 2>/dev/null || true)"
+        v="$(sheet_time_value "$xmlE" 1)"
+        [[ "$v" == Today* ]] && break
+        sleep 1
+      done
+      got_hh="${v##* }"; got_mm="${got_hh#*:}"; got_hh="${got_hh%%:*}"
+      if [[ "$got_hh" =~ ^[0-9]+$ ]]; then
+        # d = minutes by which the landing PRECEDES the original start (mod day)
+        d=$(( (10#$B_START_HH * 60 + 10#$B_START_MM - (10#$got_hh * 60 + 10#$got_mm) + 1440) % 1440 ))
+        if (( d >= 1 && d <= 3 )); then
+          ok=1
+          break
+        fi
+      fi
+      warn "start pick landed at '$v' (aim $w_hh:$(printf '%02d' "$w_mm"), need original−1..−3) — re-picking"
+      # Compensate by the drag error OBSERVED AGAINST THE TARGET JUST USED
+      # (e = landed − target, clamped to ±30 to ignore garbage): aim at wanted
+      # shifted opposite the error. A systematic error converges on the second
+      # try; random error just gets another independent chance.
+      e=0
+      if [[ "$got_hh" =~ ^[0-9]+$ ]]; then
+        e=$(( (10#$got_hh * 60 + 10#$got_mm - (10#$t_hh * 60 + 10#$t_mm) + 1440) % 1440 ))
+        (( e > 720 )) && e=$(( e - 1440 ))
+        (( e > 30 || e < -30 )) && e=0
+      fi
+      t_mm=$(( 10#$w_mm - e )); t_hh="$w_hh"
+      while (( t_mm < 0 ));  do t_mm=$(( t_mm + 60 )); t_hh=$(( (t_hh + 23) % 24 )); done
+      while (( t_mm > 59 )); do t_mm=$(( t_mm - 60 )); t_hh=$(( (t_hh + 1) % 24 )); done
+    done
+    (( ok )) || warn "START not verified inside A's window — saving anyway"
     sleep 1
-    sb="$(reveal_tag "edit/save" 2>/dev/null)" && ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
-    wait_gone_tag "edit/sheet" 10 || true
-  else
-    warn "could not edit sleep B (row text missing?)"
-  fi
-  if "$SCRIPT_DIR/offline.sh" off; then OFFLINE_ON=0; else warn "airplane mode OFF failed"; fi
+    save_edit_sheet || warn "overlap edit save did not land (B may not overlap)"
+    if "$SCRIPT_DIR/offline.sh" off; then OFFLINE_ON=0; else warn "airplane mode OFF failed"; fi
+    return 0
+  }
+
+  overlap_edit_once || true
   # the drain rejects the queued PATCH (overlap with A) -> B FAILED. P1-3 also
   # surfaces the rejection PROACTIVELY as the failure dialog over the dashboard
   # (which hides the badge from a dump) — either observation proves it.
-  local failed=0 i sb xmlF
-  # 5 x ~15 s: the offline drain's first attempt can hit NetworkDown (radios
-  # still reconnecting) and WorkManager's retry backoff stretches past 30 s.
-  for i in 1 2 3 4 5; do
-    sleep 10
-    restart_app || true
-    xmlF="$(dump_with_retry 2>/dev/null || true)"
-    if [[ -n "$xmlF" ]] && { bounds_of "$xmlF" "dashboard/badge_failed" >/dev/null 2>&1 || \
-         bounds_of "$xmlF" "edit/failure_dialog" >/dev/null 2>&1 || \
-         printf '%s' "$xmlF" | grep -q "overlaps\|intersects\|another entry"; }; then
-      failed=1; break
-    fi
-  done
+  await_failed_badge() {
+    # 5 x ~15 s: the offline drain's first attempt can hit NetworkDown (radios
+    # still reconnecting) and WorkManager's retry backoff stretches past 30 s.
+    local i xmlF
+    for i in 1 2 3 4 5; do
+      sleep 10
+      restart_app || true
+      xmlF="$(dump_with_retry 2>/dev/null || true)"
+      if [[ -n "$xmlF" ]] && { bounds_of "$xmlF" "dashboard/badge_failed" >/dev/null 2>&1 || \
+           bounds_of "$xmlF" "edit/failure_dialog" >/dev/null 2>&1 || \
+           printf '%s' "$xmlF" | grep -q "overlaps\|intersects\|another entry"; }; then
+        return 0
+      fi
+    done
+    return 1
+  }
+  local failed=0
+  if await_failed_badge; then
+    failed=1
+  elif [[ "$(b_overlaps_a_on_server)" != "OVERLAP" ]]; then
+    # Host-side truth: no B/A window intersection on the server — the edit never
+    # landed as an overlap (dial drag miss, or the save was never queued). One
+    # bounded full retry of the offline edit, then decide.
+    warn "B does not overlap A on the server — retrying the whole offline edit once"
+    scroll_top
+    overlap_edit_once || true
+    if await_failed_badge; then failed=1; fi
+  fi
   if (( failed )); then
     sleep 1
     shot 05-sync-states-04-failed-badge
@@ -1320,32 +1530,19 @@ g05_sync_states() {
     rm=$(( 10#$rm + 1 )); if (( rm >= 60 )); then rm=0; rh=$(( (10#$rh + 1) % 24 )); fi
     pick_time "edit/sheet/time_start" "$rh" "$rm"
   }
-  # save_resolved_sheet: reveal the sheet's Save, tap it, and require the sheet
-  # to close — the tap races the tick/IME re-layout more often here than
-  # anywhere else, so verify and retry.
-  save_resolved_sheet() {
-    local rb ri
-    for ri in 1 2 3; do
-      rb="$(reveal_tag "edit/save" 2>/dev/null)" || { warn "resolve: save not visible"; return 1; }
-      ash input tap $(( $(echo "$rb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$rb" | awk '{print int(($2+$4)/2)}') ))
-      sleep 3
-      if ! bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/sheet" >/dev/null; then return 0; fi
-    done
-    warn "resolve: sheet would not close after save"
-    return 1
-  }
+  # save_edit_sheet (defined above) is reused here: same verify-and-retry save.
   if bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/sheet" >/dev/null; then
     expand_sheet
     resolve_start || warn "start picker (resolve) failed"
     sleep 1
-    save_resolved_sheet || true
+    save_edit_sheet || true
   else
     # dialog already gone: find B and edit it from the row
     if find_row_text "QA-capture-B" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
       expand_sheet
       resolve_start || warn "start picker (resolve) failed"
       sleep 1
-      save_resolved_sheet || true
+      save_edit_sheet || true
     fi
   fi
   # the corrected edit syncs; T1 hides the badge change, so verify + re-render
@@ -1518,7 +1715,13 @@ g07_help() {
 
 check_env
 
-g01_login
+# g01's sign-out → UI-login dance is the run's most stateful sequence (sign-out
+# clears the DB mid-flight); one clean retry on failure resynchronized every
+# observed flake.
+g01_login || { warn "g01 failed — one full retry after a fresh login"
+  ash am force-stop "$PKG" 2>/dev/null || true
+  bash "$SCRIPT_DIR/fresh-install-login.sh" >/dev/null 2>&1 || true
+  g01_login; }
 g02_dashboard
 g03_quickactions
 g04_edit

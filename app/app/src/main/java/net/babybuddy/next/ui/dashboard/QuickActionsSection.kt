@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,6 +71,7 @@ fun QuickActionsGrid(
     childPresent: Boolean,
     runningKinds: Set<EventType>,
     openType: EventType?,
+    runningElapsed: Map<EventType, String>,
     enabled: Boolean,
     onTap: (EventType) -> Unit,
 ) {
@@ -94,6 +96,7 @@ fun QuickActionsGrid(
                         type = type,
                         running = type in runningKinds,
                         open = openType == type,
+                        elapsedLabel = runningElapsed[type],
                         enabled = enabled,
                         onTap = { onTap(type) },
                     )
@@ -108,6 +111,7 @@ private fun QuickActionButton(
     type: EventType,
     running: Boolean,
     open: Boolean,
+    elapsedLabel: String?,
     enabled: Boolean,
     onTap: () -> Unit,
 ) {
@@ -134,18 +138,22 @@ private fun QuickActionButton(
                 }
             }
             if (running) {
-                // Static running dot (UX spec §2 — no pulsing).
+                // Static running dot (UX spec §2 — no pulsing). 8dp with a surface halo,
+                // inside the circle bounds: the old half-clipped dot read as an artifact.
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = (-6).dp, y = 6.dp)
-                        .size(9.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                        .offset(x = (-4).dp, y = 4.dp)
+                        .size(10.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
                 )
             }
         }
         Text(
-            type.label,
+            // A running type's label becomes live status ("Sleep · 12m") — the only trace
+            // of a running timer once the timeline is scrolled (Jordan, persona round 2).
+            if (running && elapsedLabel != null) "${type.label} · $elapsedLabel" else type.label,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 4.dp),
@@ -238,6 +246,28 @@ fun RunningTimerCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
+                // Icon-only save lives in the HEADER (always on screen): the feeding
+                // card's fields push a bottom-corner save below the fold (UX round 2 P0).
+                Surface(
+                    onClick = callbacks::onSavePanel,
+                    enabled = saveEnabled,
+                    shape = RoundedCornerShape(12.dp),
+                    color = typeColors.container,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(44.dp)
+                        .testTag(TestTags.timerSave(type.name)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(R.drawable.ic_bb_check),
+                            contentDescription = "Save",
+                            modifier = Modifier.size(22.dp),
+                            tint = if (saveEnabled) typeColors.onContainer
+                            else typeColors.onContainer.copy(alpha = 0.38f),
+                        )
+                    }
+                }
             }
 
             when (type) {
@@ -282,29 +312,6 @@ fun RunningTimerCard(
             }
 
             StartedAgoRow(panel, nowMillis, callbacks)
-
-            // Icon-only save (U3): the original app's floppy-button slot, as a check.
-            Surface(
-                onClick = callbacks::onSavePanel,
-                enabled = saveEnabled,
-                shape = RoundedCornerShape(12.dp),
-                color = typeColors.container,
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(top = 4.dp)
-                    .size(48.dp)
-                    .testTag(TestTags.timerSave(type.name)),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(R.drawable.ic_bb_check),
-                        contentDescription = "Save",
-                        modifier = Modifier.size(24.dp),
-                        tint = if (saveEnabled) typeColors.onContainer
-                        else typeColors.onContainer.copy(alpha = 0.38f),
-                    )
-                }
-            }
         }
     }
 }
@@ -430,7 +437,7 @@ private fun StartedAgoRow(
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                startedAgoLabel(panel.draft.startedMinutesAgo),
+                startedLabel(panel, nowMillis),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -498,14 +505,24 @@ private fun StartedAgoRow(
     }
 }
 
-/** "just now" / "20m ago" / "1h 5m ago" — relative is what a tired parent needs (Jordan). */
-internal fun startedAgoLabel(minutesAgo: Int): String = when {
-    minutesAgo <= 0 -> "Started just now"
-    minutesAgo < 60 -> "Started ${minutesAgo}m ago"
-    else -> {
-        val h = minutesAgo / 60
-        val m = minutesAgo % 60
-        if (m == 0) "Started ${h}h ago" else "Started ${h}h ${m}m ago"
+/**
+ * "Started 02:12 · 12m ago" — ABSOLUTE first (the number the pediatrician asks for;
+ * Jordan+Elena, persona round 2), relative in parentheses for drift sense.
+ */
+internal fun startedLabel(panel: OpenPanel, nowMillis: Long): String {
+    val minutesAgo = panel.draft.startedMinutesAgo
+    val clock = java.time.Instant.ofEpochMilli(nowMillis - minutesAgo * 60_000L)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+    return when {
+        minutesAgo <= 0 -> "Started $clock · just now"
+        minutesAgo < 60 -> "Started $clock · ${minutesAgo}m ago"
+        else -> {
+            val h = minutesAgo / 60
+            val m = minutesAgo % 60
+            val rel = if (m == 0) "${h}h ago" else "${h}h ${m}m ago"
+            "Started $clock · $rel"
+        }
     }
 }
 
@@ -529,7 +546,7 @@ private fun FeedingFields(panel: OpenPanel, callbacks: QuickActionCallbacks) {
         AmountField(
             value = panel.draft.amountText,
             onValueChange = callbacks::onAmountChange,
-            supportingText = "mL — optional for nursing",
+            supportingText = feedingAmountHint(panel.draft.feedingMethod),
             modifier = Modifier.padding(top = 8.dp),
         )
     }
@@ -600,6 +617,10 @@ private fun DiaperFields(panel: OpenPanel, callbacks: QuickActionCallbacks) {
         }
     }
 }
+
+/** Method-aware amount hint: for a bottle the amount is the PRIMARY datum (Elena). */
+internal fun feedingAmountHint(method: String?): String =
+    if (method == null || method.contains("breast")) "mL — optional for nursing" else "mL in the bottle"
 
 @Composable
 private fun AmountField(
@@ -687,7 +708,21 @@ private fun ToggleCard(
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         modifier = modifier.height(56.dp),
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            // Independent toggles that can BOTH be on (wet AND solid) — the old
+            // either/or read silently mislogged half of all diapers (Jordan, round 2).
+            if (selected) {
+                Icon(
+                    painterResource(R.drawable.ic_bb_check),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             Text(
                 label,
                 style = MaterialTheme.typography.titleMedium,
