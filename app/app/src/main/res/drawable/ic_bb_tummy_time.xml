@@ -1,14 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Original artwork: baby lying on tummy, propped (Tummy time). Grammar: 24dp grid, 2dp round strokes (tummy time: filled silhouette for 24dp legibility). -->
+<!-- Original artwork: tummy time: crawling baby profile with diaper accent (Tummy time). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
  android:width="24dp" android:height="24dp"
  android:viewportWidth="24" android:viewportHeight="24">
     <path
- android:pathData="M3.1000000000000005,11.9 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" android:fillColor="#FF000000" />
+ android:pathData="M15.200000000000001,8.4 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0"
+ android:fillColor="#FF000000" />
     <path
- android:pathData="M6.0,12.6 h0.0 a1.3,1.3 0 0,1 1.3,1.3 v2.3000000000000003 a1.3,1.3 0 0,1 -1.3,1.3 h-0.0 a1.3,1.3 0 0,1 -1.3,-1.3 v-2.3000000000000003 a1.3,1.3 0 0,1 1.3,-1.3 z" android:fillColor="#FF000000" />
+ android:pathData="M15.8,10 C13,8.9 9.6,9.2 7.6,11 C6.4,12.1 5.7,13.6 5.5,15.2 C5.4,16.1 5.4,16.8 5.4,17.4"
+ android:strokeColor="#FF000000"
+ android:strokeWidth="2"
+ android:strokeLineCap="round"
+ android:strokeLineJoin="round"
+ android:fillColor="#00000000" />
     <path
- android:pathData="M8.9,12.9 C10.6,10.9 13.8,10.2 16.2,11.5 C18.1,12.6 19.1,14.7 19.25,16.6 C19.3,17.2 18.9,17.5 18.3,17.5 L8.9,17.5 C8.2,16 7.9,14.4 8.9,12.9 Z" android:fillColor="#FF000000" />
+ android:pathData="M15.2,10.6 L15.6,17.4"
+ android:strokeColor="#FF000000"
+ android:strokeWidth="2"
+ android:strokeLineCap="round"
+ android:strokeLineJoin="round"
+ android:fillColor="#00000000" />
     <path
- android:pathData="M2.8,17.5 H21" android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000" />
+ android:pathData="M13,11.2 L12.8,17.4"
+ android:strokeColor="#FF000000"
+ android:strokeWidth="2"
+ android:strokeLineCap="round"
+ android:strokeLineJoin="round"
+ android:fillColor="#00000000" />
+    <path
+ android:pathData="M5.4,15.2 L3.6,17.4"
+ android:strokeColor="#FF000000"
+ android:strokeWidth="2"
+ android:strokeLineCap="round"
+ android:strokeLineJoin="round"
+ android:fillColor="#00000000" />
+    <path
+ android:pathData="M7.2,10.6 c1.8,-0.5 3,0.6 2.9,2 c-0.1,1.3 -1.4,2 -3,1.6 z"
+ android:fillColor="#FF000000" />
+    <path
+ android:pathData="M2.8,17.4 H20.6"
+ android:strokeColor="#FF000000"
+ android:strokeWidth="2"
+ android:strokeLineCap="round"
+ android:strokeLineJoin="round"
+ android:fillColor="#00000000" />
 </vector>

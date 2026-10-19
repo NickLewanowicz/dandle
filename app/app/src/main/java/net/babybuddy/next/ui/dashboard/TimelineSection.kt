@@ -217,7 +217,13 @@ private fun TimelineRow(
                 ) {
                     androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            painterResource(event.type.iconRes()),
+                            painterResource(
+                                if (event.type == EventType.FEEDING) {
+                                    feedingIconRes(event.feedingMethod)
+                                } else {
+                                    event.type.iconRes()
+                                },
+                            ),
                             contentDescription = event.type.label,
                             modifier = Modifier.size(22.dp),
                             tint = typeColors.onContainer,

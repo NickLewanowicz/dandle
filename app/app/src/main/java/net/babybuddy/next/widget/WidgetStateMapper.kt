@@ -47,6 +47,8 @@ object WidgetStateMapper {
         val label: String,
         val timeText: String,
         val detailText: String?,
+        /** Feeding rows differentiate by side (drawables ic_bb_feeding_left/right/both). */
+        val feedingMethod: String? = null,
     )
 
     data class CareDashboardState(
@@ -140,6 +142,7 @@ object WidgetStateMapper {
                 label = rowLabel(type),
                 timeText = entryTimeText(event, nowMillis),
                 detailText = detailText(event),
+                feedingMethod = event.feedingMethod,
             )
         }
         val running = timers.firstOrNull { it.childId == childId }?.let {

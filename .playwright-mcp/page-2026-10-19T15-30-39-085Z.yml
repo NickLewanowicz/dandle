@@ -1,0 +1,8 @@
+- generic [active] [ref=f11e1]:
+  - heading "Generated candidates (recraft-v3-svg, line_art)" [level=2] [ref=f11e2]
+  - generic [ref=f11e3]:
+    - generic [ref=f11e4]: tummy-candidate-A
+    - generic [ref=f11e53]: tummy-candidate-B
+    - generic [ref=f11e126]: tummy-candidate-C
+    - generic [ref=f11e226]: feed-pair-candidate-A
+    - generic [ref=f11e332]: feed-pair-candidate-B

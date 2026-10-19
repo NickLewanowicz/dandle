@@ -53,6 +53,29 @@ Rejected: candidate 1 (regressed to stars + tilted bottle), candidate 3 (face +
 blush + stars + dots — decorative noise, off-palette coral), candidate 4 (onesie =
 generic baby, not a tracker).
 
+## 2.5 Round 5 — event glyph rework (owner-directed, SHIPPED)
+
+Owner: diaper/tummy/pumping still not right; the EVENT-LIST feeding icon must
+differentiate by side like the original app (breast silhouettes, solid = fed /
+dashed = unfed, L/R corner marks — analyzed from `.scratch/babybuddy-for-android/
+resources/{feeding-breast,left_breast,right_breast}.svg`, rendered via qlmanage).
+Grammar: mirrored curves crossing at the cleavage; OUR curves redrawn (no copied
+paths); stroke 1.4dp for this glyph (2dp merged the pair into a solid shield).
+
+- NEW drawables: `ic_bb_feeding_left/right/both` (generated from bezier data in
+  `/tmp/icons/feed_gen.py` — dashed variants are sampled dash-segment polylines,
+  VectorDrawable has no dash effect); timeline/card/widgets pick them via
+  `SharedUi.feedingIconRes(method)`; bottle stays for bottle/parent/self feeds
+  and the quick-action button. Wired in TimelineSection, RunningTimerCard,
+  CareDashboardWidget (CareRow.feedingMethod).
+- Diaper: ribbed waistband with tick marks + two deep leg arcs (original grammar).
+- Pumping: flange horn ANGLED up-left (the upright version read as a wine glass)
+  + bottle with mL ticks + handle.
+- Tummy time: crawling-baby profile (head raised right, back arc, two arms,
+  ground line) — replaced the rejected filled lying figure.
+
+Spend: $0 (all hand-drawn; recraft used only for the launcher in round 4).
+
 ## 3. Spend
 
 - Round 4: recraft-v3 raster 4 × $0.04 = **$0.16**; recraft-v3-svg 1 × $0.08 =

@@ -1,0 +1,4 @@
+[      38ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8736/orig/feeding-breast.svg:0
+[      40ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8736/orig/left_breast.svg:0
+[      42ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8736/orig/right_breast.svg:0
+[      67ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8736/favicon.ico:0

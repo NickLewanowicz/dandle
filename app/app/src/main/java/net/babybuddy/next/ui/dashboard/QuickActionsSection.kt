@@ -226,7 +226,13 @@ fun RunningTimerCard(
                         .background(typeColors.container),
                 ) {
                     Icon(
-                        painterResource(type.iconRes()),
+                        painterResource(
+                            if (type == EventType.FEEDING) {
+                                feedingIconRes(panel.draft.feedingMethod)
+                            } else {
+                                type.iconRes()
+                            },
+                        ),
                         contentDescription = type.label,
                         modifier = Modifier.size(26.dp),
                         tint = typeColors.onContainer,

@@ -1,0 +1,22 @@
+- generic [active] [ref=f12e1]:
+  - heading "NEW stroke glyphs (ours left, gray = professional reference)" [level=2] [ref=f12e2]
+  - generic [ref=f12e3]:
+    - generic [ref=f12e28]: ref
+    - generic [ref=f12e33]: feeding
+  - generic [ref=f12e34]: diaper
+  - generic [ref=f12e56]: pumping
+  - generic [ref=f12e86]:
+    - generic [ref=f12e99]: ref
+    - generic [ref=f12e103]: sleep
+  - generic [ref=f12e104]:
+    - generic [ref=f12e125]: ref
+    - generic [ref=f12e130]: notes
+  - generic [ref=f12e131]:
+    - generic [ref=f12e160]: ref
+    - generic [ref=f12e165]: tummy_time
+  - generic [ref=f12e166]: tummy A push-up
+  - generic [ref=f12e192]: tummy B prone
+  - generic [ref=f12e214]: tummy C bottom-up
+  - generic [ref=f12e236]: feed LEFT (sw 1.4)
+  - generic [ref=f12e278]: feed RIGHT (sw 1.4)
+  - generic [ref=f12e316]: feed BOTH (sw 1.4)

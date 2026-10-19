@@ -24,7 +24,7 @@ import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.SyncState
 import net.babybuddy.next.ui.TestTags
 
-/** Original icon set (one drawable per event type — no copied assets, spec §8). */
+/** Icon set (one drawable per event type — our own artwork, spec §8). */
 fun EventType.iconRes(): Int = when (this) {
     EventType.FEEDING -> R.drawable.ic_bb_feeding
     EventType.CHANGE -> R.drawable.ic_bb_diaper
@@ -32,6 +32,18 @@ fun EventType.iconRes(): Int = when (this) {
     EventType.NOTE -> R.drawable.ic_bb_notes
     EventType.PUMPING -> R.drawable.ic_bb_pumping
     EventType.TUMMY_TIME -> R.drawable.ic_bb_tummy_time
+}
+
+/**
+ * Icon for a FEEDING entry, differentiated by side (persona round 2 / owner directive,
+ * mimicking the original app's clarity): breast pairs mark the FED side solid and the
+ * other dashed with a corner letter; bottle/parent-fed/self-fed keep the bottle.
+ */
+fun feedingIconRes(feedingMethod: String?): Int = when (feedingMethod) {
+    "left breast" -> R.drawable.ic_bb_feeding_left
+    "right breast" -> R.drawable.ic_bb_feeding_right
+    "both breasts" -> R.drawable.ic_bb_feeding_both
+    else -> R.drawable.ic_bb_feeding
 }
 
 /** Display label used across strip, panels, dialogs. */

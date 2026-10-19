@@ -194,7 +194,11 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
             // mis-tap on "Last nap" silently STARTED a nap timer for an awake baby. Rows
             // now just open the app; starting/stopping lives on the tiles (lit state).
             CareRow(
-                icon = row.type.iconRes(),
+                icon = if (row.type == EventType.FEEDING) {
+                    net.babybuddy.next.ui.dashboard.feedingIconRes(row.feedingMethod)
+                } else {
+                    row.type.iconRes()
+                },
                 label = row.label,
                 detail = listOfNotNull(row.timeText, row.detailText).joinToString(" · "),
                 accent = false,
