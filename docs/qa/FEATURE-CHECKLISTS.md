@@ -19,7 +19,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Steps**
 1. `scripts/qa/fresh-install-login.sh` (defaults: `net.babybuddy.next.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). It clears data, disables animations, and types the fields by tag — fresh dump before every tap.
 2. To watch it live: `scripts/qa/applog.sh` in a side terminal; `scripts/qa/server-log.sh -f` for the request lines.
-3. Script exits 0 only when tag `dashboard` is visible. `scripts/qa/shot.sh qa/login/04-dashboard.png` for evidence.
+3. Script exits 0 only when tag `dashboard` is visible. `scripts/qa/shot.sh qa/login/05-dashboard-after-fresh-install.png` for evidence.
 
 **Tags:** `login/server_url`, `login/username`, `login/password`, `login/submit`, text node `Continue` (cleartext warning), `login/error_banner` (failure), `dashboard`.
 
@@ -195,16 +195,16 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. With data on the server: the widget card previews the real layout (child name + rows + running chip, UX-review W7); place "Care dashboard" (long-press → Configure: child + row visibility) → child-name header, then rows `Last feed · 12m · 120 mL` shape, minute-granular (header per UX-review W8).
 2. In the app: log a new feeding → the widget's feed row updates WITHOUT opening anything (in-app write refresh).
 3. Stop the server (`docker stop babybuddy`), log two overlapping naps in-app → PENDING → start the server → after drain the widget reflects the synced rows (drain-completion refresh).
-4. Nap row tap → sleep timer starts via broadcast, launcher stays foreground (verify `topResumedActivity` remains `NexusLauncherActivity`); if a sleep timer already runs, the tap opens the app (running card below the buttons / stop guard) so the stop guard is reachable. Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
+4. Nap row tap → OPENS the app (verify `MainActivity` resumed; no timer starts from the widget). Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
 5. Wait 15+ minutes (or `adb shell am broadcast -a android.intent.action.TIME_SET` to nudge the scheduler in QA) → periodic refresh keeps "Xm ago" honest.
 6. Theme variant: `adb shell "cmd uimode night yes"` on a light wallpaper (and the reverse) → the widget surface and the running-row accent follow the system theme; rows stay readable (UX-review W5).
 7. Amount ≤ 0 (e.g. the known failed-sync pump) shows only the since text — never "0 mL" (UX-review W9; same in the app timeline).
 
 **Tags:** launcher-driven; in-app steps use standard dashboard tags.
 
-**Expected server requests:** normal sync chain (checklist 1); no extra writes from widget taps except the sleep-timer start.
+**Expected server requests:** normal sync chain (checklist 1); no writes from widget taps — taps only open the app.
 
-**Expected UI states:** rows with icon + label + `Xm · detail`; running row = rounded primaryContainer chip with horizontal padding, "Running: Sleep — tap to stop" in onPrimaryContainer (UX-review W6); empty data → the row is omitted (never a blank stub).
+**Expected UI states:** rows with icon + label + `Xm · detail`; running row = FIRST row, rounded type-colored chip with horizontal padding, "Asleep since HH:MM · Xm elapsed" wording in onPrimaryContainer (UX-review W6; persona round 2); empty data → the row is omitted (never a blank stub).
 
 **JVM tests:** `WidgetStateMapperTest` (rows, visibility, cross-child isolation, since/duration edges incl. future skew and days).
 

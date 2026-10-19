@@ -99,3 +99,9 @@ All P1 and P2 findings were fixed with regression tests and re-verified on the e
 | P3-8 missing dialog/sheet tags | `87471ee` | Tags added |
 
 **Updated verdict: shippable beta.** 0 P0 · 0 P1 · 0 P2 open. Remaining P3 items are cosmetic and tracked above.
+
+---
+
+## Regression gate — 2026-10-18
+
+After the owner UI rework (v0.4, `90-owner-ui-rework.md`), persona round 2 (widget running-first row, info rows open the app — `widgets.md`), and the ">5-minute range" timeline tweak, `scripts/qa/capture-flows.sh --assert` ran **fully green: 4/4 canaries** — A1 save→row visibility, A2a native-picker edit, A2b in-place row update, overlap→FAILED→resolve. All flow PNGs under `docs/screenshots/new-app/flows/` were regenerated and committed in the same commits as the changes. The findings and verdicts above are unchanged.

@@ -25,7 +25,7 @@ How to verify (scripted): group 04 (canaries A2a value changed via picker, A2b r
 ## Observed
 
 ### Timeline structure
-- Day groups render ("Today", "Yesterday" verified; date headers not reachable in seed range). Durations in `12m` / `1h 00m` / `46s` form ✓; time-of-day trailing column ✓.
+- Day groups render ("Today", "Yesterday" verified; date headers not reachable in seed range). Trailing time column, observed formats (re-verified 2026-10-18): entries >5 minutes (or crossing local midnight) show a start–end range with the duration on the second line (`21:38–22:00` / `22m`); shorter entries show plain time-of-day; sub-minute durations render `<1m` (never bare seconds like `46s`) ✓.
 - Headlines match §4.1: `Bottle · 120 mL`, `Bottle · 3 mL`, `Sleep` (+ note preview "QA night nap"), `Pump · 85 mL`, `Tummy time · Rolled over!` / `· Grabbed toy`, note first line ("Loved the mobile today!", "Pediatrician called — next checkup Nov 14."), diaper `Wet` / `Wet + Solid (Yellow)` + swatch. **Exception:** diaper headlines carry a redundant "(Color)" parenthetical — finding #6.
 - Pull-to-refresh triggers the sync chain (verified via `GET /api/feedings|changes|…` in server log after swipe).
 - Ordering is newest-first within each group.

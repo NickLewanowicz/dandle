@@ -1,34 +1,36 @@
 # Baby Buddy Next
 
-A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source self-hosted baby tracker — rebuilt from scratch by an AI-driven team, with a couple of creature comforts the original Android app never had.
+A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source, self-hosted baby tracker.
 
-**Status: beta — QA-accepted (0 P0/P1/P2 open), not yet published.** The app builds, installs, and runs against a real Baby Buddy server; every flow is documented in [`docs/flows/new-app/`](docs/flows/new-app/) with screenshot evidence, and the acceptance pass is recorded in [`99-qa-findings.md`](docs/flows/new-app/99-qa-findings.md).
+**Status: beta.** It builds, installs, and runs against a real Baby Buddy server. It is not on an app store yet.
 
-## Why this exists
+## Why I'm building this
 
-[Baby Buddy for Android](https://github.com/babybuddy/babybuddy-for-android) is a wonderful little app: six buttons, fast timers, diaper logging — nothing extra. Its README says it plainly: the maintainer runs it as a hobby alongside a 9–5 and a house move, and development is paused. We're grateful for those years of daily use.
+My wife and I have gotten a lot of value out of Baby Buddy — both the service and [Baby Buddy for Android](https://github.com/babybuddy/babybuddy-for-android). That app is exactly what it should be: six buttons, fast timers, diaper logging, nothing extra. We use it every day, several times a day.
 
-This project is what happens when a family that relies on that app daily wants three things it doesn't have — and can build them:
+There were a few things we kept wanting that it doesn't do, so I'm building them:
 
-1. **Quick time edits in the app.** The original app's most-used "power feature" is long-pressing an event to bounce to the web UI just to fix a time. We kept the long-press escape hatch (the web app is always the superset), but tapping an entry now opens a fast in-app editor: nudge a diaper change ±5 minutes, fix when a feed started, done.
-2. **Offline support.** Self-hosted means sometimes the server is down, and parenthood means sometimes you're at a park with no signal. Events log locally and replay to the server when it's reachable. If the server rejects something (e.g. an overlapping nap), the entry shows a quiet "failed" state with the server's reason and a path to fix or remove it — locally, in the app.
-3. **Home-screen widgets.** A small widget to start a sleep or pump timer without opening the app, and a larger one showing *time since* the last feed, diaper, nap, or pump — tap a row to log or start a timer.
+1. **Offline support.** Self-hosted means sometimes the server is down, and parenthood means sometimes you're at a park with no signal. Events log locally and replay to the server when it's reachable. If the server rejects something (an overlapping nap, say), the entry shows a quiet "failed" state with the server's reason and a path to fix or remove it — in the app, not a dead-end error.
+2. **Editing times in the app.** The old flow for fixing a time was long-press → web UI → find the field. Here, tapping an entry opens a fast in-app editor with native date/time pickers: nudge a diaper change, fix when a feed actually started, done. The long-press escape hatch stays — the web UI always has more fields than this app, and that's intentional.
+3. **Home-screen widgets.** A small widget to start a sleep or pumping timer without opening the app, and a larger one that shows where things stand — running timer first, then time since the last feed, diaper, nap, or pump. Tapping a row opens the app.
 
-All of it wrapped in a current Material 3 look — dynamic color, dark mode, motion that communicates state — while keeping the original's layout discipline: six buttons up top, timers, timeline. **The scope is deliberately small.** Restraint is why the original worked.
+The scope is deliberately small. Restraint is a big part of why the original works, and I'm not trying to reinvent it: the six quick actions, tap-to-toggle timers, and the long-press-to-web behavior are kept as they are.
 
-## An AI-driven project, out in the open
+I'm doing this for my family first. Hopefully somebody else gets some value out of it too.
 
-This codebase is built and maintained by AI agents under a human product owner. The team roles (personas), their mandates, and the feature lifecycle are documented in [`docs/PERSONAS.md`](docs/PERSONAS.md) and `.zcode/agents/`.
+## How it's built
 
-Two things make that workable:
+I'm a software engineer with over ten years of experience, and a substantial amount of that time has gone into managing AI agents — so this project is built the way I work day to day. I set the direction, review the output, and make the calls; a small team of AI agents does the implementation, testing, and QA under that supervision. The personas, their mandates, and the feature lifecycle are documented in [`docs/PERSONAS.md`](docs/PERSONAS.md) and [`.zcode/agents/`](.zcode/agents/).
+
+Two things make that setup actually work:
 
 - **The spec is the product.** Every user path, screen state, and flow is documented in [`docs/flows/`](docs/flows/) with screenshot evidence in [`docs/screenshots/`](docs/screenshots/). The canonical functional specification — [`docs/flows/new-app/00-functional-spec.md`](docs/flows/new-app/00-functional-spec.md) — describes the entire app framework-agnostically, so the implementation is replaceable and every change is checkable against the contract.
-- **QA is automated.** A QA-engineer agent drives the app on an Android emulator against a real Baby Buddy server (Docker), walks every flow, exercises the offline path, and archives screenshots as documentation.
+- **QA is automated.** A QA-engineer agent drives the app on an Android emulator against a real Baby Buddy server (Docker), walks every flow, exercises the offline path, and archives screenshots as documentation. A `--assert` regression gate re-verifies the critical flows on every UI change.
 
 ## Upstream credit & licenses
 
 - [Baby Buddy](https://github.com/babybuddy/babybuddy) (BSD-2-Clause) — the server this app connects to. This project is an API client; it is not affiliated with the Baby Buddy project.
-- [Baby Buddy for Android](https://github.com/babybuddy/babybuddy-for-android) (MIT code) — our scope baseline and UX inspiration. We deliberately do **not** copy its icons or media (attribution-licensed); all artwork here is original.
+- [Baby Buddy for Android](https://github.com/babybuddy/babybuddy-for-android) (MIT code; icon artwork attribution-licensed) — our scope baseline and UX inspiration. Nearly all artwork here is original. One deliberate exception: the breastfeeding side icons (left / right / both) are a close recreation of Baby Buddy for Android's breast-feeding icons with minor adjustments to stroke weight and corners — for those shapes, clarity for a tired parent beats originality, and the credit belongs to the original project.
 
 ## Development (this repo)
 
@@ -41,4 +43,4 @@ See [AGENTS.md](AGENTS.md) for the full working agreement. Short version:
 
 ## Tech
 
-Native Kotlin + Jetpack Compose + Material 3 (dynamic color), Room (offline-first, outbox pattern), WorkManager (background replay), Glance (widgets), Retrofit/OkHttp. Single module, manual DI, ~7k lines of app code + 170+ JVM tests. Why native and not Flutter/React Native: [DECISION.md](docs/briefs/framework-eval/DECISION.md) — the short version is that the features that differentiate this app (widgets, Material You, background sync) are native features, and the AI-agent QA loop on the emulator was measured at under 10 seconds.
+Native Kotlin + Jetpack Compose + Material 3 (dynamic color), Room (offline-first, outbox pattern), WorkManager (background replay), Glance (widgets), Retrofit/OkHttp. Single module, manual DI, ~9.9k lines of Kotlin + 219 JVM tests. Why native and not Flutter/React Native: [DECISION.md](docs/briefs/framework-eval/DECISION.md) — the short version is that the features that differentiate this app (widgets, Material You, background sync) are native features, and the AI-agent QA loop on the emulator was measured at under 10 seconds.

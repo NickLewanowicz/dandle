@@ -111,7 +111,7 @@ One **TimerCard** per running timer, newest first. Anatomy, left to right:
   1. Leading type icon, 40dp tonal circle (same icon set).
   2. Headline (body-large, per §4.1 — restated below).
   3. Secondary line when present: note preview, 1 line ellipsized (onSurfaceVariant), or the sync badge (see below) after it.
-  4. Trailing column: time-of-day (`14:32`, locale format) on line 1; duration for timed types on line 2 (onSurfaceVariant, `12m` / `1h 05m`; sub-minute shows `45s`).
+  4. Trailing column: line 1 shows the start–end range (`21:38–22:00`) for ANY timed entry longer than 5 minutes or crossing local midnight — plain time-of-day (`14:32`, locale format) only for shorter entries; line 2 is the duration for timed types (onSurfaceVariant, `12m` / `1h 05m`; sub-minute renders `<1m`, never bare seconds like `45s`).
 - **Sync badge** lives at the end of the secondary line: PENDING = muted clock icon + "Will sync"; FAILED = errorContainer pill, see §5. SYNCED = nothing.
 - **Headline formats** (exact, app-wide):
   - Feeding: `Bottle · 120 mL` — method · amount; the `· amount` segment is omitted when amount is null.
@@ -246,7 +246,7 @@ Tap the chip → "Sync now" (drains the outbox). The chip co-exists with the PEN
 **User goal:** log or glance from the home screen without unlocking into the app.
 
 ### Quick Actions widget — 2×2 (§7.1)
-Four cells, 2×2: **Sleep, Bottle, Diaper, Pump**. Each cell: 28dp icon + label below, on a surface-colored rounded background; whole cell is one tap target with a platform ripple.
+Four cells, 2×2: **Sleep, Bottle, Diaper, Pump**. Each cell: 28dp icon + label below, on a surface-colored rounded background; whole cell is one tap target with a platform ripple. Idle cells add a subdued second line under the label — the last event of that type as a compact relative time ("45m" / "1h30m" / "2d"; nothing when there is no history).
 ```
 ┌──────────────────────────────────────┐
 │  ┌──────────────┐  ┌──────────────┐  │
@@ -259,12 +259,12 @@ Four cells, 2×2: **Sleep, Bottle, Diaper, Pump**. Each cell: 28dp icon + label 
 │  └──────────────┘  └──────────────┘  │
 └──────────────────────────────────────┘
 ```
-Running variant — the Sleep cell shows the running state: primary-container fill, elapsed replaces the label ("12m" — minute granularity, no per-second ticking):
+Running variant — the Sleep cell shows the running state: highlighted in the type's semantic color (not a generic accent), with a live elapsed label ("Sleep · 12m" — minute granularity, no per-second ticking); the idle last-line is hidden while running:
 ```
 ┌──────────────────────────────────────┐
 │  ┌──────────────┐  ┌──────────────┐  │
 │  │ ▒(moon)▒▒▒▒▒ │  │   (bottle)   │  │
-│  │   12m        │  │   Bottle     │  │  ← Sleep running: tap stops+saves
+│  │ Sleep · 12m  │  │   Bottle     │  │  ← Sleep running: tap stops+saves
 │  └──────────────┘  └──────────────┘  │
 │  ┌──────────────┐  ┌──────────────┐  │
 │  │   (diaper)   │  │   (pump)     │  │
@@ -285,13 +285,13 @@ Header line (child first name, small) + up to 4 **WidgetRow**s. Row anatomy: lea
 │  (pump)    Last pump       3h  · 85 mL       │
 └──────────────────────────────────────────────┘
 ```
-With a timer running, the **Running timer** row takes the last slot, accented (primaryContainer):
+With a timer running, the **Running timer** row takes the FIRST slot, accented (primaryContainer):
 ```
+│  (moon) ▒ Asleep since 13:00 · 12m elapsed  ▒│
 │  …                                           │
-│  (moon) ▒ Running: Sleep  12m — tap to stop ▒│
 └──────────────────────────────────────────────┘
 ```
-- Tap targets: nap/running rows act directly (start sleep timer / stop+save); feed/diaper/pump rows deep-link into the app with that panel pre-opened. Rows have no ripple requirement — platform default highlight suffices.
+- Tap targets: ALL info rows open the app — feed/diaper/pump rows deep-link with that panel pre-opened, and no timer is ever started from the widget; only the running row routes to the stop guard. Rows have no ripple requirement — platform default highlight suffices.
 - Resizable 4×3: same rows with more breathing room and full detail lines; no new content types in beta.
 - **Configuration** (long-press → Configure): child selection + per-row visibility (dashboard widget). One-tap add uses the active child.
 - **Dark/light**: follows system; surface background, onSurface text, dynamic-color accents where the platform exposes them. Both variants must be legible at arm's length on a nightstand — minimum body-size text, no thin weights.

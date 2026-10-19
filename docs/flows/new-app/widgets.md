@@ -22,12 +22,31 @@ Checklists: `docs/qa/FEATURE-CHECKLISTS.md` entries 9–10. Tags: `BB/UI`, `BB/S
 ## CareDashboard (4×2, resizable 4×3)
 
 - Rows: Last feed (`12m · 120 mL`), Last diaper (`34m · Wet`), Last nap (`2h · 45m`), Last pump —
-  minute-granular, staleness documented (spec §7.2). Running-timer row is accented
-  ("Running: Sleep — 22m — tap to stop") when a timer is active.
-- Taps: nap row → starts the sleep timer via broadcast (stays on the launcher; P2-5 fix — the
-  activity trampoline previously landed on the app task); when a sleep timer already runs, the
-  broadcast opens the app so the in-app stop guard is reachable. feed/diaper/pump rows deep-link
-  with the panel pre-opened; running row (T5) → app opens straight into the stop-guard dialog.
+  minute-granular, staleness documented (spec §7.2). When a timer is active, the running-timer
+  row renders as the widget's FIRST row, accented ("Asleep since 13:00 · 12m elapsed" wording
+  shape); feeding rows use method-specific icons (left / right / both / bottle). Entry
+  timestamps on rows follow the same >5-minute range rule as the timeline.
+- Taps: ALL info rows open the app — feed/diaper/pump rows deep-link with the panel pre-opened,
+  and the nap row opens the app too (timers are never started from the widget; this supersedes
+  the earlier broadcast-stays-on-launcher behavior, see `50-widgets.md` finding #5). Running row
+  (T5) → app opens straight into the stop-guard dialog.
+
+## Persona round 2 (2026-10-18)
+
+Re-verified on device; specified behavior now:
+
+- **Running-first row (CareDashboard):** a running timer renders as the widget's FIRST row in a
+  running state, wording like "Asleep since 13:00 · 12m elapsed" (the old "Running: Sleep —
+  Xm — tap to stop" is gone).
+- **Info rows open the app:** tapping any info row (sleep/feed/diaper/pump) opens the app; no
+  timers are ever started from the widget and nothing runs from the launcher.
+- **Method-specific feeding icons:** feeding rows show a left / right / both / bottle icon.
+- **QuickActions cells:** idle cells show a subdued second line with the last event's compact
+  relative time ("45m" / "1h30m" / "2d"); a running cell is highlighted in the type color with
+  a live elapsed label ("Sleep · 12m").
+- **Range rule on widget timestamps:** entry timestamps follow the same >5-minute rule as the
+  timeline — a start–end range (duration on the second line) for entries longer than 5 minutes
+  or crossing local midnight, plain time-of-day for shorter entries; sub-minute renders "<1m".
 
 ## Refresh (spec §7.2)
 

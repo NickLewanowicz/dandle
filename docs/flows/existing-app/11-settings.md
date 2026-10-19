@@ -66,8 +66,11 @@ message text field, buttons `SEND` and `BACK`.
 
 ## Screenshots (docs/screenshots/existing-app/11-settings/)
 - `01-overflow-menu.png` — 5 menu items
-- `02-help-1.png` … `10-help-9-history.png` — all 9 help slides in order
-  (`05-help-4-overview.png` is the Overview topic; files 05–10 cover topics 2–5)
+- All 9 help slides in order: `02-help-1.png` (login), `03-help-2-qr.png` (QR code login),
+  `04-help-3-insecure.png` (insecure login) — topic 1; `05-help-4-overview.png` (topic 2
+  Overview); `06-help-5-timer-logging.png`, `07-help-6-timer-interface.png`,
+  `08-help-7-timer-save-cancel.png` (topic 3 Using Timers); `09-help-8-events.png` (topic 4);
+  `10-help-9-history.png` (topic 5)
 - `11-settings-screen.png` — Settings with single Dark/Light mode pref
 - `12-contact-developer.png` — Contact developer screen
 - `14-about.png` — About page (license + third-party libraries)
