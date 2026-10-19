@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Traced from babybuddy-for-android resources (left_breast/right_breast/feeding-breast.svg). Group transform baked into coordinates; dasharray 2.106/4.212 pre-generated as M/L subpaths; bespoke: round caps/joins. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <path
+     android:pathData="M240.66,13.59 C246.75,111.24 162.1,178.66 78.06,246.28 C153.28,405.08 222.2,402.04 290.42,381.28"
+     android:strokeColor="#FF000000"
+     android:fillColor="#00000000"
+     android:strokeWidth="20"
+     android:strokeLineCap="round"
+     android:strokeLineJoin="round" />
+    <path
+     android:pathData="M243.31,390.62 L242.45,498.95"
+     android:strokeColor="#FF000000"
+     android:fillColor="#00000000"
+     android:strokeWidth="20"
+     android:strokeLineCap="round"
+     android:strokeLineJoin="round" />
+    <path
+     android:pathData="M393.69,40.87 C399.78,138.53 315.13,205.95 231.08,273.57 C306.31,432.36 375.22,429.32 443.45,408.57"
+     android:strokeColor="#FF000000"
+     android:fillColor="#00000000"
+     android:strokeWidth="20"
+     android:strokeLineCap="round"
+     android:strokeLineJoin="round" />
+</vector>

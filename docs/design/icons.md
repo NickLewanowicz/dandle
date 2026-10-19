@@ -76,7 +76,7 @@ paths); stroke 1.4dp for this glyph (2dp merged the pair into a solid shield).
 
 Spend: $0 (all hand-drawn; recraft used only for the launcher in round 4).
 
-### 2.1 Round 6 — feeding side variants via gpt-image-2 img2img (FINAL, SHIPPED)
+### 2.1 Round 6 — feeding side variants via gpt-image-2 img2img (superseded by 2.2)
 
 The hand-drawn breast-pair curves kept closing into a heart/shield at 24dp
 (six visual iterations), and recraft-v3-svg line_art output detailed
@@ -98,6 +98,42 @@ app's icon into gpt-image-2 as input and have it generate the variants.
 - Two real QA bugs fixed while landing (see 1d816b4): stale-dump serving in
   `dump_with_retry` (dump file now rm'd before each attempt) and
   `tap_text`/`center_of` phantom-success on empty bounds.
+
+### 2.2 Round 7 — traced vector recreation of the trio + pump/tummy redraw (FINAL, SHIPPED, supersedes 2.1's raster trio)
+
+Owner verdict on round 6: the generated side variants were "still completely
+unlegible." New direction: take the original app's icons, recreate them with
+slight adjustments to line thickness and corner radius so it looks bespoke,
+and iterate until visually almost identical. Pump and tummy time called
+stupid-looking — redraw simple, with a very strict visual reviewer gate.
+
+- **Trio** (`ic_bb_feeding_left/right/both.xml`, vector drawables replacing the
+  round-6 `drawable-nodpi` rasters, same resource names so no Kotlin changes):
+  traced from `.scratch/babybuddy-for-android/resources/{left,right}_breast.svg`
+  and `feeding-breast.svg`. Group matrices baked into path coordinates
+  (left: 4.7494×; right: 7.8372×; both: mm-space × 3.7798). Dashes
+  pre-generated as M/L subpaths by arc-length walking the flattened Béziers
+  (VectorDrawable has no dashArray); dash rhythm exactly the original's
+  (10.0/20.0 in the 512 viewport). L/R letterform paths reused verbatim.
+  Bespoke deltas: round caps/joins; otherwise overlay-identical (green-only
+  diff sheets). 3 iterations each.
+- **Pumping** (`ic_bb_pumping.xml`): redrawn minimal — flange ellipse with
+  visible channel + concave funnel + collared collection bottle, 2dp strokes.
+  7 iterations (rejected: V-bowl, open trapezoid, continuous hourglass
+  walls). Strict-review FAIL v1 (rode 2.7dp high; interior whites 0.5/1.2dp
+  died at 24px) → fixed to measured center (12.0, 11.88)dp, ink height
+  16.27dp, ellipse ry 2.25, bottle x 9.8–14.2 → PASS on re-verdict.
+- **Tummy time** (`ic_bb_tummy_time.xml`): redrawn as a single filled mass —
+  prone body, back high into the shoulder, lifted round head breaking the
+  back line, flat mat base; no accent lines (every accent variant muddied
+  24px). 7 iterations (rejected: snail, bun+ball, twin blobs). PASS.
+- **Strict review gate** (ux-designer): 4/5 first pass; pumping failed on
+  measured centering + 24px interior survival, re-passed after fix. Evidence:
+  `docs/design/candidates/icon-round7/` (all-five 512/48, trio overlays,
+  pumping/tummy details).
+- Color tokens unified to the set convention `#FF000000` (was `#1A1A1A` on
+  the five; inert — all usage sites tint).
+- Spend: **$0.** All tracing/redraw hand-computed; no generation APIs.
 
 ## 3. Spend
 
