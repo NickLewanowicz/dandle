@@ -98,11 +98,18 @@ class QuickActionsWidget : GlanceAppWidget() {
         val slots = if (childId == null) {
             emptyList()
         } else {
+            val configured = configuredSlots(prefs)
+            val nowMillis = container.serverClock.nowMillis()
+            // U10: each slot whispers when its type last happened — one small query per slot.
+            val latest = configured.associateWith { type ->
+                container.eventRepository.latestByType(childId, type)
+            }.filterValues { it != null }.mapValues { it.value!! }
             WidgetStateMapper.quickActionSlots(
-                configured = configuredSlots(prefs),
+                configured = configured,
                 timers = container.timerRepository.snapshotRunning(),
                 childId = childId,
-                nowMillis = container.serverClock.nowMillis(),
+                nowMillis = nowMillis,
+                latest = latest,
             )
         }
 
@@ -223,14 +230,24 @@ private fun SlotCell(
     val colors = GlanceTheme.colors
     val running = slot.running
     val action = if (running) {
-        // T5: the slot reads "tap to stop" — the tap deep-links straight into the app's
-        // stop-guard dialog for this timer (≤10s discards silently, in-app semantics).
+        // T5/U3: the running slot's tap deep-links straight into the app's stop-guard dialog
+        // for this timer (≤10s discards silently, in-app semantics).
         WidgetActions.openStopTimerModifier(context, slot.type)
     } else {
         GlanceModifier.clickable(slotAction(context, slot.type))
     }
-    val fill = if (running) colors.primaryContainer else colors.surfaceVariant
-    val content = if (running) colors.onPrimaryContainer else colors.onSurface
+    // U10/U11: a running slot takes its TYPE's color (not generic primary) so "the nap slot is
+    // blue and lit up" reads at a glance; idle slots stay surface buttons.
+    val dark = (LocalContext.current.resources.configuration.uiMode and
+        android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    val (containerArgb, onContainerArgb) = net.babybuddy.next.ui.theme.TypeColors
+        .argbPair(slot.type, dark)
+    val fill = if (running) ColorProvider(androidx.compose.ui.graphics.Color(containerArgb)) else colors.surfaceVariant
+    val content = if (running) {
+        ColorProvider(androidx.compose.ui.graphics.Color(onContainerArgb))
+    } else {
+        colors.onSurface
+    }
     // 2dp inset per cell = 4dp gaps between chips and ≤4dp outer breathing room; the chip fills
     // the rest of its weighted cell so the grid fills the widget (owner padding fix) and 12sp
     // labels get the cell's full width (wrap-content chips collapsed to icon width and
@@ -252,8 +269,8 @@ private fun SlotCell(
                     modifier = GlanceModifier.size(24.dp),
                     colorFilter = ColorFilter.tint(content),
                 )
-                // W4: the running slot renders the elapsed time; if the state race leaves it
-                // null, fall back to the label — never an empty chip.
+                // W4/U10: a running slot renders the elapsed counter (fall back to the label —
+                // never an empty chip); idle slots keep the label plus the subdued "last" line.
                 Text(
                     if (running) slot.elapsedText ?: slot.label else slot.label,
                     style = TextStyle(
@@ -263,6 +280,16 @@ private fun SlotCell(
                     ),
                     maxLines = 1,
                 )
+                if (!running && slot.lastText != null) {
+                    Text(
+                        slot.lastText,
+                        style = TextStyle(
+                            color = ColorProvider(colors.onSurface.getColor(context).copy(alpha = 0.55f)),
+                            fontSize = 10.sp,
+                        ),
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }

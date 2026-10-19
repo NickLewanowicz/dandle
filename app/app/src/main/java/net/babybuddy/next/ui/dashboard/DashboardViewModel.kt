@@ -41,11 +41,16 @@ import net.babybuddy.next.domain.model.SyncState
 import net.babybuddy.next.domain.model.toDraft
 import net.babybuddy.next.data.repo.TimerRepository
 
-/** One open quick-action panel: its type, persisted field draft, and running timer (if any). */
+/** One open quick-action card/sheet: its type, persisted field draft, and running timer (if any). */
 data class OpenPanel(
     val type: EventType,
     val draft: PanelDraft,
     val timer: RunningTimer?,
+    /**
+     * U4: the create sheet's (diaper/note) absolute entry time — null = "now". Ephemeral by
+     * design (defaults to now anyway); the field DRAFTS persist independently.
+     */
+    val entryTimeMillis: Long? = null,
 )
 
 /** The calm duplicate line (spec §3.7) waiting on the user's Add / View-last decision. */
@@ -106,6 +111,9 @@ data class DashboardUiState(
 
 sealed interface DashboardEvent {
     data object SignedOut : DashboardEvent
+
+    /** A quick-action save landed locally — the UI scrolls the timeline to the new row. */
+    data class EntryCreated(val localUuid: String) : DashboardEvent
 }
 
 /**
@@ -178,6 +186,7 @@ class DashboardViewModel(
             activeChildId.value = container.sessionStore.sessionFlow.first().activeChildId
             restoreOpenPanel()
         }
+        observeRunningTimersAutoOpen()
         // P1-3: a server-rejected write surfaces the failure dialog proactively (spec §3.8/§6.2)
         // — the user must never have to hunt for a badge to learn a save was rejected.
         viewModelScope.launch {
@@ -276,6 +285,27 @@ class DashboardViewModel(
             val timer = if (type.isTimed) timerRepo.findRunning(type, childId) else null
             openPanel.value = OpenPanel(type, draft, timer)
             return
+        }
+    }
+
+    /**
+     * U2: a running timer's card is ALWAYS visible below the buttons — not opt-in via an open
+     * panel. This collector opens the panel whenever a timer runs for the active child and no
+     * editor is open (app restart with a timer, child switch, timer started from the widget).
+     * Idempotent: the panel it opens satisfies the guard on the next emission.
+     */
+    private fun observeRunningTimersAutoOpen() {
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(activeChildId, timerRepo.observeRunning()) { childId, timers ->
+                childId to timers
+            }.collect { (childId, timers) ->
+                if (childId == null || openPanel.value != null) return@collect
+                val unopened = timers.firstOrNull { it.childId == childId && openPanel.value?.type != it.kind }
+                if (unopened != null) {
+                    net.babybuddy.next.log.BbLog.d(TAG_UI, "auto-open card ${unopened.kind.name}")
+                    openPanelFor(unopened.kind, childId)
+                }
+            }
         }
     }
 
@@ -443,20 +473,23 @@ class DashboardViewModel(
 
     // -- Quick actions (spec §3) -------------------------------------------------------
 
+    /**
+     * U3 (original-app tap semantics): tapping a timer type with a RUNNING timer is tap-to-stop —
+     * the StopGuard decides dialog vs silent discard (>10s / ≤10s). A stopped/absent timer starts
+     * one and opens its card. Edit-like types (diaper/note) toggle their sheet.
+     */
     fun onQuickActionTap(type: EventType) {
         val child = uiState.value.activeChild ?: return
         net.babybuddy.next.log.BbLog.d(TAG_UI, "quick action ${type.name} child=${child.id}")
         if (type.isTimed) {
             val running = uiState.value.runningTimers.firstOrNull { it.kind == type }
-            when {
-                running == null -> viewModelScope.launch {
+            if (running != null) {
+                requestStopGuard(running)
+            } else {
+                viewModelScope.launch {
                     timerRepo.start(type, child.id)
                     openPanelFor(type, child.id)
                 }
-
-                openPanel.value?.type == type -> requestStopGuard(running)
-
-                else -> viewModelScope.launch { openPanelFor(type, child.id) }
             }
         } else {
             if (openPanel.value?.type == type) {
@@ -535,6 +568,13 @@ class DashboardViewModel(
 
     fun onPanelTextChange(text: String) = updateDraft(EventType.NOTE) { it.copy(text = text) }
 
+    /** U4: the create sheet's TIME row — absolute entry time for diaper/note (null = now). */
+    override fun onCreateTimePicked(millis: Long) {
+        val panel = openPanel.value ?: return
+        if (panel.type.isTimed) return
+        openPanel.value = panel.copy(entryTimeMillis = millis)
+    }
+
     // -- T2: "started X min ago" adjust on timed panels (spec §5 panel time-adjust) ----------
 
     /** Stepper: [minutesAgoDelta] > 0 backdates ("−15m" = started 15 minutes earlier). */
@@ -574,13 +614,18 @@ class DashboardViewModel(
         else -> true
     }
 
-    /** Save from the panel (or the strip card) — runs the duplicate guard first (spec §3.7). */
+    /** Save from the timer card or the create sheet — runs the duplicate guard first (spec §3.7). */
     fun savePanel() {
         val panel = openPanel.value ?: return
         val child = uiState.value.activeChild ?: return
         if (!isPanelSaveEnabled(panel)) return
         net.babybuddy.next.log.BbLog.d(TAG_UI, "panel save ${panel.type.name} child=${child.id}")
-        val now = container.serverClock.nowMillis()
+        // U4: the create sheet's TIME row backdates the entry (duplicate guard anchors there too).
+        val now = if (!panel.type.isTimed) {
+            panel.entryTimeMillis ?: container.serverClock.nowMillis()
+        } else {
+            container.serverClock.nowMillis()
+        }
         val draft = panel.draft.toEventDraft(panel.type, child.id, now)
         viewModelScope.launch {
             val last = eventRepo.latestByType(child.id, panel.type)
@@ -642,12 +687,15 @@ class DashboardViewModel(
     }
 
     private suspend fun commitSave(type: EventType, childId: Long, draft: EventDraft, timer: RunningTimer?) {
-        if (type.isTimed) {
+        val created = if (type.isTimed) {
             val running = timer ?: timerRepo.findRunning(type, childId) ?: return
             timerRepo.stopAndSave(running, draft)
         } else {
             eventRepo.create(draft)
         }
+        // The insert animation is the save confirmation (UX §3): make sure the new row is
+        // actually IN view — a scrolled-back timeline must not silently swallow it.
+        _events.tryEmit(DashboardEvent.EntryCreated(created.localUuid))
         if (type == EventType.FEEDING && draft.feedingType != null && draft.feedingMethod != null) {
             quickActions.rememberFeeding(childId, draft.feedingType!!, draft.feedingMethod!!)
         }
@@ -665,6 +713,14 @@ class DashboardViewModel(
         val draft = panelDraftFor(type, childId).copy(open = true)
         quickActions.savePanel(childId, type.name, draft)
         val timer = if (type.isTimed) timerRepo.findRunning(type, childId) else null
+        // The tap path and the auto-open collector can both open the same card within the same
+        // second (timer insert → observeRunning → auto-open, while the tap's own open is still
+        // suspended on DataStore). Whoever lands second must NOT replace a live panel: the user
+        // may already have typed into it. The first open wins; its draft stays.
+        openPanel.value?.takeIf { it.type == type }?.let {
+            net.babybuddy.next.log.BbLog.d(TAG_UI, "openPanelFor ${type.name}: already open, keeping live draft")
+            return
+        }
         openPanel.value = OpenPanel(type, draft, timer)
         net.babybuddy.next.log.BbLog.d(TAG_UI, "openPanel set ${type.name} timer=${timer?.localId}")
     }
@@ -778,29 +834,6 @@ class DashboardViewModel(
         editState.value = current.copy(draft = transform(current.draft))
     }
 
-    /** Stepper on the START row (timed types): duration-preserving (spec §5). */
-    fun onEditStartStepped(minutes: Long) {
-        val current = editState.value ?: return
-        if (current.event.type.isTimed) {
-            val (start, end) = TimeEditLogic.moveStart(
-                current.draft.startMillis,
-                current.draft.endMillis,
-                TimeEditLogic.step(current.draft.startMillis, minutes),
-            )
-            onEditDraftChange { it.copy(startMillis = start, endMillis = end) }
-        } else {
-            onEditDraftChange { it.copy(startMillis = TimeEditLogic.step(it.startMillis, minutes)) }
-        }
-    }
-
-    /** Stepper on the END row (timed types): adjusts duration independently (raw; the
-     *  end ≤ start case surfaces via [editValidationReason] and disables Save). */
-    fun onEditEndStepped(minutes: Long) {
-        onEditDraftChange { draft ->
-            draft.copy(endMillis = TimeEditLogic.step(draft.endMillis, minutes))
-        }
-    }
-
     /** Absolute set from the platform date+time picker. */
     fun onEditStartTimeSet(millis: Long) {
         val current = editState.value ?: return
@@ -909,10 +942,6 @@ class DashboardViewModel(
             clashLocalUuid = presentation.clashLocalUuid,
         )
     }
-
-    /** P1-3: the first FAILED row in the loaded timeline, for scroll-to-failed from the chip. */
-    fun firstFailedLocalUuid(): String? =
-        uiState.value.timeline.firstOrNull { it.syncState == SyncState.FAILED }?.localUuid
 
     fun dismissFailureDialog() {
         failureDialog.value = null

@@ -2,21 +2,16 @@ package net.babybuddy.next.ui.dashboard
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -44,7 +39,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.babybuddy.next.data.AppContainer
-import net.babybuddy.next.domain.DuplicateGuard
 import net.babybuddy.next.domain.StopGuard
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
@@ -53,9 +47,11 @@ import net.babybuddy.next.ui.dialogTestTags
 import net.babybuddy.next.ui.edit.QuickEditSheet
 
 /**
- * Dashboard (spec §2): header (child switcher + overflow + sync chip), active-timers strip,
- * six quick actions with inline panels, and the day-grouped timeline. Local-first saves; the
- * timeline insert animation is the save confirmation (UX spec §3/§5).
+ * Dashboard (spec §2, owner rework U1): header (child name + chevron, sync chip, overflow), the
+ * six quick actions PINNED directly under the header — nothing dynamic ever renders above them —
+ * then the running-timer card (U2) when a timer runs, then the day-grouped timeline. Diaper and
+ * note creation open a modal sheet (U4). Local-first saves; the timeline insert animation is the
+ * save confirmation (UX spec §3/§5).
  */
 
 @Composable
@@ -82,8 +78,8 @@ fun DashboardScreen(
 
     var stopDialog by remember { mutableStateOf<RunningTimer?>(null) }
 
-    // P2-4: guard requests from panel close / re-tap routes (the <=10s branch never emits —
-    // the VM discards silently and closes the panel there).
+    // P2-4/U3: guard requests from a re-tap of a running type's button (the <=10s branch never
+    // emits — the VM discards silently there).
     LaunchedEffect(Unit) {
         viewModel.stopGuardRequests.collect { timer ->
             if (timer != null) {
@@ -103,6 +99,7 @@ fun DashboardScreen(
         viewModel.events.collect { event ->
             when (event) {
                 DashboardEvent.SignedOut -> onSignedOut()
+                is DashboardEvent.EntryCreated -> viewLastEntryUuid = event.localUuid
             }
         }
     }
@@ -135,14 +132,8 @@ fun DashboardScreen(
                     onSignOut = { showSignOutDialog = true },
                     onHelp = { showHelpDialog = true },
                     onAbout = { showAboutDialog = true },
-                    syncChip = syncChipState(state.isOnline, state.syncing, state.failedCount, state.showAllSynced),
-                    onSyncChipTap = {
-                        viewModel.syncNow()
-                        // P1-3: the "N failed" chip also reveals the failed entries (UX §5).
-                        viewModel.firstFailedLocalUuid()?.let { failedUuid ->
-                            viewLastEntryUuid = failedUuid
-                        }
-                    },
+                    syncChip = syncChipState(state.isOnline, state.syncing, state.showAllSynced),
+                    onSyncChipTap = viewModel::syncNow,
                 )
 
                 if (state.sessionExpired) {
@@ -152,18 +143,7 @@ fun DashboardScreen(
                     )
                 }
 
-                ActiveTimersStrip(
-                    timers = state.runningTimers,
-                    nowMillis = nowMillis,
-                    onSave = viewModel::saveRunningTimer,
-                    onDiscard = { timer ->
-                        // Strip ✕ runs the stop guard (UX spec §2).
-                        val elapsed = nowMillis - timer.startedAtMillis
-                        if (StopGuard.shouldConfirm(elapsed)) stopDialog = timer else viewModel.discardTimer(timer)
-                    },
-                    onOpenPanel = viewModel::onQuickActionTap,
-                )
-
+                // U1: the grid is the first thing under the header, always at the same place.
                 QuickActionsGrid(
                     childPresent = state.activeChild != null,
                     runningKinds = state.runningTimers.map { it.kind }.toSet(),
@@ -172,15 +152,10 @@ fun DashboardScreen(
                     onTap = viewModel::onQuickActionTap,
                 )
 
-                state.openPanel?.let { panel ->
-                    QuickActionPanel(
-                        panel = panel,
-                        nowMillis = nowMillis,
-                        saveEnabled = viewModel.isPanelSaveEnabled(panel),
-                        callbacks = viewModel, // DashboardViewModel implements QuickActionCallbacks
-                    )
-                }
-
+                // U2: a running timer renders as the expanded TOP ELEMENT of the list — it is the
+                // timeline's first item, so it scrolls with it and the keyboard can never hide
+                // the field being typed into.
+                val runningPanel = state.openPanel?.takeIf { it.type.isTimed && it.timer != null }
                 TimelineSection(
                     events = state.timeline,
                     totalCount = state.totalTimelineCount,
@@ -200,9 +175,29 @@ fun DashboardScreen(
                     onLoadOlder = { viewModel.loadOlder() },
                     scrollToUuid = viewLastEntryUuid,
                     modifier = Modifier.weight(1f),
+                    leadingItem = runningPanel?.let { panel ->
+                        {
+                            RunningTimerCard(
+                                panel = panel,
+                                nowMillis = nowMillis,
+                                saveEnabled = viewModel.isPanelSaveEnabled(panel),
+                                callbacks = viewModel, // DashboardViewModel implements QuickActionCallbacks
+                            )
+                        }
+                    },
                 )
             }
         }
+    }
+
+    // U4: diaper / note creation is a sheet — the same UI family as editing a finished entry.
+    state.openPanel?.takeIf { !it.type.isTimed }?.let { panel ->
+        CreateEntrySheet(
+            panel = panel,
+            entryMillis = panel.entryTimeMillis ?: nowMillis,
+            saveEnabled = viewModel.isPanelSaveEnabled(panel),
+            callbacks = viewModel,
+        )
     }
 
     if (showSignOutDialog) {
@@ -295,8 +290,6 @@ fun DashboardScreen(
             validationReason = viewModel.editValidationReason(edit),
             failureReason = edit.failureReason,
             onDraftChange = viewModel::onEditDraftChange,
-            onStartStepped = viewModel::onEditStartStepped,
-            onEndStepped = viewModel::onEditEndStepped,
             onStartTimeSet = viewModel::onEditStartTimeSet,
             onEndTimeSet = viewModel::onEditEndTimeSet,
             onSave = viewModel::saveEdit,
@@ -306,7 +299,7 @@ fun DashboardScreen(
         )
     }
 
-    // Failure dialog (spec §6.2): tap a FAILED badge/row → parent-language reason.
+    // Failure dialog (spec §6.2): tap a FAILED row → parent-language reason.
     state.failureDialog?.let { failure ->
         FailureDialog(
             state = failure,
@@ -321,6 +314,12 @@ fun DashboardScreen(
     }
 }
 
+/**
+ * Header (owner rework U9, original-app parity): the CHILD's first name sits where a title
+ * would — plain text plus a chevron when there is more than one child (tap → full-name
+ * dropdown); the app has no name in the chrome. Sync chip inline (only when it has something
+ * to say), overflow on the right. One row — no second line to push the buttons down.
+ */
 @Composable
 private fun HeaderRow(
     children: List<net.babybuddy.next.domain.model.Child>,
@@ -334,148 +333,73 @@ private fun HeaderRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var overflowOpen by remember { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Baby Buddy",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Box(modifier = Modifier.weight(1f))
-            Box {
-                Surface(
-                    onClick = { if (children.size > 1) menuOpen = true },
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.testTag(TestTags.DASHBOARD_CHILD_SWITCHER),
-                ) {
-                    Text(
-                        (activeChild?.firstName ?: "No child") + if (children.size > 1) " ▾" else "",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    children.forEach { child ->
-                        DropdownMenuItem(
-                            // Full names in the dropdown (original-app parity); chip stays short.
-                            text = { Text(listOfNotNull(child.firstName, child.lastName).joinToString(" ")) },
-                            onClick = {
-                                onSelectChild(child.id)
-                                menuOpen = false
-                            },
-                        )
-                    }
-                }
-            }
-            Box {
-                TextButton(
-                    onClick = { overflowOpen = true },
-                    modifier = Modifier.testTag(TestTags.DASHBOARD_OVERFLOW),
-                ) { Text("⋮") }
-                DropdownMenu(expanded = overflowOpen, onDismissRequest = { overflowOpen = false }) {
-                    DropdownMenuItem(text = { Text("Sign out") }, onClick = {
-                        overflowOpen = false
-                        onSignOut()
-                    })
-                    DropdownMenuItem(text = { Text("Help") }, onClick = {
-                        overflowOpen = false
-                        onHelp()
-                    })
-                    DropdownMenuItem(text = { Text("About") }, onClick = {
-                        overflowOpen = false
-                        onAbout()
-                    })
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            SyncStatusChip(state = syncChip, onTap = onSyncChipTap)
-        }
-    }
-}
-
-@Composable
-private fun ActiveTimersStrip(
-    timers: List<RunningTimer>,
-    nowMillis: Long,
-    onSave: (RunningTimer) -> Unit,
-    onDiscard: (RunningTimer) -> Unit,
-    onOpenPanel: (EventType) -> Unit,
-) {
-    if (timers.isEmpty()) return
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.testTag(TestTags.DASHBOARD_TIMER_STRIP),
+    val switchable = children.size > 1
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        timers.forEach { timer ->
+        Box {
             Surface(
-                onClick = { onOpenPanel(timer.kind) }, // focus the running panel (spec §3)
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(TestTags.timerCard(timer.kind.name)),
+                onClick = { if (switchable) menuOpen = true },
+                enabled = switchable,
+                shape = MaterialTheme.shapes.small,
+                color = androidx.compose.ui.graphics.Color.Transparent,
+                modifier = Modifier.testTag(TestTags.DASHBOARD_CHILD_SWITCHER),
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
                 ) {
-                    Surface(
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(8.dp),
-                        ) {
-                            androidx.compose.material3.Icon(
-                                androidx.compose.ui.res.painterResource(timer.kind.iconRes()),
-                                contentDescription = timer.kind.label,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.padding(start = 12.dp)) {
-                        Text(timer.kind.label, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        activeChild?.firstName ?: "No child",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (switchable) {
                         Text(
-                            "Running",
-                            style = MaterialTheme.typography.bodySmall,
+                            "▾",
+                            style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp),
                         )
                     }
-                    Box(modifier = Modifier.weight(1f))
-                    Text(
-                        net.babybuddy.next.domain.ElapsedTimeFormatter.timerCounter(
-                            (nowMillis - timer.startedAtMillis).coerceAtLeast(0),
-                        ),
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontFeatureSettings = "tnum",
-                        ),
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                    Button(
-                        onClick = { onSave(timer) },
-                        modifier = Modifier
-                            .height(48.dp)
-                            .testTag(TestTags.timerSave(timer.kind.name)),
-                    ) { Text("Save") }
-                    TextButton(
-                        onClick = { onDiscard(timer) },
-                        modifier = Modifier.testTag(TestTags.timerDiscard(timer.kind.name)),
-                    ) { Text("✕") }
                 }
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                children.forEach { child ->
+                    DropdownMenuItem(
+                        // Full names in the dropdown (original-app parity); header stays short.
+                        text = { Text(listOfNotNull(child.firstName, child.lastName).joinToString(" ")) },
+                        onClick = {
+                            onSelectChild(child.id)
+                            menuOpen = false
+                        },
+                    )
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(1f))
+        SyncStatusChip(state = syncChip, onTap = onSyncChipTap)
+        Box {
+            TextButton(
+                onClick = { overflowOpen = true },
+                modifier = Modifier.testTag(TestTags.DASHBOARD_OVERFLOW),
+            ) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
+            DropdownMenu(expanded = overflowOpen, onDismissRequest = { overflowOpen = false }) {
+                DropdownMenuItem(text = { Text("Sign out") }, onClick = {
+                    overflowOpen = false
+                    onSignOut()
+                })
+                DropdownMenuItem(text = { Text("Help") }, onClick = {
+                    overflowOpen = false
+                    onHelp()
+                })
+                DropdownMenuItem(text = { Text("About") }, onClick = {
+                    overflowOpen = false
+                    onAbout()
+                })
             }
         }
     }

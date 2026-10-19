@@ -244,6 +244,42 @@ class TimerRepositoryTest {
         assertEquals(0, db.timerDao().snapshot().size)
     }
 
+    @Test
+    fun `refresh drops a synced timer that vanished from the server (stopped elsewhere)`() = runTest {
+        responses += timerCreatedResponse(21, "2025-10-09T04:00:00Z")
+        timerRepo.start(EventType.SLEEP, childId = 1)
+        // The timer was stopped on another device / via the web UI: the server lists nothing.
+        responses += MockResponse().setResponseCode(200).setBody(
+            """{"count":0,"next":null,"previous":null,"results":[]}""",
+        )
+        timerRepo.refresh(childId = 1)
+        assertNull("a server-deleted timer must not keep running locally", timerRepo.findRunning(EventType.SLEEP, 1))
+        assertEquals(0, db.timerDao().snapshot().size)
+    }
+
+    @Test
+    fun `refresh keeps another child's synced timer (listing is per child)`() = runTest {
+        responses += timerCreatedResponse(22, "2025-10-09T04:00:00Z")
+        timerRepo.start(EventType.SLEEP, childId = 2)
+        // Child 1's timer list is empty — it says nothing about child 2's timer.
+        responses += MockResponse().setResponseCode(200).setBody(
+            """{"count":0,"next":null,"previous":null,"results":[]}""",
+        )
+        timerRepo.refresh(childId = 1)
+        assertNotNull(timerRepo.findRunning(EventType.SLEEP, childId = 2))
+        assertEquals(1, db.timerDao().snapshot().size)
+    }
+
+    @Test
+    fun `refresh keeps an offline-created timer (no server id yet)`() = runTest {
+        timerRepo.start(EventType.SLEEP, childId = 1) // unscripted create → 500 → local-only
+        responses += MockResponse().setResponseCode(200).setBody(
+            """{"count":0,"next":null,"previous":null,"results":[]}""",
+        )
+        timerRepo.refresh(childId = 1)
+        assertNotNull("an offline timer is still waiting to sync — it must survive", timerRepo.findRunning(EventType.SLEEP, 1))
+    }
+
     // -- Process death: the Room row is the timer -----------------------------------
 
     /** A brand-new repository stack over the same Room instance (fresh "process"). */

@@ -53,6 +53,7 @@ class EventRepository(
 
     /** Fire-and-forget write marker; safe from any thread/coroutine. */
     fun nudgeTimeline() {
+        net.babybuddy.next.log.BbLog.d("BB/SYNC", "timeline nudge")
         timelineWrites.tryEmit(Unit)
     }
 

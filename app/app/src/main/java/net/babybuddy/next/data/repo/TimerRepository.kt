@@ -91,7 +91,7 @@ class TimerRepository(
      * create path; the server timer (if any) is deleted best-effort. Use [discard] to stop
      * without saving.
      */
-    suspend fun stopAndSave(timer: RunningTimer, draft: EventDraft) {
+    suspend fun stopAndSave(timer: RunningTimer, draft: EventDraft): net.babybuddy.next.domain.model.Event {
         require(draft.type == timer.kind)
         val end = serverClock.nowMillis()
         val start = (timer.startedAtMillis - draft.startAdjustMillis).coerceAtMost(end)
@@ -100,13 +100,14 @@ class TimerRepository(
             "stop+save ${timer.kind.name} localId=${timer.localId} elapsed=${end - timer.startedAtMillis}ms " +
                 "adjust=${draft.startAdjustMillis}ms",
         )
-        eventRepository.create(
+        val created = eventRepository.create(
             draft.copy(
                 startMillis = start,
                 endMillis = end.coerceAtLeast(timer.startedAtMillis),
             )
         )
         removeTimer(timer)
+        return created
     }
 
     /** Stops without logging anything (the >10s "Discard" path — spec §3). */
@@ -159,6 +160,18 @@ class TimerRepository(
                         createdAtMillis = clock.nowMillis(),
                     )
                 )
+            }
+            // Reconcile the other direction: a local timer that WAS synced but no longer exists
+            // on the server was stopped elsewhere (another device, the web UI, a QA purge) — it
+            // must not keep "running" here forever. Offline-created timers (no server id) are
+            // untouched: they are still waiting to sync.
+            val serverIds = serverAppTimers.map { it.id }.toSet()
+            for (local in timerDao.snapshot()) {
+                val serverId = local.serverTimerId ?: continue
+                if (local.childId == childId && serverId !in serverIds) {
+                    net.babybuddy.next.log.BbLog.d(TAG, "drop stale ${local.kind} serverId=$serverId (gone on server)")
+                    timerDao.delete(local.id)
+                }
             }
         } catch (_: Exception) {
             // Offline: local timers keep running; nothing to reconcile.

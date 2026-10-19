@@ -73,32 +73,32 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **Steps**
 1. Login (checklist 1).
-2. Start: `ui-tap-tag.sh dashboard/quick_action/SLEEP`; card appears in `dashboard/timer_strip` with tag `dashboard/timer/SLEEP` and ticking counter.
+2. Start: `ui-tap-tag.sh dashboard/quick_action/SLEEP`; the running card appears BELOW the grid (tag `dashboard/panel/SLEEP`) with a ticking `H:MM:SS` counter and an icon-only save (`dashboard/timer/SLEEP/save`). v0.4: no strip, no ✕.
 3. Kill the app (`adb shell am kill net.babybuddy.next.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
 4. Stop after >10s: `ui-tap-tag.sh dashboard/timer/SLEEP` -> stop dialog `dashboard/stop_dialog` with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
 5. Save: `ui-tap-tag.sh dashboard/stop_dialog/save`; verify `scripts/qa/api.sh GET /api/sleep/`.
 6. <10s path: repeat quickly — stop must discard silently (no dialog).
 
-**Tags:** `dashboard/quick_action/SLEEP`, `dashboard/timer_strip`, `dashboard/timer/SLEEP`, `dashboard/timer/SLEEP/save`, `dashboard/timer/SLEEP/discard`, `dashboard/stop_dialog/{save,keep,discard}`.
+**Tags:** `dashboard/quick_action/SLEEP` (re-tap = tap-to-stop), `dashboard/panel/SLEEP` (the card), `dashboard/timer/SLEEP/save`, `dashboard/stop_dialog/{save,keep,discard}`.
 
 **Expected server requests:** start: `POST /api/timers/` (named `Sleep-BBapp:<n>`); save: `POST /api/sleep/` `{child, start, end, notes?}` + `DELETE /api/timers/<id>/` (nap flag is server-computed; app must not send it).
 
-**Expected UI states:** timer strip only while running; elapsed HH:mm:ss; >10s stop -> "Stop timer?" dialog with Save emphasized; timeline entry SYNCED.
+**Expected UI states:** card only while running, always below the (never-moving) buttons; elapsed H:MM:SS; re-tap >10s -> "Stop timer?" dialog with Save emphasized, ≤10s silent discard; timeline entry SYNCED and scrolled into view.
 
 **JVM tests:** `StopGuardTest` (>10s vs <10s), `TimerRepositoryTest` (restore after process death).
 
 ## 5. Quick edit time nudge (spec §5)
 
-**Goal:** fix an entry's time in <=3 interactions via stepper buttons.
+**Goal:** fix an entry's time through the standard native date/time pickers (v0.4: no steppers).
 
 **Steps**
 1. Login; ensure at least one entry exists (checklist 2 or 3).
 2. Tap its timeline row (`dashboard/timeline/<localUuid>`) -> `edit/sheet` opens.
-3. Nudge start: `ui-tap-tag.sh edit/stepper/start_plus` (or `_minus` / `end_plus` / `end_minus`). For timed types moving start shifts end by the same delta (duration preserved).
+3. Move start: `ui-tap-tag.sh edit/sheet/time_start` → native TimePicker pre-populated → pick → OK (calendar button = DatePicker first). For timed types moving start shifts end by the same delta (duration preserved). Scripted: `pick_time` in `capture-flows.sh`.
 4. Save: `ui-tap-tag.sh edit/save`; timeline row updates in place.
-5. Verify: `scripts/qa/api.sh GET /api/<type>/<id>/` shows the nudged time; `server-log.sh` shows the `PATCH`.
+5. Verify: `scripts/qa/api.sh GET /api/<type>/<id>/` shows the picked time; `server-log.sh` shows the `PATCH`.
 
-**Tags:** `edit/sheet`, `edit/stepper/{start,end}_{minus,plus}`, `edit/validation`, `edit/save`, `edit/delete`.
+**Tags:** `edit/sheet`, `edit/sheet/time_{start,end,time}`, `edit/validation`, `edit/save`, `edit/delete` (all reachable in the dump since `dialogTestTags()`).
 
 **Expected server requests:** `PATCH /api/{type}/{id}/` (never PUT — always 405 on Baby Buddy).
 
@@ -134,7 +134,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. While server is down (`scripts/qa/server.sh stop`), create sleep entry A: `dashboard/quick_action/SLEEP` -> stop -> save (offline).
 2. Create overlapping sleep entry B (times intersecting A) — also offline.
 3. `scripts/qa/server.sh wait`; let sync drain: A syncs, B is rejected (`non_field_errors`: "Another entry intersects the specified time period").
-4. B shows `dashboard/badge_failed`; A must still sync (FAILED must not block the queue). `scripts/qa/api.sh GET /api/sleep/` — only A on server.
+4. B shows `dashboard/badge_failed` — v0.4: a small warning badge on the row's type icon (normal row height, no header chip); A must still sync (FAILED must not block the queue). `scripts/qa/api.sh GET /api/sleep/` — only A on server.
 5. Tap FAILED badge -> failure dialog `edit/failure_dialog`: parent-language reason naming the clashing entry + **Edit** / **Delete locally** / **Retry** (`edit/retry`, `edit/delete`).
 6. Resolution path A: Edit via sheet -> non-overlapping times -> save -> retries -> SYNCED. Path B: `edit/delete` -> row gone locally, nothing on server.
 
@@ -172,7 +172,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. Fresh session: `scripts/qa/fresh-install-login.sh` (widget taps resolve the active child from the persisted selection).
 2. Long-press launcher → Widgets → the "Quick actions" card previews the real 2×2 chip layout (not the loading grid) and is labeled **2 × 2** (UX-review W1/W7) → drag to the home screen → the configure screen opens (`QuickActionsConfigActivity`): pick the child and four buttons (default Sleep / Bottle / Diaper / Pump) → **Save**.
 3. Tap the **Sleep** cell (idle) → NO app launch; a server timer appears (`scripts/qa/server-log.sh` shows `POST /api/timers/`), the cell turns accented with minute-granular elapsed, and the CareDashboard running row appears if placed.
-4. Tap the **Sleep** cell (running) → the app opens on the timers strip (the >10s stop guard is an in-app dialog; widgets open the app instead — see `docs/flows/new-app/widgets.md`).
+4. Tap the **Sleep** cell (running; v0.4: lit in the sleep type color with the elapsed in place of the label; idle cells show a subdued last-activity line like `1h30m`) → the app opens straight into the stop-guard dialog (widgets cannot host it — see `docs/flows/new-app/widgets.md`).
 5. Tap **Diaper** → the app opens with the Diaper panel pre-opened (wet/solid toggles). Same for Bottle (feeding timer + panel) and Pump.
 6. Long-press widget → a **Configure** entry must exist (UX-review W10) → change a slot → Save → the cell updates in place.
 7. Theme variant: switch system dark mode (`adb shell "cmd uimode night yes"`) and use a light wallpaper → the widget surface and chips follow the system theme; text/icons stay readable (UX-review W5). Verify both directions (`night no` / `night yes`).
@@ -195,7 +195,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. With data on the server: the widget card previews the real layout (child name + rows + running chip, UX-review W7); place "Care dashboard" (long-press → Configure: child + row visibility) → child-name header, then rows `Last feed · 12m · 120 mL` shape, minute-granular (header per UX-review W8).
 2. In the app: log a new feeding → the widget's feed row updates WITHOUT opening anything (in-app write refresh).
 3. Stop the server (`docker stop babybuddy`), log two overlapping naps in-app → PENDING → start the server → after drain the widget reflects the synced rows (drain-completion refresh).
-4. Nap row tap → sleep timer starts via broadcast, launcher stays foreground (verify `topResumedActivity` remains `NexusLauncherActivity`); if a sleep timer already runs, the tap opens the app (timers strip) so the stop guard is reachable. Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
+4. Nap row tap → sleep timer starts via broadcast, launcher stays foreground (verify `topResumedActivity` remains `NexusLauncherActivity`); if a sleep timer already runs, the tap opens the app (running card below the buttons / stop guard) so the stop guard is reachable. Feed/diaper/pump row taps open the app with that panel pre-opened. Running row tap opens the plain app.
 5. Wait 15+ minutes (or `adb shell am broadcast -a android.intent.action.TIME_SET` to nudge the scheduler in QA) → periodic refresh keeps "Xm ago" honest.
 6. Theme variant: `adb shell "cmd uimode night yes"` on a light wallpaper (and the reverse) → the widget surface and the running-row accent follow the system theme; rows stay readable (UX-review W5).
 7. Amount ≤ 0 (e.g. the known failed-sync pump) shows only the since text — never "0 mL" (UX-review W9; same in the app timeline).

@@ -10,27 +10,32 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,23 +43,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import net.babybuddy.next.R
 import net.babybuddy.next.domain.ElapsedTimeFormatter
 import net.babybuddy.next.domain.FeedingOptions
 import net.babybuddy.next.domain.model.EventType
 import net.babybuddy.next.domain.model.RunningTimer
 import net.babybuddy.next.ui.TestTags
 import net.babybuddy.next.ui.dashboard.OpenPanel
+import net.babybuddy.next.ui.dialogTestTags
+import net.babybuddy.next.ui.edit.DateTimeRow
 
 /**
- * The six quick-action buttons (spec §2.3, UX spec §2): canonical order Feeding, Diaper,
- * Sleep, Notes, Pumping, Tummy time — 3×2 grid of 64dp tonal circles with labels. Timer types
- * show the running state: primaryContainer circle + a small static dot; tap re-opens the
- * running panel, never a duplicate (spec §3).
+ * The six quick-action buttons (spec §2.3, UX spec §2): canonical order Feeding, Diaper, Sleep,
+ * Notes, Pumping, Tummy time — 3×2 grid of 64dp tonal circles with labels. Owner rework U2/U11:
+ * a running (or open) type highlights in its SEMANTIC type color, not generic primary; the dot
+ * marks running. Tap semantics live in the ViewModel (U3: tap a running type → stop guard).
  */
 @Composable
 fun QuickActionsGrid(
@@ -103,13 +112,14 @@ private fun QuickActionButton(
     onTap: () -> Unit,
 ) {
     val active = running || open
+    val typeColors = type.typeColorPair()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
             Surface(
                 onClick = onTap,
                 enabled = enabled,
                 shape = CircleShape,
-                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                color = if (active) typeColors.container else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .size(64.dp)
                     .testTag(TestTags.quickAction(type.name)),
@@ -119,11 +129,7 @@ private fun QuickActionButton(
                         painterResource(type.iconRes()),
                         contentDescription = type.label,
                         modifier = Modifier.size(28.dp),
-                        tint = if (active) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        tint = if (active) typeColors.onContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -147,7 +153,7 @@ private fun QuickActionButton(
     }
 }
 
-/** Contract between the panels and the ViewModel (implemented by DashboardViewModel). */
+/** Contract between the cards/sheets and the ViewModel (implemented by DashboardViewModel). */
 interface QuickActionCallbacks {
     fun onClosePanel(type: EventType)
     fun onSavePanel()
@@ -162,85 +168,90 @@ interface QuickActionCallbacks {
     fun onMilestoneChange(text: String)
     fun onTextChange(text: String)
 
+    /** U4: the create sheet's TIME row (diaper/note) — absolute entry time. */
+    fun onCreateTimePicked(millis: Long)
+
     /** T2: "started X min ago" adjust — [minutesAgoDelta] > 0 backdates the start. */
     fun onStartAdjustStepped(minutesAgoDelta: Long)
     fun onStartTimePicked(millis: Long)
 }
 
 /**
- * The inline logging panel (UX spec §3): a card directly below the grid pushing the timeline
- * down. Timer types show the live counter; Save is the only validation surface.
+ * The running-timer card (owner rework U2): the original app's "expanded top element in the
+ * list" look, rendered below the buttons — type-colored icon tile beside the label + live
+ * `H:MM:SS` counter, the type's fields at full width below (chips need the whole row), and an
+ * icon-only check save bottom-right. No ✕ and no "Save"/"Running" words anywhere (U3):
+ * discarding happens by tapping the type button again (StopGuard), which is exactly the
+ * original app's tap-to-stop.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuickActionPanel(
+fun RunningTimerCard(
     panel: OpenPanel,
     nowMillis: Long,
     saveEnabled: Boolean,
     callbacks: QuickActionCallbacks,
 ) {
     val type = panel.type
+    val timer = panel.timer ?: return
+    val typeColors = type.typeColorPair()
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .testTag(TestTags.panel(type.name)),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp),
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header band: type tile + label + counter (the card's scan anchor).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .width(56.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(typeColors.container),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            painterResource(type.iconRes()),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
-                Text(
-                    type.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-                Box(modifier = Modifier.weight(1f))
-                if (type.isTimed && panel.timer != null) {
-                    Text(
-                        ElapsedTimeFormatter.timerCounter(nowMillis - panel.timer.startedAtMillis),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
+                    Icon(
+                        painterResource(type.iconRes()),
+                        contentDescription = type.label,
+                        modifier = Modifier.size(26.dp),
+                        tint = typeColors.onContainer,
                     )
                 }
-                IconButton(onClick = { callbacks.onClosePanel(type) }, modifier = Modifier.testTag(TestTags.PANEL_CLOSE)) {
-                    Text("✕", style = MaterialTheme.typography.titleMedium)
+                Column(modifier = Modifier.padding(start = 12.dp)) {
+                    Text(
+                        type.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        ElapsedTimeFormatter.timerCounter((nowMillis - timer.startedAtMillis).coerceAtLeast(0)),
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontFeatureSettings = "tnum",
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
 
             when (type) {
-                EventType.FEEDING -> {
-                    StartedAgoRow(panel, nowMillis, callbacks)
-                    FeedingFields(panel, callbacks)
-                }
-                EventType.CHANGE -> DiaperFields(panel, callbacks)
-                EventType.SLEEP -> {
-                    StartedAgoRow(panel, nowMillis, callbacks)
-                    NoteField(
-                        value = panel.draft.noteText,
-                        onValueChange = callbacks::onNoteChange,
-                        label = "Note",
-                    )
-                }
+                EventType.FEEDING -> FeedingFields(panel, callbacks)
+                EventType.SLEEP -> NoteField(
+                    value = panel.draft.noteText,
+                    onValueChange = callbacks::onNoteChange,
+                    label = "Note",
+                )
                 EventType.PUMPING -> {
-                    StartedAgoRow(panel, nowMillis, callbacks)
                     AmountField(
                         value = panel.draft.amountText,
                         onValueChange = callbacks::onAmountChange,
-                        modifier = Modifier.padding(top = 12.dp),
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                     NoteField(
                         value = panel.draft.noteText,
@@ -249,15 +260,16 @@ fun QuickActionPanel(
                     )
                 }
                 EventType.TUMMY_TIME -> {
-                    StartedAgoRow(panel, nowMillis, callbacks)
                     OutlinedTextField(
                         value = panel.draft.milestone,
                         onValueChange = callbacks::onMilestoneChange,
                         label = { Text("Milestone") },
                         singleLine = true,
+                        keyboardOptions = imeDoneOptions,
+                        keyboardActions = doneKeyboardActions(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp)
+                            .padding(top = 8.dp)
                             .testTag(TestTags.PANEL_MILESTONE),
                     )
                     NoteField(
@@ -266,15 +278,121 @@ fun QuickActionPanel(
                         label = "Note",
                     )
                 }
+                else -> Unit
+            }
+
+            StartedAgoRow(panel, nowMillis, callbacks)
+
+            // Icon-only save (U3): the original app's floppy-button slot, as a check.
+            Surface(
+                onClick = callbacks::onSavePanel,
+                enabled = saveEnabled,
+                shape = RoundedCornerShape(12.dp),
+                color = typeColors.container,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(top = 4.dp)
+                    .size(48.dp)
+                    .testTag(TestTags.timerSave(type.name)),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painterResource(R.drawable.ic_bb_check),
+                        contentDescription = "Save",
+                        modifier = Modifier.size(24.dp),
+                        tint = if (saveEnabled) typeColors.onContainer
+                        else typeColors.onContainer.copy(alpha = 0.38f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The create sheet for the edit-like quick actions (owner rework U4): diaper and note open a
+ * modal bottom sheet with the SAME field composables the Quick Edit sheet uses, plus a TIME row
+ * (native pickers, defaults to now) — because logging a change that happened 20 minutes ago is
+ * an everyday correction. Save runs the duplicate guard; ✕/scrim keeps the draft.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreateEntrySheet(
+    panel: OpenPanel,
+    entryMillis: Long,
+    saveEnabled: Boolean,
+    callbacks: QuickActionCallbacks,
+) {
+    val type = panel.type
+    val typeColors = type.typeColorPair()
+    ModalBottomSheet(
+        onDismissRequest = { callbacks.onClosePanel(type) },
+        modifier = Modifier
+            .dialogTestTags()
+            .testTag(TestTags.panel(type.name)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(10.dp), color = typeColors.container) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            painterResource(type.iconRes()),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = typeColors.onContainer,
+                        )
+                    }
+                }
+                Text(
+                    if (type == EventType.CHANGE) "New diaper" else "New note",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+                Box(modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = { callbacks.onClosePanel(type) },
+                    modifier = Modifier.testTag(TestTags.PANEL_CLOSE),
+                ) { Text("✕") }
+            }
+
+            DateTimeRow(
+                label = "TIME",
+                millis = entryMillis,
+                onPicked = callbacks::onCreateTimePicked,
+                valueTag = TestTags.PANEL_TIME,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+
+            when (type) {
+                EventType.CHANGE -> DiaperFields(panel, callbacks)
                 EventType.NOTE -> OutlinedTextField(
                     value = panel.draft.text,
                     onValueChange = callbacks::onTextChange,
                     label = { Text("Note") },
                     minLines = 2,
+                    keyboardOptions = imeDoneOptions,
+                    keyboardActions = doneKeyboardActions(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
                         .testTag(TestTags.PANEL_TEXT),
+                )
+                else -> Unit
+            }
+
+            if (!saveEnabled) {
+                Text(
+                    if (type == EventType.CHANGE) "Choose at least one of Wet or Solid." else "Write something first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
 
@@ -284,19 +402,17 @@ fun QuickActionPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp)
-                    .height(56.dp)
+                    .height(52.dp)
                     .testTag(TestTags.PANEL_SAVE),
-            ) {
-                Text("Save")
-            }
+            ) { Text("Save") }
         }
     }
 }
 
-// -- Per-type fields -------------------------------------------------------------
+// -- Per-type fields (shared with QuickEditSheet) ----------------------------------
 
 /**
- * T2 (spec §5 panel time-adjust, Jordan/Elena): the timed-type panels start their timer at tap;
+ * T2 (spec §5 panel time-adjust, Jordan/Elena): the timed-type cards start their timer at tap;
  * reality often started earlier. One compact line — "Started 20m ago · Adjust" — expands to
  * −15m/−5m/+5m/+15m nudges plus a plain time picker. The adjust backdates the START only;
  * duration rules are unchanged (the created entry uses the adjusted start).
@@ -311,11 +427,12 @@ private fun StartedAgoRow(
     var expanded by remember { mutableStateOf(false) }
     var showPicker by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.padding(top = 12.dp)) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 startedAgoLabel(panel.draft.startedMinutesAgo),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .weight(1f)
                     .testTag(TestTags.PANEL_STARTED_AGO),
@@ -325,7 +442,7 @@ private fun StartedAgoRow(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                 modifier = Modifier.testTag(TestTags.PANEL_STARTED_ADJUST),
             ) {
-                Text(if (expanded) "Hide" else "Adjust", style = MaterialTheme.typography.labelLarge)
+                Text(if (expanded) "Hide" else "Adjust", style = MaterialTheme.typography.labelMedium)
             }
         }
         if (expanded) {
@@ -340,14 +457,14 @@ private fun StartedAgoRow(
                         onClick = { callbacks.onStartAdjustStepped(delta) },
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                         modifier = Modifier.testTag(TestTags.startedAgoStep(label)),
-                    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
+                    ) { Text(label, style = MaterialTheme.typography.labelMedium) }
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(
                     onClick = { showPicker = true },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.testTag(TestTags.PANEL_STARTED_PICK),
-                ) { Text("Pick time", style = MaterialTheme.typography.labelLarge) }
+                ) { Text("Pick time", style = MaterialTheme.typography.labelMedium) }
             }
         }
     }
@@ -395,14 +512,14 @@ internal fun startedAgoLabel(minutesAgo: Int): String = when {
 @Composable
 private fun FeedingFields(panel: OpenPanel, callbacks: QuickActionCallbacks) {
     Column {
-        Text("Type", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+        Text("Type", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
         ChoiceChipRow(
             options = FeedingOptions.TYPES.map { it.wire to it.label },
             selected = panel.draft.feedingType,
             tagPrefix = { TestTags.feedingTypeChip(it) },
             onSelect = callbacks::onFeedingTypeChange,
         )
-        Text("Method", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp))
+        Text("Method", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
         ChoiceChipRow(
             options = FeedingOptions.methodsFor(panel.draft.feedingType).map { it.wire to it.label },
             selected = panel.draft.feedingMethod,
@@ -413,7 +530,7 @@ private fun FeedingFields(panel: OpenPanel, callbacks: QuickActionCallbacks) {
             value = panel.draft.amountText,
             onValueChange = callbacks::onAmountChange,
             supportingText = "mL — optional for nursing",
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 8.dp),
         )
     }
 }
@@ -497,6 +614,8 @@ private fun AmountField(
         label = { Text("Amount") },
         supportingText = supportingText?.let { { Text(it) } },
         singleLine = true,
+        keyboardOptions = imeDoneOptions,
+        keyboardActions = doneKeyboardActions(),
         modifier = modifier
             .fillMaxWidth()
             .testTag(TestTags.PANEL_AMOUNT),
@@ -514,9 +633,11 @@ private fun NoteField(
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
+        keyboardOptions = imeDoneOptions,
+        keyboardActions = doneKeyboardActions(),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp)
+            .padding(top = 8.dp)
             .testTag(TestTags.PANEL_NOTE),
     )
 }

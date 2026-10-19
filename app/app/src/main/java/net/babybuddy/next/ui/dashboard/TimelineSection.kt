@@ -49,9 +49,14 @@ private val timeOfDayFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
  * The merged six-type timeline (spec §4): day-grouped, newest first, rows with type icon +
- * headline + note preview + sync badge, trailing time-of-day and duration. Pull-to-refresh and
- * paged older-load are handled by the caller-provided callbacks; rows are clickable (Quick Edit
- * arrives in Stage 3) and long-pressable (opens the entry on the Baby Buddy web UI).
+ * headline + note preview + sync marking, trailing time-of-day and duration. Pull-to-refresh and
+ * paged older-load are handled by the caller-provided callbacks; rows are clickable (Quick Edit)
+ * and long-pressable (opens the entry on the Baby Buddy web UI).
+ *
+ * [leadingItem] (owner rework U2): the running-timer card is composed as the list's FIRST item —
+ * literally "an expanded top element of the list" — so it scrolls with the timeline and a focused
+ * text field inside it is brought into view above the keyboard (the fixed header + grid never
+ * move).
  */
 @Composable
 fun TimelineSection(
@@ -64,18 +69,30 @@ fun TimelineSection(
     onLoadOlder: () -> Unit,
     modifier: Modifier = Modifier,
     scrollToUuid: String? = null,
+    leadingItem: (@Composable () -> Unit)? = null,
 ) {
     if (totalCount == 0) {
-        EmptyTimeline(modifier = modifier)
+        Column(modifier = modifier) {
+            leadingItem?.invoke()
+            EmptyTimeline(modifier = Modifier.weight(1f))
+        }
         return
     }
     val listState = rememberLazyListState()
-    // "View last entry" (duplicate guard, spec §3.7): jump to the named row when present.
+    val leadingCount = if (leadingItem != null) 1 else 0
+    // A keyed LazyColumn anchors its scroll position to the first visible item's KEY, so an
+    // item inserted at index 0 lands ABOVE the viewport. The card must be seen the moment a
+    // timer starts: reveal it explicitly.
+    LaunchedEffect(leadingItem != null) {
+        if (leadingItem != null) listState.animateScrollToItem(0)
+    }
+    // "View last entry" (duplicate guard, spec §3.7) and the post-save reveal (U2): jump to
+    // the named row when present (same key-anchoring reason).
     LaunchedEffect(scrollToUuid, events.size) {
         if (scrollToUuid == null) return@LaunchedEffect
         val index = events.indexOfFirst { it.localUuid == scrollToUuid }
         if (index >= 0) {
-            listState.animateScrollToItem(index)
+            listState.animateScrollToItem(index + leadingCount)
         }
     }
     // Paged older-load: when the list cannot scroll FURTHER DOWN (the true end of the rendered
@@ -95,6 +112,9 @@ fun TimelineSection(
             .testTag(TestTags.DASHBOARD_TIMELINE),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        if (leadingItem != null) {
+            item(key = "leading-card") { leadingItem() }
+        }
         items(events, key = { it.localUuid }) { event ->
             val failed = event.syncState == SyncState.FAILED
             TimelineRow(
@@ -186,17 +206,27 @@ private fun TimelineRow(
                 .padding(vertical = 8.dp)
                 .testTag(TestTags.timelineRow(event.localUuid)),
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(40.dp),
-            ) {
-                androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(event.type.iconRes()),
-                        contentDescription = event.type.label,
-                        modifier = Modifier.size(22.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            // U11: the type's semantic color is the scan layer; U7: a FAILED entry carries the
+            // warning badge ON the icon (normal row height; the tap explains).
+            val typeColors = event.type.typeColorPair()
+            androidx.compose.foundation.layout.Box {
+                Surface(
+                    shape = CircleShape,
+                    color = typeColors.container,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painterResource(event.type.iconRes()),
+                            contentDescription = event.type.label,
+                            modifier = Modifier.size(22.dp),
+                            tint = typeColors.onContainer,
+                        )
+                    }
+                }
+                if (event.syncState == SyncState.FAILED) {
+                    FailedIconBadge(
+                        modifier = Modifier.align(Alignment.TopEnd),
                     )
                 }
             }
@@ -208,7 +238,16 @@ private fun TimelineRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         EventHeadline.headline(event),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            // U8: note content reads as WORDS, not a structured event — italics
+                            // keep it unmistakably distinct from type labels it could collide
+                            // with ("Feeding interrupted" the note vs a feeding event).
+                            fontStyle = if (event.type == EventType.NOTE) {
+                                androidx.compose.ui.text.font.FontStyle.Italic
+                            } else {
+                                null
+                            },
+                        ),
                         maxLines = if (event.type == EventType.NOTE) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -230,7 +269,9 @@ private fun TimelineRow(
                     preview?.let { note ->
                         Text(
                             note,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -240,7 +281,6 @@ private fun TimelineRow(
                     }
                     SyncBadge(
                         state = SyncState.valueOf(event.syncState.name),
-                        onTapFailed = onFailedBadge,
                     )
                 }
             }

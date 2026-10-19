@@ -275,4 +275,57 @@ class WidgetStateMapperTest {
         assertEquals("pump", WidgetStateMapper.friendlyNoun(EventType.PUMPING))
         assertEquals("nap", WidgetStateMapper.friendlyNoun(EventType.SLEEP))
     }
+
+    // -- U10: subdued "last" line on idle slots -------------------------------------------
+
+    @Test
+    fun `idle slot whispers when its type last happened (compact since)`() {
+        val slots = WidgetStateMapper.quickActionSlots(
+            configured = listOf(EventType.CHANGE, EventType.FEEDING),
+            timers = emptyList(),
+            childId = 1,
+            nowMillis = now,
+            latest = mapOf(
+                EventType.CHANGE to event(EventType.CHANGE, endedMinutesAgo = 90),
+                EventType.FEEDING to event(EventType.FEEDING, endedMinutesAgo = 3 * 24 * 60 + 5),
+            ),
+        )
+        assertEquals("1h30m", slots[0].lastText)
+        assertEquals("3d", slots[1].lastText)
+    }
+
+    @Test
+    fun `running slot shows elapsed, not the last line`() {
+        val slots = WidgetStateMapper.quickActionSlots(
+            configured = listOf(EventType.SLEEP),
+            timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 17)),
+            childId = 1,
+            nowMillis = now,
+            latest = mapOf(EventType.SLEEP to event(EventType.SLEEP, endedMinutesAgo = 50)),
+        )
+        assertTrue(slots[0].running)
+        assertEquals("17m", slots[0].elapsedText)
+        assertNull("a running slot must not also whisper 'last'", slots[0].lastText)
+    }
+
+    @Test
+    fun `idle slot with no history has no last line`() {
+        val slots = WidgetStateMapper.quickActionSlots(
+            configured = listOf(EventType.PUMPING),
+            timers = emptyList(),
+            childId = 1,
+            nowMillis = now,
+            latest = emptyMap(),
+        )
+        assertNull(slots[0].lastText)
+    }
+
+    @Test
+    fun `compact since keeps minutes under an hour and zero pads the remainder`() {
+        assertEquals("45m", WidgetStateMapper.compactSince(45 * 60_000L))
+        assertEquals("1h30m", WidgetStateMapper.compactSince(90 * 60_000L))
+        assertEquals("2h05m", WidgetStateMapper.compactSince(125 * 60_000L))
+        assertEquals("2d", WidgetStateMapper.compactSince(48 * 60 * 60_000L + 30_000))
+        assertEquals("0m", WidgetStateMapper.compactSince(-1))
+    }
 }

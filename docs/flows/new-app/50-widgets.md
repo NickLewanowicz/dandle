@@ -4,6 +4,15 @@ Implementation reference: `docs/flows/new-app/widgets.md`. Engineer's placement/
 
 **Purpose:** re-verify the engineer's widget claims independently: placement + live data, tap semantics (trampoline vs deep-link), refresh triggers, and configuration.
 
+
+## v0.4 — owner UI rework (U10)
+
+- **Quick Actions tiles whisper the last activity**: an idle tile shows a subdued second line under its label — compact since-text `45m` / `1h30m` / `2d` (newest event of that type for the widget's child; none when there is no history). `WidgetStateMapper.compactSince` + `QuickActionSlot.lastText`, pinned by `WidgetStateMapperTest`.
+- **Running tiles light up in their semantic type color** (not the generic accent) with the elapsed counter replacing the label; the last-line is hidden while running. Dark/light pairs from `TypeColors`.
+- "Opens app on the timers strip" below now reads: opens the app with the running-timer **card** below the buttons (the strip no longer exists); a running tile's tap goes straight to the stop-guard dialog (T5, unchanged).
+
+Screenshots: `06-widgets-01-home-both-widgets` (idle tiles with last-lines), `06-widgets-03-home-sleep-running` (sleep tile lit in indigo with elapsed).
+
 ## How to verify
 
 - The two Glance widgets live on the launcher — drive with `adb shell uiautomator dump` + `input tap` (cells expose text/content-desc: `Sleep`, `Bottle`, `Diaper`, `Pump`, `Last feed`, …, `Running: Sleep — 0m — tap to stop`); no in-app tags involved.

@@ -14,8 +14,9 @@
 #   A1 save-visibility: after saving a diaper via the quick-action panel, the
 #      uiautomator dump must contain a "Today" timeline row showing our unique
 #      "Wet (Green)" headline within 5 s — WITHOUT restart or refresh.
-#   A2 edit-update: after a -15m stepper nudge + Save, the timeline must show
-#      the nudged HH:mm within 5 s.
+#   A2 edit-update: after moving START one hour earlier through the native
+#      time picker (owner rework U6 — no steppers) + Save, the timeline row
+#      must show the new HH:mm within 10 s.
 # T1 regression history (persona round 1, triage FINAL): the timeline used to
 # stop re-rendering from Room (rows appeared only after restart/refresh), and
 # BOTH canaries FAILED — that failure was the regression evidence. FIXED
@@ -216,27 +217,26 @@ type_into() {
   return 1
 }
 
-hide_kb() {  # dismiss the IME and VERIFY it is gone. A tap issued while the
-             # keyboard window is up is consumed by the IME, not the app — and
-             # the IME show is ASYNC: right after typing, mInputShown can still
-             # be false while the keyboard animates in, so a single "false"
-             # check is not trusted (re-checked after a beat).
-  local i=0
-  while :; do
+hide_kb() {  # dismiss the IME via the field's own Done action and VERIFY.
+             # Every single-line field in the app maps Done -> clearFocus, so
+             # after ENTER nothing is focused and no later uiautomator pass can
+             # re-summon the keyboard. NO other key events: ESC/BACK act as
+             # "dismiss" on a bottom sheet or dialog window (observed: the
+             # create sheet vanished mid-step), and dumpsys' mInputShown lies
+             # in Gboard's zombie state, so a conditional ESC fires wrongly.
+  ash input keyevent 66
+  sleep 1.5
+  local i
+  for i in 1 2 3; do
     if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
-      ash input keyevent 4
-      sleep 2
-      i=$((i + 1))
-      (( i >= 4 )) && { warn "keyboard would not dismiss"; return 1; }
-    else
       sleep 1
-      if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
-        continue   # it popped up after all - dismiss on the next pass
-      fi
+    else
       sleep 1
       return 0
     fi
   done
+  warn "keyboard still reported shown after Done (continuing)"
+  return 0
 }
 
 # expand_sheet: the quick edit sheet opens HALF-expanded — its time rows,
@@ -266,14 +266,25 @@ handle_anr() {
 # layout bounds but taps land on nothing. Dump failures (wedged UiAutomation)
 # are waited out WITHOUT swiping; only genuinely-too-low bounds scroll.
 ensure_visible() {
-  local tag="$1" i b y2 xml
-  for i in 1 2 3 4 5 6; do
+  # Small upward drags (12% of the screen) that start ABOVE any keyboard
+  # (the IME occupies the bottom ~43%): the running-timer card is the
+  # timeline's first list item (U2) and content clipped out of the list's
+  # viewport is pruned from the uiautomator tree — a big 40% fling scrolled
+  # the card clean out of view; a drag that starts on the keyboard scrolls
+  # nothing. Also tolerates a visible keyboard: a node whose bottom edge sits
+  # above it is tappable without dismissing the IME at all.
+  local tag="$1" i b b2 y2 xml limit
+  for i in 1 2 3 4 5 6 7 8 9 10; do
     if xml="$(dump_with_retry 2>/dev/null)"; then
       if b="$(bounds_of "$xml" "$tag")"; then
         y2="$(printf '%s' "$b" | awk '{print $4}')"
-        (( y2 <= SCREEN_H - 120 )) && return 0
+        limit=$(( SCREEN_H - 40 ))
+        if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
+          limit=$(( SCREEN_H * 55 / 100 ))
+        fi
+        (( y2 <= limit )) && return 0
       fi
-      ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 72 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 32 / 100 ))" 250
+      ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 50 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 38 / 100 ))" 300
     fi
     sleep 2
   done
@@ -302,7 +313,15 @@ sheet_time_value() {
 }
 
 # Visible-safe variants for panel/sheet content that may sit below the fold.
-vtag()  { ensure_visible "$1" && tap_tag "$1"; }
+# vtag: reveal, then tap the already-resolved bounds — NOT a second dump. A
+# second uiautomator pass can re-show the IME for a focused text field and the
+# window re-shrinks mid-flight, so the tap misses (observed on device).
+vtag() {
+  local b x1 y1 x2 y2
+  b="$(reveal_tag "$1")" || return 1
+  read -r x1 y1 x2 y2 <<< "$b"
+  ash input tap "$(( (x1 + x2) / 2 ))" "$(( (y1 + y2) / 2 ))"
+}
 vtype() { ensure_visible "$1" && type_into "$1" "$2"; }
 
 # save_panel <TYPE> [no-accept-dup]: save the open quick-action panel.
@@ -318,13 +337,13 @@ save_panel() {
   # closed (a tap under the keyboard window is silently eaten otherwise)
   for i in 1 2 3; do
     hide_kb || true
-    if [[ "$type" == "CHANGE" || "$type" == "NOTE" ]]; then
-      vtag "dashboard/panel/save" || { warn "panel/save unreachable for $type"; return 1; }
-    else
-      if ! tap_tag "dashboard/timer/$type/save" 2>/dev/null; then
-        vtag "dashboard/panel/save" || { warn "no save path for $type"; return 1; }
-      fi
-    fi
+    # Reveal the save once, then tap the RESOLVED coordinates (see reveal_tag).
+    # The card is a list item (U2): its icon-only save may sit below the fold or
+    # below the keyboard.
+    local sb stag
+    if [[ "$type" == "CHANGE" || "$type" == "NOTE" ]]; then stag="dashboard/panel/save"; else stag="dashboard/timer/$type/save"; fi
+    sb="$(reveal_tag "$stag")" || { warn "no save path for $type ($stag)"; return 1; }
+    ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     sleep 3
     xml="$(dump_with_retry 2>/dev/null)" || return 0
     if ! bounds_of "$xml" "dashboard/panel/$type" >/dev/null; then
@@ -450,25 +469,160 @@ wait_focus_pkg() {  # wait until the app package holds the window focus
 # Stop a running <TYPE> timer via the STRIP's own Discard button (no dialog,
 # minimal dumps — ticking counters make dumps flaky). Falls back to the
 # card -> stop-dialog path. Best-effort, never fatal.
-discard_timer() {
+discard_timer() {  # owner rework U3: the card has no ✕ — re-tapping the type's
+                   # button IS tap-to-stop (StopGuard: >10 s dialog, ≤10 s silent)
   local type="$1" xml
-  if tap_tag "dashboard/timer/$type/discard" 2>/dev/null; then
-    sleep 2
-    # the strip discard runs the stop guard: >10 s opens the stop dialog
-    xml="$(dump_with_retry 2>/dev/null)" || return 0
-    if bounds_of "$xml" "dashboard/stop_dialog" >/dev/null; then
-      tap_tag "dashboard/stop_dialog/discard" || true
-      sleep 1
-    fi
-    return 0
-  fi
-  tap_tag "dashboard/timer/$type" || { warn "no timer card for $type"; return 0; }
+  scroll_top
+  tap_tag "dashboard/quick_action/$type" || { warn "no quick action for $type"; return 0; }
   sleep 2
   xml="$(dump_with_retry)" || return 1
   if bounds_of "$xml" "dashboard/stop_dialog" >/dev/null; then
     tap_tag "dashboard/stop_dialog/discard" || true
   fi
   wait_gone_tag "dashboard/stop_dialog" 8 || warn "stop dialog still open after discard ($type)"
+}
+
+# tap_node_lowest <attr> <value>: tap the LOWEST (max-y) node whose <attr>
+# (text | content-desc) equals <value>. The native time picker's big selected
+# hour/minute field carries the SAME content-desc as its dial label
+# ("1 o'clock"); the dial label is always lower on screen, so it wins.
+tap_node_lowest() {
+  local attr="$1" val="$2" xml best="" by=-1 m x1 y1 x2 y2
+  xml="$(dump_with_retry)" || return 1
+  while IFS= read -r m; do
+    [[ -z "$m" ]] && continue
+    read -r x1 y1 x2 y2 <<< "$(printf '%s' "$m" | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+    if (( y1 > by )); then by=$y1; best="$x1 $y1 $x2 $y2"; fi
+  done <<< "$(printf '%s' "$xml" | grep -oE "$attr=\"$val\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"")"
+  [[ -n "$best" ]] || { printf 'ERROR: node not found: %s=%s\n' "$attr" "$val" >&2; return 1; }
+  read -r x1 y1 x2 y2 <<< "$best"
+  ash input tap "$(( (x1 + x2) / 2 ))" "$(( (y1 + y2) / 2 ))"
+}
+
+# node_center_lowest <attr> <value> <xml>: "x y" of the lowest matching node.
+node_center_lowest() {
+  local attr="$1" val="$2" xml="$3" by=-1 m x1 y1 x2 y2 cx="" cy=""
+  while IFS= read -r m; do
+    [[ -z "$m" ]] && continue
+    read -r x1 y1 x2 y2 <<< "$(printf '%s' "$m" | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+    if (( y1 > by )); then by=$y1; cx=$(( (x1+x2)/2 )); cy=$(( (y1+y2)/2 )); fi
+  done <<< "$(printf '%s' "$xml" | grep -oE "$attr=\"$val\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"")"
+  [[ -n "$cx" ]] || return 1
+  echo "$cx $cy"
+}
+
+# pick_time <value_tag> <HH24> <MM>: set a time row through the native Material
+# time picker (owner rework U6: the ONLY time-editing affordance). AM/PM and the
+# hour go through the dial (labels expose content-desc "N o'clock"; selecting an
+# hour flips the dial to minutes); the exact minute is tapped at its angle on the
+# minute dial (labels sit at every 5 min — "N minutes" — but the dial selects any
+# minute from the touch position). Tags inside the sheet reach the dump since
+# dialogTestTags() (QA finding #8 resolved).
+pick_time() {
+  local tag="$1" hh="$2" mm="$3" xml h12 period
+  vtag "$tag" || return 1
+  wait_text "Pick a time" 8 || return 1
+  if (( 10#$hh >= 12 )); then period="PM"; else period="AM"; fi
+  h12=$(( 10#$hh % 12 )); (( h12 == 0 )) && h12=12
+  tap_row_text "$period" || true
+  sleep 1
+  tap_node_lowest "content-desc" "$h12 o'clock" || return 1
+  sleep 1
+  xml="$(dump_with_retry)" || return 1
+  local top bottom x0 y0 x30 y30 cx cy r mx my
+  top="$(node_center_lowest "content-desc" "0 minutes" "$xml")" || { warn "minute dial '0 minutes' label not found"; return 1; }
+  bottom="$(node_center_lowest "content-desc" "30 minutes" "$xml")" || { warn "minute dial '30 minutes' label not found"; return 1; }
+  read -r x0 y0 <<< "$top"; read -r x30 y30 <<< "$bottom"
+  cx=$(( (x0 + x30) / 2 )); cy=$(( (y0 + y30) / 2 )); r=$(( (y30 - y0) / 2 ))
+  read -r mx my <<< "$(python3 -c "import math; a=math.radians((int('$mm')+0.7)*6-90); print(int($cx+$r*math.cos(a)), int($cy+$r*math.sin(a)))")"
+  # A tap snaps to the nearest 5-minute label; a short DRAG that ends on the
+  # target angle selects the exact minute (verified on device).
+  ash input swipe "$x30" "$y30" "$mx" "$my" 400
+  sleep 1
+  tap_row_text "OK" || return 1
+  sleep 1
+}
+
+# reveal_tag <resource-id>: like vtag but ECHOES the node bounds ("x1 y1 x2 y2")
+# once visible, so the caller can tap the already-resolved coordinates. A second
+# dump after revealing is not safe: uiautomator's accessibility pass can RE-SHOW
+# the IME for a still-focused text field (observed on device), the window
+# re-shrinks mid-flight, and a tap computed from the second dump misses.
+reveal_tag() {
+  # IMPORTANT: read the IME state AFTER the dump, not before — the dump itself
+  # re-shows the keyboard for a focused text field (its accessibility pass
+  # re-focuses), so a check taken before the dump reports a stale state and
+  # the "found" bounds end up BEHIND the keyboard, where the tap lands on
+  # Gboard. Same for the swipe: it must stay inside the visible area.
+  local tag="$1" i b y2 xml limit
+  for i in 1 2 3 4 5 6 7 8; do
+    # First pass: let a freshly-opened sheet/card FINISH its slide-in — bounds
+    # captured mid-animation belong to a layout that no longer exists.
+    [[ "$i" == 1 ]] && sleep 2
+    xml="$(dump_with_retry 2>/dev/null)" || { sleep 2; continue; }
+    limit=$(( SCREEN_H - 40 ))
+    if ash dumpsys input_method 2>/dev/null | tr -d '\r' | grep -q 'mInputShown=true'; then
+      limit=$(( SCREEN_H * 55 / 100 ))
+    fi
+    if b="$(bounds_of "$xml" "$tag")"; then
+      y2="$(printf '%s' "$b" | awk '{print $4}')"
+      if (( y2 <= limit )); then
+        # Stability gate: re-dump after a beat and require UNCHANGED bounds —
+        # coordinates captured mid-animation (sheets settling, list scrolls)
+        # belong to a layout that no longer exists by tap time.
+        sleep 1
+        if xml="$(dump_with_retry 2>/dev/null)"; then
+          if b2="$(bounds_of "$xml" "$tag")" && [[ "$b2" == "$b" ]]; then
+            printf '%s\n' "$b"; return 0
+          fi
+        fi
+      fi
+    fi
+    ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 45 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 35 / 100 ))" 300
+    sleep 2
+  done
+  warn "could not bring $tag on screen"
+  return 1
+}
+
+# find_row_text <text> [n]: scroll the timeline (small drags) until the text is
+# in the dump, then tap it. Rows below the fold never reach uiautomator, and the
+# Today group is long after a full run — plain tap_row_text missed them.
+find_row_text() {
+  local text="$1" i
+  scroll_top   # newest rows live at the top; look there before scrolling down
+  for i in 1 2 3 4 5 6; do
+    if tap_row_text "$text"; then return 0; fi
+    ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 62 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 42 / 100 ))" 300
+    sleep 1.5
+    # A mid-scroll dump can miss a row that is actually present — re-look at
+    # rest once per cycle before scrolling further.
+    if tap_row_text "$text"; then return 0; fi
+  done
+  warn "row text never found while scrolling: $text"
+  return 1
+}
+
+# open_timer_card <TYPE>: tap the type's button expecting a FRESH card. A
+# leftover running timer (previous run, before the app's refresh reconciles it
+# away) turns that tap into tap-to-stop (U3) — discard it and tap again.
+open_timer_card() {
+  local type="$1" xml
+  tap_tag "dashboard/quick_action/$type" || return 1
+  sleep 2
+  if xml="$(dump_with_retry 2>/dev/null)" && bounds_of "$xml" "dashboard/stop_dialog" >/dev/null; then
+    warn "leftover $type timer — discarding it and starting fresh"
+    tap_tag "dashboard/stop_dialog/discard" || true
+    sleep 2
+    tap_tag "dashboard/quick_action/$type" || return 1
+  fi
+  wait_for_tag "dashboard/panel/$type" 15 2 >/dev/null
+}
+
+# sheet_time_value <xml> <n>: the Nth "Today HH:MM"-style value on the edit
+# sheet (1 = START/TIME, 2 = END) — unique to the sheet (rows show bare HH:mm).
+sheet_time_value() {
+  printf '%s' "$1" | grep -oE 'text="[^"]+ [0-9]{2}:[0-9]{2}"' | sed -n "${2}p" | sed -E 's/^text="([^"]*)".*/\1/'
 }
 
 # ------------------------------------------------------------- API cleanup ---
@@ -574,6 +728,7 @@ restore_state() {
   printf '==> capture-flows done (failures=%s, rc=%s)\n' "$FAILURES" "$rc"
   exit "$rc"
 }
+B_START_HH=""; B_START_MM=""   # group 05: sleep B's original START (resolve step)
 trap restore_state EXIT
 
 # ----------------------------------------------------------- precondition ---
@@ -703,6 +858,12 @@ g01_login() {
     if xml="$(dump_with_retry 2>/dev/null)"; then
       if   bounds_of "$xml" "dashboard"       >/dev/null; then state="dashboard"; break
       elif bounds_of "$xml" "login/server_url" >/dev/null; then state="login";     break
+      elif bounds_of "$xml" "dashboard/panel/close" >/dev/null; then
+        # A create sheet restored from a previous run's draft (process-death restore is a
+        # feature) — it is its own window and hides the dashboard tags. Close it.
+        warn "restored create sheet at launch — closing it"
+        tap_tag "dashboard/panel/close" || true
+        sleep 2
       elif printf '%s' "$xml" | grep -q "isn't responding"; then
         warn "ANR dialog detected — tapping Wait"
         tap_text "$xml" "Wait" || true
@@ -719,7 +880,14 @@ g01_login() {
 
   if [[ "$state" == "dashboard" ]]; then
     step "01: already logged in — signing out via the app to reach the login states"
-    tap_tag "dashboard/overflow" || { warn "overflow missing"; return 1; }
+    # The first post-boot dump can catch the dashboard mid-composition (grid
+    # present, header not yet) — retry the tap a few times before giving up.
+    local oi ov_ok=0
+    for oi in 1 2 3 4 5; do
+      if tap_tag "dashboard/overflow" 2>/dev/null; then ov_ok=1; break; fi
+      sleep 3
+    done
+    (( ov_ok )) || { warn "overflow missing"; return 1; }
     local xml2
     xml2="$(dump_with_retry)" || return 1
     tap_text "$xml2" "Sign out" || { warn "Sign out menu item missing"; ash input keyevent 4; return 1; }
@@ -792,7 +960,7 @@ g03_quickactions() {
   scroll_top
 
   step "03: FEEDING panel + type/method cascade"
-  if tap_tag "dashboard/quick_action/FEEDING" && wait_for_tag "dashboard/panel/FEEDING" 15 2 >/dev/null; then
+  if open_timer_card FEEDING; then
     shot 03-quickactions-01-feeding-panel
     vtag "dashboard/panel/feeding_type/formula" && sleep 1
     shot 03-quickactions-02-feeding-cascade   # methods drop to bottle/parent fed/self fed
@@ -806,16 +974,22 @@ g03_quickactions() {
   fi
   scroll_top
 
-  step "03: DIAPER panel + extra options"
+  step "03: DIAPER sheet + extra options"
   if tap_tag "dashboard/quick_action/CHANGE" && wait_for_tag "dashboard/panel/CHANGE" 15 2 >/dev/null; then
-    shot 03-quickactions-03-diaper-panel   # Save disabled: Wet/Solid both off
-    vtag "dashboard/panel/wet" || true
-    vtag "dashboard/panel/extra_options" && sleep 1
+    sleep 2   # let the sheet finish its slide-in before any coordinates are read
+    # Toggle rows are driven by TEXT taps: the sheet is its own window whose
+    # content settles late, and tag-based taps raced its slide-in (bounds up to
+    # 130px off). Text nodes in the sheet's window are stable once it is at
+    # rest, and while the sheet is up they are unambiguous.
+    shot 03-quickactions-03-diaper-sheet   # Save disabled: Wet/Solid both off
+    vtag "dashboard/panel/wet" || warn "wet toggle tap failed"
+    vtag "dashboard/panel/extra_options" && sleep 1.5
     shot 03-quickactions-04-diaper-extra-options   # color chips + amount
-    vtag "dashboard/panel/color/green" || true
+    vtag "dashboard/panel/color/green" || warn "green chip tap failed"
     vtype "dashboard/panel/amount" "73" && hide_kb
-    scroll_top   # collapse is at the top of the panel; bring it back
-    vtag "dashboard/panel/extra_options" || true   # collapse again so Save is reachable
+    # Collapse so Save is reachable (the row reads "Hide extra options" while
+    # expanded — an exact-match tap on "Extra options" would silently miss).
+    vtag "dashboard/panel/extra_options" || true
     save_panel "CHANGE" || true
     wait_gone_tag "dashboard/panel/CHANGE" 15 || warn "diaper panel did not close after save"
 
@@ -842,8 +1016,9 @@ g03_quickactions() {
 
   step "03: duplicate guard (diaper saved seconds ago -> save again)"
   if tap_tag "dashboard/quick_action/CHANGE" && wait_for_tag "dashboard/panel/CHANGE" 15 2 >/dev/null; then
+    sleep 2
     vtag "dashboard/panel/wet" || true
-    vtag "dashboard/panel/save" || true   # pops the duplicate dialog - captured next
+    save_panel "CHANGE" no-accept-dup || true   # pops the duplicate dialog - captured next
     if wait_for_tag "dashboard/duplicate_dialog" 10 2 >/dev/null; then
       shot 03-quickactions-05-duplicate-guard
       ash input keyevent 4   # dismiss WITHOUT adding (no cleanup needed)
@@ -853,15 +1028,16 @@ g03_quickactions() {
     fi
     tap_tag "dashboard/panel/close" || ash input keyevent 4
   else
-    warn "duplicate-guard diaper panel failed"
+    warn "duplicate-guard diaper sheet failed"
   fi
   scroll_top
 
-  step "03: SLEEP running panel, then >10s stop-guard dialog"
-  if tap_tag "dashboard/quick_action/SLEEP" && wait_for_tag "dashboard/panel/SLEEP" 15 2 >/dev/null; then
+  step "03: SLEEP running card (below the buttons), then >10s stop-guard dialog"
+  if open_timer_card SLEEP; then
     shot 03-quickactions-06-sleep-running   # live counter visible
     sleep 12                                # must exceed 10 s for the stop guard
-    if tap_tag "dashboard/timer/SLEEP" || { scroll_top; tap_tag "dashboard/timer/SLEEP"; }; then
+    scroll_top
+    if tap_tag "dashboard/quick_action/SLEEP"; then   # U3: tap-to-stop (no ✕ on the card)
       if wait_for_tag "dashboard/stop_dialog" 10 2 >/dev/null; then
         shot 03-quickactions-07-sleep-stopguard   # Save emphasized
         tap_tag "dashboard/stop_dialog/discard" || true
@@ -869,7 +1045,7 @@ g03_quickactions() {
         warn "stop dialog did not appear for sleep"
       fi
     else
-      warn "could not tap the running sleep timer card"
+      warn "could not re-tap the running sleep quick action"
     fi
     wait_gone_tag "dashboard/panel/SLEEP" 10 || true
   else
@@ -889,7 +1065,7 @@ g03_quickactions() {
   scroll_top
 
   step "03: PUMPING panel (discarded <10s, silently)"
-  if tap_tag "dashboard/quick_action/PUMPING" && wait_for_tag "dashboard/panel/PUMPING" 15 2 >/dev/null; then
+  if open_timer_card PUMPING; then
     shot 03-quickactions-09-pumping-panel
     discard_timer "PUMPING"
   else
@@ -898,7 +1074,7 @@ g03_quickactions() {
   scroll_top
 
   step "03: TUMMY TIME panel (discarded <10s, silently)"
-  if tap_tag "dashboard/quick_action/TUMMY_TIME" && wait_for_tag "dashboard/panel/TUMMY_TIME" 15 2 >/dev/null; then
+  if open_timer_card TUMMY_TIME; then
     shot 03-quickactions-10-tummytime-panel
     discard_timer "TUMMY_TIME"
   else
@@ -915,27 +1091,28 @@ g04_edit() {
   restart_app || true   # T1 workaround: only a restart renders the g03 rows
   scroll_top
 
-  step "04: feeding sheet + -15m nudge"
-  if tap_row_text "Bottle · 149 mL" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  step "04: feeding sheet + START moved one hour earlier via the native picker"
+  if find_row_text "Bottle · 149 mL" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
-    local xml before after new_hm changed
+    local xml before after new_hm changed hh mm
     xml="$(dump_with_retry)" || return 1
-    # The sheet is a Compose DIALOG window: test tags inside it never reach
-    # uiautomator (QA finding #8), so read the START value by its day-prefixed
-    # text ("Today 18:53") — unique to the sheet (timeline rows show bare HH:mm).
-    sheet_start_value() {
-      printf '%s' "$1" | grep -oE 'text="[^"]+ [0-9]{2}:[0-9]{2}"' | head -1 | sed -E 's/^text="([^"]*)".*/\1/'
-    }
-    before="$(sheet_start_value "$xml")"
-    shot 04-edit-01-feeding-sheet   # START + END stepper rows visible
-    # Tag invisible in dialog windows (QA finding #8): tap the visible "-15m" text.
-    tap_row_text "−15m" || tap_row_text "-15m" || warn "start_minus stepper missing"
+    before="$(sheet_time_value "$xml" 1)"
+    shot 04-edit-01-feeding-sheet   # START + END native-picker rows visible (U6)
+    hh="${before##* }"; mm="${hh#*:}"; hh="${hh%%:*}"
+    if [[ "$hh" =~ ^[0-9]+$ ]]; then
+      pick_time "edit/sheet/time_start" "$(( (10#$hh + 23) % 24 ))" "$mm" || warn "start picker flow failed"
+    else
+      warn "could not parse START value ($before)"
+    fi
     sleep 1
     xml="$(dump_with_retry)" || return 1
-    after="$(sheet_start_value "$xml")"
-    shot 04-edit-02-feeding-nudged   # value visibly changed
-    if [[ -n "$before" && -n "$after" && "$before" != "$after" ]]; then changed=1; else changed=0; fi
-    assert_chk "$changed" "A2a edit sheet value visibly changed after -15m ($before -> $after)"
+    after="$(sheet_time_value "$xml" 1)"
+    shot 04-edit-02-feeding-picked   # value visibly changed
+    if [[ -n "$before" && -n "$after" && "$before" != "$after" && "$after" == Today* ]]; then changed=1; else changed=0; fi
+    # "Today*" guards a date-picker regression that produced TOMORROW for evening
+    # times (UTC round-trip); an hour-earlier move always stays on the same day
+    # (except within the first hour after midnight — accepted edge).
+    assert_chk "$changed" "A2a edit sheet value visibly changed via the native time picker, same day ($before -> $after)"
     new_hm="${after##* }"
     # Save by text (dialog-window tags are invisible to uiautomator, QA finding #8).
     if tap_row_text "Save"; then
@@ -960,7 +1137,7 @@ g04_edit() {
   fi
 
   step "04: diaper sheet + delete-confirm dialog"
-  if tap_row_text "Wet (Green)" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  if find_row_text "Wet (Green)" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
     shot 04-edit-03-diaper-sheet   # Wet/Solid toggles + TIME row
     if vtag "edit/delete" && wait_for_tag "edit/delete_confirm" 10 2 >/dev/null; then
@@ -986,13 +1163,13 @@ offline_note() {  # create a note while offline; 0 if the panel save fired
   wait_gone_tag "dashboard/panel/NOTE" 15 || true
 }
 
-sleep_with_note() {  # start a sleep timer with a marker note, run >10s, save
-                     # via the strip Save (same draft; accepts the duplicate
-                     # guard between the two sleeps)
-  tap_tag "dashboard/quick_action/SLEEP" || return 1
-  wait_for_tag "dashboard/panel/SLEEP" 15 2 >/dev/null || return 1
-  vtype "dashboard/panel/note" "$1" && hide_kb
-  sleep 12                              # >10 s so the stop guard applies
+sleep_with_note() {  # start a sleep timer with a marker note, run >10s (or
+                     # $2 seconds), save via the card's check Save (same draft;
+                     # accepts the duplicate guard between the two sleeps)
+  local note="$1" track="${2:-12}"
+  open_timer_card SLEEP || return 1
+  vtype "dashboard/panel/note" "$note" && hide_kb
+  sleep "$track"                        # >10 s so the stop guard applies
   scroll_top
   save_panel "SLEEP" || return 1
   wait_gone_tag "dashboard/panel/SLEEP" 10 || true
@@ -1055,14 +1232,17 @@ g05_sync_states() {
   shot 05-sync-states-03-synced-badge-cleared
 
   step "05: overlapping sleep -> FAILED badge + failure dialog"
-  # A and B are created ONLINE (both sync). Then, OFFLINE, A's END is nudged
-  # +15m so it swallows B's window (B is scripted ~60-90 s after A's stop, so
-  # a +1m nudge no longer reaches it); the queued PATCH is rejected at replay
-  # (overlap) and A ends FAILED — resolution path captured below.
-  # One dump flake must not sink the whole overlap scenario: retry each creation.
-  if sleep_with_note "QA-capture-A"; then printf '    sleep A synced\n'
+  # A and B are created ONLINE (both sync). Then, OFFLINE, B's START is moved
+  # one minute EARLIER: start-moves are DURATION-PRESERVING (spec §5), so with
+  # A tracked ~90 s and B starting right after it, B's new window lands
+  # strictly inside A's — a guaranteed overlap, always in the PAST (an
+  # END+1h edit of a just-created entry lands in the future and validation
+  # correctly blocks the save — the scenario never reached the server). The
+  # queued PATCH is rejected at replay (overlap) and B ends FAILED —
+  # resolution path captured below.
+  if sleep_with_note "QA-capture-A" 90; then printf '    sleep A synced\n'
   else scroll_top; sleep 2
-       if sleep_with_note "QA-capture-A"; then printf '    sleep A synced (retry)\n'; else warn "sleep A failed"; fi
+       if sleep_with_note "QA-capture-A" 90; then printf '    sleep A synced (retry)\n'; else warn "sleep A failed"; fi
   fi
   if sleep_with_note "QA-capture-B"; then printf '    sleep B synced\n'
   else scroll_top; sleep 2
@@ -1071,35 +1251,49 @@ g05_sync_states() {
   restart_app || true   # rows visible
   scroll_top
   if "$SCRIPT_DIR/offline.sh" on; then OFFLINE_ON=1; else warn "airplane mode ON failed"; fi
-  sleep 20   # ensure A.end (+1m target) stays in the past when the edit saves
-  if tap_row_text "QA-capture-A" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  sleep 5
+  if find_row_text "QA-capture-B" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
-    # Dialog-window tags are invisible to uiautomator (QA finding #8): the END
-    # row's "+1m" is the SECOND "+1m" on the sheet (START row has the first).
-    local nudge_ok=0 ri
-    for ri in 1 2 3 4 5; do
-      if tap_row_text_nth "+15m" 2; then nudge_ok=1; break; fi
-      sleep 2   # the swipe-scroll settle can transiently hide the row from the dump
-    done
-    (( nudge_ok )) || warn "end +15m stepper missing (after retries)"
+    local xmlE startv shh smm
+    xmlE="$(dump_with_retry)" || true
+    startv="$(sheet_time_value "$xmlE" 1)"; shh="${startv##* }"; smm="${shh#*:}"; shh="${shh%%:*}"
+    local omm="$smm"
+    if [[ "$shh" =~ ^[0-9]+$ ]]; then
+      smm=$(( 10#$smm - 1 )); if (( smm < 0 )); then smm=59; shh=$(( (10#$shh + 23) % 24 )); fi
+      pick_time "edit/sheet/time_start" "$shh" "$smm" || warn "start picker flow failed"
+    else
+      warn "could not parse B's START value ($startv)"
+    fi
+    B_START_HH="$shh"; B_START_MM="$omm"   # resolve restores the ORIGINAL start
     sleep 1
-    tap_row_text "Save" || true
+    sb="$(reveal_tag "edit/save" 2>/dev/null)" && ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     wait_gone_tag "edit/sheet" 10 || true
   else
-    warn "could not edit sleep A (row text missing?)"
+    warn "could not edit sleep B (row text missing?)"
   fi
   if "$SCRIPT_DIR/offline.sh" off; then OFFLINE_ON=0; else warn "airplane mode OFF failed"; fi
-  # the drain rejects the queued PATCH (overlap with B) -> A FAILED
-  local failed=0 i
-  for i in 1 2 3; do
+  # the drain rejects the queued PATCH (overlap with A) -> B FAILED. P1-3 also
+  # surfaces the rejection PROACTIVELY as the failure dialog over the dashboard
+  # (which hides the badge from a dump) — either observation proves it.
+  local failed=0 i sb xmlF
+  # 5 x ~15 s: the offline drain's first attempt can hit NetworkDown (radios
+  # still reconnecting) and WorkManager's retry backoff stretches past 30 s.
+  for i in 1 2 3 4 5; do
     sleep 10
     restart_app || true
-    if bounds_of "$(dump_with_retry 2>/dev/null || true)" "dashboard/badge_failed" >/dev/null 2>&1; then failed=1; break; fi
+    xmlF="$(dump_with_retry 2>/dev/null || true)"
+    if [[ -n "$xmlF" ]] && { bounds_of "$xmlF" "dashboard/badge_failed" >/dev/null 2>&1 || \
+         bounds_of "$xmlF" "edit/failure_dialog" >/dev/null 2>&1 || \
+         printf '%s' "$xmlF" | grep -q "overlaps\|intersects\|another entry"; }; then
+      failed=1; break
+    fi
   done
   if (( failed )); then
     sleep 1
     shot 05-sync-states-04-failed-badge
-    if tap_tag "dashboard/badge_failed" && wait_for_tag "edit/failure_dialog" 10 2 >/dev/null; then
+    if bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/failure_dialog" >/dev/null 2>&1; then
+      shot 05-sync-states-05-failure-dialog
+    elif tap_tag "dashboard/badge_failed" && wait_for_tag "edit/failure_dialog" 10 2 >/dev/null; then
       shot 05-sync-states-05-failure-dialog
     else
       warn "failure dialog not captured"
@@ -1109,27 +1303,49 @@ g05_sync_states() {
     assert_chk 0 "overlap -> FAILED badge (not observed)"
   fi
 
-  step "05: resolve — edit A back to non-overlap, retry, synced"
-  local resolved=0 waited xmlC
+  step "05: resolve — edit B back to non-overlap, retry, synced"
+  local resolved=0 waited xmlC sb
   # If the failure dialog is open: Edit opens the sheet with values intact.
   xmlC="$(dump_with_retry 2>/dev/null || true)"
   if [[ -n "$xmlC" ]] && bounds_of "$xmlC" "edit/failure_dialog" >/dev/null; then
     tap_row_text "Edit" || true
     sleep 1
   fi
+  # Non-overlapping again = one minute LATER than B's original start (the
+  # minute drag on the dial can land ±1; +1 pushes strictly away from A, so a
+  # near-miss still resolves). B happened minutes ago, so this stays past.
+  resolve_start() {
+    local rh="${B_START_HH:-}" rm="${B_START_MM:-}"
+    [[ "$rh" =~ ^[0-9]+$ ]] || { warn "no remembered START for B"; return 1; }
+    rm=$(( 10#$rm + 1 )); if (( rm >= 60 )); then rm=0; rh=$(( (10#$rh + 1) % 24 )); fi
+    pick_time "edit/sheet/time_start" "$rh" "$rm"
+  }
+  # save_resolved_sheet: reveal the sheet's Save, tap it, and require the sheet
+  # to close — the tap races the tick/IME re-layout more often here than
+  # anywhere else, so verify and retry.
+  save_resolved_sheet() {
+    local rb ri
+    for ri in 1 2 3; do
+      rb="$(reveal_tag "edit/save" 2>/dev/null)" || { warn "resolve: save not visible"; return 1; }
+      ash input tap $(( $(echo "$rb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$rb" | awk '{print int(($2+$4)/2)}') ))
+      sleep 3
+      if ! bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/sheet" >/dev/null; then return 0; fi
+    done
+    warn "resolve: sheet would not close after save"
+    return 1
+  }
   if bounds_of "$(dump_with_retry 2>/dev/null || true)" "edit/sheet" >/dev/null; then
-    vtag "edit/stepper/end-1_minus" || warn "end -1m stepper missing"
-    sleep 1
-    vtag "edit/save" || true
-    wait_gone_tag "edit/sheet" 10 || true
-  else
-    # dialog already gone: find A and edit it from the row
-    if tap_row_text "QA-capture-A" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
-      vtag "edit/stepper/end-1_minus" || warn "end -1m stepper missing"
+    resolve_start || warn "start picker (resolve) failed"
+    sleep 1
+    save_resolved_sheet || true
+  else
+    # dialog already gone: find B and edit it from the row
+    if find_row_text "QA-capture-B" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+      expand_sheet
+      resolve_start || warn "start picker (resolve) failed"
       sleep 1
-      vtag "edit/save" || true
-      wait_gone_tag "edit/sheet" 10 || true
+      save_resolved_sheet || true
     fi
   fi
   # the corrected edit syncs; T1 hides the badge change, so verify + re-render

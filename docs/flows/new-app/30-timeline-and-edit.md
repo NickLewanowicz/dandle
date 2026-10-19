@@ -2,6 +2,20 @@
 
 **Purpose:** verify timeline structure (day groups, §4.1 headlines, durations, pull-to-refresh, pagination order) and the Quick Edit sheet (steppers, duration-preserving start moves, inline validation, delete-with-confirm, server PATCH).
 
+
+## v0.4 — owner UI rework (supersedes stepper statements below)
+
+Decisions: `docs/flows/new-app/90-owner-ui-rework.md` (U6–U8, U11). What changed:
+
+- **Native pickers, no steppers.** Each time row (`edit/sheet/time_start`, `edit/sheet/time_end`, or `edit/sheet/time_time` for untimed types) shows the stored value; tapping it opens the Material **TimePicker pre-populated**; the calendar button opens the **DatePicker** then the TimePicker. `edit/stepper/*` tags no longer exist. Start moves stay duration-preserving; validation unchanged. The sheet's inner tags now reach the dump (`dialogTestTags()`), so `edit/save`, `edit/delete`, `edit/retry` are tappable by tag.
+- **Driving the picker from UiAutomator** (`capture-flows.sh` → `pick_time <tag> <HH24> <MM>`): AM/PM by text, the hour via the dial node `content-desc="N o'clock"` (lowest match — the big field shares the description), the exact minute by a short **drag** ending at the minute's angle on the dial (a tap snaps to 5-minute labels); then `OK`.
+- **Type-colored icon chips** on every row (Brief 03 §3). **FAILED** rows carry a small warning badge on the icon's corner (`dashboard/badge_failed` sits on the badge; tapping the row opens the failure dialog) — rows keep their normal height; there is no "Sync failed" pill and no header chip for failures. PENDING keeps the "Will sync" pill.
+- **Notes are italic**: note headlines and note previews on other types' rows.
+
+Screenshots: `04-edit-01-feeding-sheet` (picker rows), `04-edit-02-feeding-picked` (value changed through the picker), `05-sync-states-04-failed-badge` (badge on icon), `05-…-05-failure-dialog`, `05-…-06-resolved-synced`.
+
+How to verify (scripted): group 04 (canaries A2a value changed via picker, A2b row updated in place ≤10 s) and group 05 (overlap → FAILED badge → edit END back via picker → retry → badge cleared).
+
 ## How to verify
 
 - Login + at least one entry of each type (see `20-quick-actions.md`).

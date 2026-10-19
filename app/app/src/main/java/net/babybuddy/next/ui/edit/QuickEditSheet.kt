@@ -64,8 +64,8 @@ private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val compactDateFormat = DateTimeFormatter.ofPattern("MMM d")
 
 /**
- * Quick Edit sheet (functional spec §5, UX spec §4): type fields mirror the create panel,
- * StepperTimeRow fixes a time in ≤3 interactions (−15m/−1m/+1m/+15m + tap-for-picker), start
+ * Quick Edit sheet (functional spec §5, UX spec §4): type fields mirror the create card, each
+ * time is a standard native-picker row ([DateTimeRow], owner rework U6 — no steppers), start
  * moves preserve duration (caller applies TimeEditLogic), inline validation disables Save with
  * a reason, FAILED entries get a failure banner + Retry, Delete is confirmed.
  */
@@ -77,8 +77,6 @@ fun QuickEditSheet(
     validationReason: String?,
     failureReason: String? = null,
     onDraftChange: ((EventDraft) -> EventDraft) -> Unit,
-    onStartStepped: (Long) -> Unit,
-    onEndStepped: (Long) -> Unit,
     onStartTimeSet: (Long) -> Unit,
     onEndTimeSet: (Long) -> Unit,
     onSave: () -> Unit,
@@ -173,29 +171,26 @@ fun QuickEditSheet(
             TypeFields(event.type, draft, onDraftChange)
 
             if (event.type.isTimed) {
-                StepperTimeRow(
+                DateTimeRow(
                     label = "START",
-                    fieldTag = "start",
                     millis = draft.startMillis,
-                    onStepped = onStartStepped,
                     onPicked = onStartTimeSet,
+                    valueTag = "${TestTags.EDIT_SHEET}/time_start",
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                StepperTimeRow(
+                DateTimeRow(
                     label = "END",
-                    fieldTag = "end",
                     millis = draft.endMillis,
-                    onStepped = onEndStepped,
                     onPicked = onEndTimeSet,
+                    valueTag = "${TestTags.EDIT_SHEET}/time_end",
                     modifier = Modifier.padding(top = 8.dp),
                 )
             } else {
-                StepperTimeRow(
+                DateTimeRow(
                     label = "TIME",
-                    fieldTag = "time",
                     millis = draft.startMillis,
-                    onStepped = onStartStepped,
                     onPicked = onStartTimeSet,
+                    valueTag = "${TestTags.EDIT_SHEET}/time_time",
                     modifier = Modifier.padding(top = 16.dp),
                 )
             }
@@ -350,6 +345,8 @@ private fun TypeFields(
             onValueChange = { text -> onDraftChange { it.copy(noteText = text) } },
             label = { Text("Note") },
             minLines = 2,
+            keyboardOptions = net.babybuddy.next.ui.dashboard.imeDoneOptions,
+            keyboardActions = net.babybuddy.next.ui.dashboard.doneKeyboardActions(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
@@ -372,6 +369,8 @@ private fun TypeFields(
                 onValueChange = { text -> onDraftChange { it.copy(milestone = text) } },
                 label = { Text("Milestone") },
                 singleLine = true,
+                keyboardOptions = net.babybuddy.next.ui.dashboard.imeDoneOptions,
+                keyboardActions = net.babybuddy.next.ui.dashboard.doneKeyboardActions(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
@@ -399,6 +398,8 @@ private fun EditAmount(value: Double?, supportingText: String?, onChange: (Doubl
         supportingText = supportingText?.let { { Text(it) } },
         suffix = { Text("mL") },
         singleLine = true,
+        keyboardOptions = net.babybuddy.next.ui.dashboard.imeDoneOptions,
+        keyboardActions = net.babybuddy.next.ui.dashboard.doneKeyboardActions(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
@@ -416,6 +417,8 @@ private fun EditNote(value: String, onChange: (String) -> Unit) {
         onValueChange = onChange,
         label = { Text("Note") },
         singleLine = true,
+        keyboardOptions = net.babybuddy.next.ui.dashboard.imeDoneOptions,
+        keyboardActions = net.babybuddy.next.ui.dashboard.doneKeyboardActions(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
@@ -447,132 +450,5 @@ private fun EditToggle(
                 },
             )
         }
-    }
-}
-
-// -- StepperTimeRow + date/time picker -------------------------------------------------
-
-/**
- * Label + stored value ("Today 14:32") + four compact steppers; tapping the value opens the
- * platform date then time picker. Steps cross midnight/day boundaries freely.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun StepperTimeRow(
-    label: String,
-    fieldTag: String,
-    millis: Long,
-    onStepped: (minutes: Long) -> Unit,
-    onPicked: (millis: Long) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pickedDate by remember { mutableStateOf<Long?>(null) } // epoch at UTC midnight of the date
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier
-                .width(112.dp)
-                .clickable { showDatePicker = true }
-                .testTag("${TestTags.EDIT_SHEET}/time_$fieldTag"),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                valueLabel(millis),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        StepButton(fieldTag, "−15m") { onStepped(-TimeEditLogic.STEP_LARGE_MINUTES) }
-        StepButton(fieldTag, "−1m") { onStepped(-TimeEditLogic.STEP_SMALL_MINUTES) }
-        StepButton(fieldTag, "+1m") { onStepped(TimeEditLogic.STEP_SMALL_MINUTES) }
-        StepButton(fieldTag, "+15m") { onStepped(TimeEditLogic.STEP_LARGE_MINUTES) }
-    }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = millis)
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    // DatePicker's selection is UTC-noon-based; normalize to a UTC-midnight key.
-                    pickedDate = datePickerState.selectedDateMillis?.let { utcMidnight(it) }
-                    showDatePicker = false
-                    showTimePicker = true
-                }) { Text("Next") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            },
-        ) {
-            DatePicker(state = datePickerState, title = null)
-        }
-    }
-
-    if (showTimePicker) {
-        val zone = ZoneId.systemDefault()
-        val initial = Instant.ofEpochMilli(millis).atZone(zone)
-        val timeState = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute)
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Pick a time") },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showTimePicker = false
-                    val dateMillis = pickedDate ?: utcMidnight(millis)
-                    val combined = Instant.ofEpochMilli(dateMillis)
-                        .atZone(ZoneOffset.UTC).toLocalDate()
-                        .atTime(timeState.hour, timeState.minute)
-                        .atZone(zone)
-                        .toInstant()
-                        .toEpochMilli()
-                    onPicked(combined)
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
-            },
-        )
-    }
-}
-
-/** Snaps an epoch value to UTC midnight of the day it falls on (date-only key). */
-private fun utcMidnight(millis: Long): Long =
-    Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-        .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-
-private fun valueLabel(millis: Long): String {
-    val zone = ZoneId.systemDefault()
-    val dateTime = Instant.ofEpochMilli(millis).atZone(zone)
-    val day = dayLabel(millis)
-    val prefix = if (day == "Today" || day == "Yesterday") day else compactDateFormat.format(dateTime)
-    return "$prefix ${timeFormat.format(dateTime)}"
-}
-
-@Composable
-private fun StepButton(fieldTag: String, label: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp),
-        modifier = Modifier.testTag(
-            when (label) {
-                "−15m" -> TestTags.editStepperMinus(fieldTag)
-                "−1m" -> TestTags.editStepperMinus("$fieldTag-1")
-                "+1m" -> TestTags.editStepperPlus("$fieldTag-1")
-                else -> TestTags.editStepperPlus(fieldTag)
-            },
-        ),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }

@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.sp
  */
 val AppTypography = Typography()
 
-/** Timer counters (ActiveTimersStrip, running panels): headline-size, tabular, HH:MM:ss. */
+/** Timer counters (running-timer cards): headline-size, tabular, HH:MM:ss. */
 val TimerCounterStyle = TextStyle(
     fontFamily = FontFamily.SansSerif,
     fontWeight = FontWeight.Medium,

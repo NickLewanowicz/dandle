@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material3.lightColorScheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -38,5 +39,51 @@ class ThemePaletteTest {
         val expectedDark = darkColorScheme()
         // Sanity: real M3 schemes differ from each other exactly like ours do.
         assertNotEquals(expectedLight.background, expectedDark.background)
+    }
+
+    // -- Semantic type colors (Brief 03 §3, owner rework U11) -----------------------------
+
+    @Test
+    fun `every type adapts between light and dark - hues are fixed, tones are not`() {
+        net.babybuddy.next.domain.model.EventType.entries.forEach { type ->
+            val light = TypeColors.pair(type, darkTheme = false)
+            val dark = TypeColors.pair(type, darkTheme = true)
+            assertNotEquals("$type must adapt to dark mode", light.container, dark.container)
+        }
+    }
+
+    @Test
+    fun `type hues cover all six families and differ from each other in light theme`() {
+        val entries = net.babybuddy.next.domain.model.EventType.entries
+        val containers = entries.map { TypeColors.pair(it, darkTheme = false).container }
+        assertEquals(entries.size, containers.toSet().size)
+    }
+
+    @Test
+    fun `on-container text meets the 4_5 to 1 contrast rule in both themes (Brief 03)`() {
+        net.babybuddy.next.domain.model.EventType.entries.forEach { type ->
+            listOf(false, true).forEach { dark ->
+                val (container, on) = TypeColors.pair(type, darkTheme = dark)
+                val ratio = contrastRatio(container, on)
+                assertTrue(
+                    "$type dark=$dark contrast ${"%.2f".format(ratio)} < 4.5",
+                    ratio >= 4.5,
+                )
+            }
+        }
+    }
+
+    /** WCAG relative-luminance contrast ratio. */
+    private fun contrastRatio(a: androidx.compose.ui.graphics.Color, b: androidx.compose.ui.graphics.Color): Double {
+        fun lum(c: androidx.compose.ui.graphics.Color): Double {
+            fun channel(v: Float): Double {
+                val s = v.toDouble()
+                return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+        }
+        val l1 = lum(a)
+        val l2 = lum(b)
+        return (maxOf(l1, l2) + 0.05) / (minOf(l1, l2) + 0.05)
     }
 }

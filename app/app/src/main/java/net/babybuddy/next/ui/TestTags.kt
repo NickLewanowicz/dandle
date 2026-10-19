@@ -23,7 +23,6 @@ object TestTags {
     const val DASHBOARD_TIMELINE = "dashboard/timeline"
     const val DASHBOARD_REFRESH = "dashboard/refresh"
     const val DASHBOARD_SYNC_CHIP = "dashboard/sync_chip"
-    const val DASHBOARD_TIMER_STRIP = "dashboard/timer_strip"
     const val DASHBOARD_EMPTY_TIMELINE = "dashboard/empty_timeline"
 
     /** Parametrized: "dashboard/quick_action/FEEDING" etc. (EventType.name). */
@@ -34,12 +33,12 @@ object TestTags {
 
     fun timerSave(type: String) = "dashboard/timer/$type/save"
 
-    fun timerDiscard(type: String) = "dashboard/timer/$type/discard"
 
     /** The inline quick-action panel: "dashboard/panel/FEEDING" etc. */
     fun panel(type: String) = "dashboard/panel/$type"
 
     const val PANEL_SAVE = "dashboard/panel/save"
+    const val PANEL_TIME = "dashboard/panel/time"
     const val PANEL_CLOSE = "dashboard/panel/close"
     const val PANEL_NOTE = "dashboard/panel/note"
     const val PANEL_NOTE_TEXT = "dashboard/panel/note_text"
@@ -87,9 +86,7 @@ object TestTags {
     const val EDIT_VALIDATION = "edit/validation"
     const val EDIT_DELETE_CONFIRM = "edit/delete_confirm"
 
-    fun editStepperMinus(field: String) = "edit/stepper/${field}_minus"
 
-    fun editStepperPlus(field: String) = "edit/stepper/${field}_plus"
 
     const val FAILURE_DIALOG = "edit/failure_dialog"
 }

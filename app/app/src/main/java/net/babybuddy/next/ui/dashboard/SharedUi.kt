@@ -68,12 +68,15 @@ object DiaperSwatches {
         ?: ""
 }
 
-/** Header sync-health chip states (UX spec §5); hidden is the clean default. */
+/**
+ * Header sync-health chip states (UX spec §5); hidden is the clean default. Owner rework U7:
+ * FAILED is deliberately absent — failed entries surface on their timeline row (warning badge on
+ * the type icon), never duplicated as a header chip.
+ */
 sealed interface SyncChipState {
     data object Hidden : SyncChipState
     data object Offline : SyncChipState
     data object Syncing : SyncChipState
-    data class Failed(val count: Int) : SyncChipState
 
     /** T3: transient settle after a drain completes — the visible "caught up" moment. */
     data object AllSynced : SyncChipState
@@ -82,15 +85,22 @@ sealed interface SyncChipState {
 fun syncChipState(
     isOnline: Boolean,
     syncing: Boolean,
-    failedCount: Int,
     allSynced: Boolean = false,
 ): SyncChipState = when {
-    failedCount > 0 -> SyncChipState.Failed(failedCount)
     !isOnline -> SyncChipState.Offline
     syncing -> SyncChipState.Syncing
     allSynced -> SyncChipState.AllSynced
     else -> SyncChipState.Hidden
 }
+
+/**
+ * The type's semantic color pair (Brief 03 §3, owner rework U11): same hue family as the
+ * original app, fixed across themes with light/dark tone pairs. One source for timeline icon
+ * chips, running-timer card tiles, quick-action running highlight, and widget accents.
+ */
+@Composable
+fun EventType.typeColorPair(): net.babybuddy.next.ui.theme.TypeColorPair =
+    net.babybuddy.next.ui.theme.TypeColors.pair(this, androidx.compose.foundation.isSystemInDarkTheme())
 
 @Composable
 fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
@@ -162,31 +172,6 @@ fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
                     )
                 }
             }
-
-            is SyncChipState.Failed -> Surface(
-                onClick = onTap,
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.testTag(TestTags.DASHBOARD_SYNC_CHIP),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_bb_warning),
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                    Text(
-                        "${current.count} failed",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(start = 4.dp),
-                    )
-                }
-            }
         }
     }
 }
@@ -194,14 +179,15 @@ fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
 /**
  * Per-entry sync badge (UX spec §5, T3): SYNCED renders nothing; PENDING is a tonal pill —
  * a real badge, not bare muted text (Elena looked for the promised "Will sync" mark and found
- * none; it must read at arm's length); FAILED is the filled errorContainer pill (tap → failure
- * dialog). Badge transitions fade at 150 ms (motion budget).
+ * none; it must read at arm's length). FAILED renders nothing HERE (owner rework U7): the row
+ * marks it with a warning badge overlaid on the type icon (see [FailedIconBadge]) so the row
+ * keeps its normal height; the row tap opens the failure dialog. Transitions fade at 150 ms.
  */
 @Composable
-fun SyncBadge(state: SyncState, modifier: Modifier = Modifier, onTapFailed: () -> Unit = {}) {
+fun SyncBadge(state: SyncState, modifier: Modifier = Modifier) {
     Crossfade(targetState = state, animationSpec = tween(150), label = "sync-badge", modifier = modifier) { current ->
         when (current) {
-            SyncState.SYNCED -> {}
+            SyncState.SYNCED, SyncState.FAILED -> {}
             SyncState.PENDING -> Surface(
                 shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -225,31 +211,31 @@ fun SyncBadge(state: SyncState, modifier: Modifier = Modifier, onTapFailed: () -
                     )
                 }
             }
+        }
+    }
+}
 
-            SyncState.FAILED -> Surface(
-                onClick = onTapFailed,
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.testTag(TestTags.BADGE_FAILED),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_bb_warning),
-                        contentDescription = null,
-                        modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                    Text(
-                        "Sync failed",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(start = 3.dp),
-                    )
-                }
-            }
+/**
+ * The FAILED marker (owner rework U7): a small error-colored dot with the warning glyph, meant
+ * to sit at the top-end corner of a type icon chip — the "caution over the primary icon" the
+ * owner asked for. Tapping the row explains the failure.
+ */
+@Composable
+fun FailedIconBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.error,
+        modifier = modifier
+            .size(16.dp)
+            .testTag(TestTags.BADGE_FAILED),
+    ) {
+        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painterResource(R.drawable.ic_bb_warning),
+                contentDescription = "Sync failed",
+                modifier = Modifier.size(10.dp),
+                tint = MaterialTheme.colorScheme.onError,
+            )
         }
     }
 }
@@ -263,3 +249,20 @@ fun ColorSwatchDot(color: Color, modifier: Modifier = Modifier) {
             .background(color, CircleShape),
     )
 }
+
+/**
+ * The standard keyboard "Done" behavior for every single-line field in the app
+ * (owner rework follow-up): Done dismisses the keyboard AND clears focus. A
+ * still-focused field lets UiAutomator's accessibility pass re-summon the IME
+ * on every dump, which kept moving the window layout under the QA scripts.
+ */
+@Composable
+fun doneKeyboardActions(): androidx.compose.foundation.text.KeyboardActions {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    return androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus(force = true) })
+}
+
+val imeDoneOptions: androidx.compose.foundation.text.KeyboardOptions =
+    androidx.compose.foundation.text.KeyboardOptions(
+        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+    )

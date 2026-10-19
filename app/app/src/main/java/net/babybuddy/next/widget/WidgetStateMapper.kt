@@ -18,6 +18,11 @@ object WidgetStateMapper {
         val running: Boolean,
         /** Minute-granular elapsed ("12m") when this slot's timer is running, else null. */
         val elapsedText: String?,
+        /**
+         * U10: subdued "last activity" line under the label when idle — "45m", "1h30m", "2d"
+         * since the newest event of this type for this child. Null when there is no history.
+         */
+        val lastText: String?,
     )
 
     data class RunningTimerState(val kind: EventType, val elapsedText: String)
@@ -58,12 +63,17 @@ object WidgetStateMapper {
         EventType.TUMMY_TIME -> "Tummy"
     }
 
-    /** The four QuickActions slots with running-state accents (spec §7.1). */
+    /**
+     * The four QuickActions slots (spec §7.1) with running-state accents and the U10 "last"
+     * line: a running slot swaps to the type-color accent with the elapsed counter; idle slots
+     * whisper when their type last happened ([latest] = newest event per type for this child).
+     */
     fun quickActionSlots(
         configured: List<EventType>,
         timers: List<RunningTimer>,
         childId: Long,
         nowMillis: Long,
+        latest: Map<EventType, net.babybuddy.next.domain.model.Event> = emptyMap(),
     ): List<QuickActionSlot> = configured.map { type ->
         val running = timers.firstOrNull { it.kind == type && it.childId == childId }
         QuickActionSlot(
@@ -71,7 +81,26 @@ object WidgetStateMapper {
             label = slotLabel(type),
             running = running != null,
             elapsedText = running?.let { elapsedMinutesText(nowMillis - it.startedAtMillis) },
+            lastText = latest[type]
+                ?.takeIf { running == null }
+                ?.let { compactSince(nowMillis - it.endMillis) },
         )
+    }
+
+    /**
+     * U10's compact "time since" for the widget's subdued last-line: "45m", "1h30m", "2d".
+     * Same minute-granular contract as [sinceText] but keeps minutes under an hour so
+     * "1h30m" reads as one unit instead of the app-side "1h 30m".
+     */
+    fun compactSince(elapsedMillis: Long): String {
+        val minutes = (elapsedMillis / 60_000L).coerceAtLeast(0)
+        val hours = minutes / 60
+        val days = hours / 24
+        return when {
+            hours >= 24 -> "${days}d"
+            hours >= 1 -> "${hours}h${(minutes % 60).toString().padStart(2, '0')}m"
+            else -> "${minutes}m"
+        }
     }
 
     /**

@@ -1,10 +1,12 @@
-# babybuddy-next — Canonical Functional Specification (v0.3 BETA)
+# babybuddy-next — Canonical Functional Specification (v0.4 BETA)
 
 > **This document is the product of record.** Any implementation (Kotlin/Compose, Flutter, React Native, or a future rewrite) must satisfy every MUST here. Screenshots referenced under `docs/screenshots/` are normative evidence. Parity baselines: the existing Baby Buddy for Android v2.6.4 flows mapped in `docs/flows/existing-app/`, and server behavior in `docs/research/babybuddy-api.md`.
 >
 > v0.2 changes (from user-persona review, docs/flows/new-app/02-user-persona-review.md): learning feeding defaults, 15-minute steppers + duration-preserving start moves, duplicate guard, parent-language failure messages, session-expiry reassurance, configurable widget buttons, Save-emphasized stop dialog.
 >
 > v0.3 changes (from persona beta round 1, docs/flows/new-app/80-persona-feedback/00-triage.md): panel "Started X min ago" adjust (§3), visible offline badge + "All synced" settle (§6.2), widget child-name prominence + cross-child timer line + stop-guard deep link (§7), login dead-button reason + neutral cleartext copy + paste-API-key path (§1.1).
+>
+> v0.4 changes (owner UI rework, docs/flows/new-app/90-owner-ui-rework.md): quick-action buttons pinned under the header with NOTHING above them; running timers render as the original app's "expanded top element" card below the buttons with an icon-only save and no ✕ (re-tap = stop); diaper/note creation moves to a sheet with a time row; Quick Edit time rows are native date/time pickers (steppers removed); failed entries mark the row's icon (no header chip); notes render italic; header shows the child's name + chevron (no app title); semantic per-type colors everywhere a type appears; widget tiles whisper the last activity and light up in their type color when running.
 >
 > Status markers: **[P]** parity with existing app (must match), **[N]** new in this app.
 
@@ -27,19 +29,21 @@ Menu → Sign out: clears stored key and local cache. Confirmation dialog (data 
 
 ## 2. Dashboard (single screen; no tabs in beta) **[P]**
 
-Layout, top to bottom:
-1. **Header bar**: app name + current child selector (chip/dropdown listing all children; default = first child; MUST persist selection across restarts) **[P]** + overflow menu (Sign out, Help, About).
-2. **Active timers strip** (only when a timer is running): one card per running timer — type icon, live elapsed counter (HH:MM:ss), Stop/Save and Discard affordances. **[P]**
-3. **Quick actions grid**: exactly six buttons, this order: **Feeding, Diaper, Sleep, Notes, Pumping, Tummy time**. Icons are this app's own original artwork. **[P]**
-4. **Timeline**: most recent events (all six types), newest first, grouped by day ("Today", "Yesterday", date). Entry rows show type icon, headline (per type, §4.1), time-of-day, duration (for timed types), sync-state badge (§6). Pull-to-refresh MUST re-sync. Pagination: load older on scroll (server limit/offset).
+Layout, top to bottom (v0.4 — the grid NEVER moves; nothing dynamic renders above it):
+1. **Header bar**: the active child's FIRST NAME as the title, with a chevron when more than one child exists (tap → dropdown of full names; default = first child; MUST persist selection across restarts) **[P: original-app placement]**; the app has no name in the chrome. Inline sync chip (only when it has something to say: Offline / Syncing… / All synced ✓ — never a failed count, §6.2) + overflow menu (Sign out, Help, About). One row.
+2. **Quick actions grid**: exactly six buttons, this order: **Feeding, Diaper, Sleep, Notes, Pumping, Tummy time**. Icons are this app's own original artwork; a running or open type lights up in its semantic type color (§8) with a static running dot. **[P]**
+3. **Running-timer card** (only while a timer runs for this child; at most one card — one editor at a time, original-app semantics): rendered DIRECTLY BELOW the grid as the original app's "expanded top element of the list" — literally the timeline's first list item, so it scrolls with the timeline and a field being typed into is brought into view above the keyboard (the header and grid never move); the list reveals the card the moment a timer starts — type-colored icon tile, type label, live `H:MM:SS` counter, the type's fields at full width (Feeding: type/method/amount; Sleep: note; Pumping: amount+note; Tummy time: milestone+note), the compact "Started Xm ago · Adjust" line (§3), and an **icon-only check save** bottom-right. **No ✕ and no "Save"/"Running" words** — stopping is the type button's re-tap (§3 tap-to-stop). **[P look, N fields]**
+4. **Timeline**: most recent events (all six types), newest first, grouped by day ("Today", "Yesterday", date). Entry rows show a type-colored icon chip, headline (per type, §4.1), time-of-day, duration (for timed types), sync-state marking (§6.2). Pull-to-refresh MUST re-sync. Pagination: load older on scroll (server limit/offset). After a quick-action save the timeline scrolls so the new row is in view — the insert IS the confirmation.
+
+Diaper and Note creation open a **modal sheet** (§3.2/§3.4), the same UI family as Quick Edit; they never render inline.
 
 Empty state (fresh server): friendly illustration + "Log your first event with a button above."
 
 ## 3. Quick actions (create flows) **[P] — behavior must match existing app**
 
 Common rules:
-- Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer; tapping again (or Stop) completes it. **[P]**
-- If a timer for that type is already running for the active child, tapping the button focuses/opens that running timer instead of starting a duplicate. **[P]**
+- Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer and shows its card below the grid (§2.3); **tapping the same button again is tap-to-stop** — it runs the stop guard below (>10s dialog, ≤10s silent discard). Never a duplicate timer. **[P: exact original tap semantics, v0.4]**
+- The card's only action is the icon-only save (check). There is no discard/✕ on the card: discard = re-tap → Discard in the dialog.
 - Timer >10s stop → confirmation dialog ("Stop timer?") where **Save is the emphasized (filled) action**; Keep timer and Discard are subdued text buttons. <10s → discard silently. **[P]** (original semantics, emphasis per user review)
 - Timer >10s stop → confirmation dialog ("Stop timer? Keep / Discard / Save"). <10s → discard silently. **[P]** (exact original semantics per existing-app flow docs)
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
@@ -52,15 +56,15 @@ Common rules:
 - Server timer (created on start, named `Feeding-BBapp:<n>`) DELETEd on save/discard. **[P]**
 
 ### 3.2 Diaper change **[P]**
-- Opens panel (no timer): toggles **Wet** and **Solid** (both allowed). **Save disabled until at least one is on.**
+- Opens a **modal sheet** (v0.4 — creation is an edit-like action, same UI family as §5): a **TIME** row (native picker, defaults to now — "it happened 20 minutes ago" is an everyday correction; the duplicate guard anchors on the chosen time), toggles **Wet** and **Solid** (both allowed). **Save disabled until at least one is on** (a one-line hint says so).
 - "Extra options" disclosure: **Color** choice (black, brown, green, yellow, pink/red — server enum, exact strings per research doc) and **Amount** (numeric).
-- Save → `POST /api/changes/` {child, time, wet, solid, color?, amount?}. time = now.
+- Save → `POST /api/changes/` {child, time, wet, solid, color?, amount?}. time = the sheet's TIME (default now).
 
 ### 3.3 Sleep **[P]**
 - Start/stop timer; note field in running panel. Save → `POST /api/sleep/` {child, start, end, notes?}. Nap flag auto by server rules (don't send).
 
 ### 3.4 Notes **[P]**
-- Opens text panel; Save (disabled when empty) → `POST /api/notes/` {child, note, time=now}.
+- Opens a **modal sheet** (v0.4): TIME row (native picker, default now) + note text; Save (disabled when empty) → `POST /api/notes/` {child, note, time}.
 
 ### 3.5 Pumping **[P]**
 - Start/stop timer; amount (mL) + note fields. Save → `POST /api/pumping/` {child, start, end, amount?, notes?}.
@@ -80,7 +84,7 @@ Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/Tum
 - Feeding: "Bottle · 120 mL" (method · amount) + duration
 - Diaper: "Wet" / "Solid" / "Wet + Solid" (+ color chip if set)
 - Sleep: "Sleep" + duration
-- Note: first line of note text
+- Note: first line of note text, rendered **italic** (v0.4): note content is words, not a structured event — italics keep "Feeding interrupted" the note from reading as a feeding. Note previews on other types' rows are italic too.
 - Pumping: "Pump · 85 mL" + duration
 - Tummy time: "Tummy time" + duration (+" · milestone" if set)
 
@@ -94,7 +98,7 @@ Server may reject with `non_field_errors` (overlapping Sleep/Feeding/Pumping/Tum
 
 Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in ≤3 interactions; never more fields than the quick action itself.
 
-- **Time editing** (all types): start time (and end time for timed types) each get a row showing the stored value + stepper buttons **−15m / −1m / +1m / +15m** (15-minute steps primary — parents think in 5/15-minute units) and tap-to-open the platform time picker (date+time). **Moving the start time of a timed entry keeps its duration** (end shifts by the same delta); changing end adjusts duration independently. Constraint feedback inline: end must be after start; no future times; timed entries ≤24h (server rules). Save disabled with reason while invalid.
+- **Time editing** (all types, v0.4): start time (and end time for timed types) each get a row showing the stored value ("Today 14:32"); tapping it opens the **native time picker pre-populated with that value**; a small calendar button opens the **native date picker** (then the time picker). That is the whole affordance — no steppers (owner: the standard mobile date/time interface, as the Baby Buddy web UI does). **Moving the start time of a timed entry keeps its duration** (end shifts by the same delta); changing end adjusts duration independently. Constraint feedback inline: end must be after start; no future times; timed entries ≤24h (server rules). Save disabled with reason while invalid.
 - **Type fields** mirror §3 exactly (feeding type/method/amount; diaper wet/solid/color/amount; sleep notes; note text; pumping amount/notes; tummy milestone/notes).
 - **Save** → PATCH `/api/{type}/{id}/` (online) or queued edit op (offline §6). On success the timeline row updates in place (animated).
 - **Conflict on edit** (overlap created by the new times) → same handling as §3.7.
@@ -105,12 +109,13 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 - Room/SQLite-equivalent local DB is the UI source of truth. Every write (create/edit/delete) records an outbox op and applies locally immediately.
 - `SyncWorker` drains the outbox oldest-first when connectivity exists; exponential backoff; runs on app open, connectivity regain, and write.
 - Local IDs (uuid) + nullable serverId; serverId filled on successful create.
+- **Running timers reconcile both ways** [N, v0.4]: refresh adopts this child's server `-BBapp:` timers not tracked locally (process death, started on another device), and drops a local timer whose SERVER id no longer exists (it was stopped elsewhere — it must not keep "running" here forever). Offline-created timers (no server id) are never dropped: they are still waiting to sync.
 
 ### 6.2 Sync-state badge per entry (timeline + sheets)
 - **SYNCED**: no badge (clean look).
 - **PENDING**: tonal pill — clock icon + "Will sync" in a secondary-container chip — shown while offline or queued. MUST be legible at arm's length: an offline-created row wears the badge from the moment it renders (no restart, no refresh required) [v0.3 visibility rule].
-- **FAILED**: subdued but noticeable amber/red-outline style + warning icon. Tap opens the failure dialog: server's error reason (e.g. "Another entry intersects the specified time period"), buttons: **Edit** (opens Quick Edit) / **Delete locally** / **Retry**. MUST NOT auto-delete. MUST NOT block other entries' sync.
-- **"All synced" settle [N, v0.3]**: when a drain completes while online, the header chip shows **"All synced ✓"** for ~4 seconds (suppressed while offline — a failed drain synced nothing — and outranked by the Failed and Syncing states) — the visible "caught up" moment after queued entries land. The chip's clean default stays hidden.
+- **FAILED** (v0.4): a small error-colored **warning badge on the corner of the row's type icon** — the row keeps its normal height (no stacked "Sync failed" pill) and failure is surfaced ONLY on the row, never duplicated as a header chip. Tapping the row opens the failure dialog: parent-language reason (e.g. the overlap names the clashing entry), buttons: **Edit** (opens Quick Edit) / **Delete locally** / **Retry**. MUST NOT auto-delete. MUST NOT block other entries' sync.
+- **"All synced" settle [N, v0.3]**: when a drain completes while online, the header chip shows **"All synced ✓"** for ~4 seconds (suppressed while offline — a failed drain synced nothing — and outranked by the Syncing state) — the visible "caught up" moment after queued entries land. The chip's clean default stays hidden.
 
 ### 6.3 Scenarios (MUST all pass QA)
 1. Server down → create events → badge PENDING → server returns → events replayed in order → badges clear.
@@ -124,7 +129,8 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 
 ### 7.1 Quick Actions widget (2×2 or 2×1)
 - Buttons: **four configurable slots** (default: Sleep toggle, Bottle, Diaper, Pump) — user picks any quick action per slot in the widget config (§7.3). Tap = same create/toggle semantics as in-app (including "diaper opens app with panel pre-opened" for types needing input).
-- Active-timer state: button shows running state (accent + elapsed for sleep if space). Tap on a RUNNING slot → opens the app **directly into the stop-guard dialog for that timer** — the slot reads "tap to stop" and the tap does what it says (≤10s discards silently, in-app semantics; widgets cannot host the dialog themselves) [v0.3].
+- Active-timer state: a RUNNING slot lights up in its **semantic type color** (not generic accent) and shows the minute-granular elapsed in place of its label. Tap on a RUNNING slot → opens the app **directly into the stop-guard dialog for that timer** (≤10s discards silently, in-app semantics; widgets cannot host the dialog themselves) [v0.3].
+- **Last-activity line [N, v0.4]**: every idle slot whispers when its type last happened, in a subdued second line under the label — compact "45m", "1h30m", "2d" (since the newest event of that type for the widget's child; nothing when there is no history). Space-efficient: no "Last:" prefix.
 
 ### 7.2 Care Dashboard widget (4×2 or resizable 4×3)
 - **Child-name header [v0.3]**: bold, full-contrast — the widget's WHO must be impossible to miss (the widget answers for one specific child).
@@ -143,6 +149,7 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 - Motion budget: animated timer counter, sheet slide-up, timeline item insert/remove, sync-badge transitions. Nothing decorative that delays logging.
 - Type scale favors glanceability: durations and "time since" values are prominent.
 - Original icon set (our own vector art; no copied assets from the original app — its media is attribution-licensed).
+- **Semantic type colors [N, v0.4]** (Brief 03): each of the six types has a fixed hue family matching the original app's tints (feeding rose, diaper amber, sleep indigo, pumping magenta, tummy green, notes teal) expressed as light/dark container + on-container pairs (≥4.5:1 text contrast, pinned by test). They do NOT follow dynamic color — they are information. Used wherever a type appears: timeline icon chips, the running card's tile and save, the grid's running highlight, widget running accents.
 
 ## 9. Settings & help **[P/N]**
 - Overflow menu: Sign out **[P]**, Help (short slideshow re-using original app's UX-guidance intent, our own content) **[P]**, About (version, licenses, links to both upstream projects) **[P]**.
