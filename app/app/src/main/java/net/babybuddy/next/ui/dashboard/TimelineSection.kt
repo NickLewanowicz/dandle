@@ -294,12 +294,12 @@ private fun TimelineRow(
                 val zone = ZoneId.systemDefault()
                 val start = Instant.ofEpochMilli(event.startMillis).atZone(zone)
                 val timed = event.type.isTimed && event.durationMillis > 0
-                // Owner tweak (persona round 2): long entries show the END time — a 12h
-                // overnight sleep as bare start + duration forces midnight math. Threshold:
-                // >= 60 min, OR the entry crosses local midnight (date math nobody does at
-                // 3am). Short entries keep the bare start — the end is one mental step.
+                // Owner tweak (round 2, widened): ANY timed entry longer than 5 minutes
+                // shows the END time — "slept 1h 55m at 11:15, so they woke at...?" forces
+                // tired parents to do math; just put the data there. Threshold: > 5 min,
+                // OR the entry crosses local midnight (date math is worse).
                 val crossesMidnight = timed && start.toLocalDate() != Instant.ofEpochMilli(event.endMillis).atZone(zone).toLocalDate()
-                val showRange = timed && (event.durationMillis >= 3_600_000 || crossesMidnight)
+                val showRange = timed && (event.durationMillis > 5 * 60_000 || crossesMidnight)
                 if (showRange) {
                     val end = Instant.ofEpochMilli(event.endMillis).atZone(zone)
                     Text(

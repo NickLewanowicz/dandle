@@ -143,10 +143,14 @@ class WidgetStateMapperTest {
         assertEquals("120 mL", feed.detailText)
         assertEquals(WidgetStateMapper.clockTime(now - 34 * 60_000), state.rows.first { it.type == EventType.CHANGE }.timeText)
         assertEquals("Wet", state.rows.first { it.type == EventType.CHANGE }.detailText)
-        // Sleep <60m: bare end clock (the range starts at >=60m or midnight-crossing).
-        assertEquals(WidgetStateMapper.clockTime(now - 120 * 60_000), state.rows.first { it.type == EventType.SLEEP }.timeText)
-        // Duration detail dropped for timed rows — the time carries it now.
-        assertNull(state.rows.first { it.type == EventType.SLEEP }.detailText)
+        // Sleep 45m (>5min): start-end range (owner rule — no math for tired parents).
+        val napRange = state.rows.first { it.type == EventType.SLEEP }
+        assertEquals(
+            WidgetStateMapper.clockTime(now - 165 * 60_000) + "–" + WidgetStateMapper.clockTime(now - 120 * 60_000),
+            napRange.timeText,
+        )
+        // Duration detail dropped for timed rows — the range carries it now.
+        assertNull(napRange.detailText)
         assertEquals("85 mL", state.rows.first { it.type == EventType.PUMPING }.detailText)
         assertNull(state.running)
     }

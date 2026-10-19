@@ -217,16 +217,16 @@ object WidgetStateMapper {
     }
 
     /**
-     * Clock time of an entry's END (or a start–end range when it ran >= 60 min or
-     * crossed local midnight) — the owner's timeline tweak, mirrored here. Clock
-     * times stay true even when the widget is minutes-stale; "3h" under-reports.
+     * Clock time of an entry's END (or a start–end range when it ran > 5 min or
+     * crossed local midnight) — mirrors the timeline's rule: tired parents don't
+     * do math, and clock times stay true even when the widget is minutes-stale.
      */
     fun entryTimeText(event: Event, nowMillis: Long): String {
         val zone = java.time.ZoneId.systemDefault()
         val end = java.time.Instant.ofEpochMilli(event.endMillis).atZone(zone)
         val start = java.time.Instant.ofEpochMilli(event.startMillis).atZone(zone)
         val crossesMidnight = start.toLocalDate() != end.toLocalDate()
-        return if (event.type.isTimed && (event.endMillis - event.startMillis >= 3_600_000 || crossesMidnight)) {
+        return if (event.type.isTimed && (event.endMillis - event.startMillis > 5 * 60_000 || crossesMidnight)) {
             "${clockTime(event.startMillis)}–${clockTime(event.endMillis)}"
         } else {
             clockTime(event.endMillis)
