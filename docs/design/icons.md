@@ -1,8 +1,67 @@
 # Icons & mark — asset documentation (Brief 03 §2, §4.1)
 
-Date: 2026-10-17. Owner: asset-designer (AI). Scope of this doc: launcher/app mark
-(generated via Replicate), the pipeline used, the vector glyph grid rules, and the
-breast-side badge spec. Glyph XML implementation and code are the android-engineer's.
+Date: 2026-10-19 (round 4 — owner-directed "ruthless" icon overhaul). Prior rounds:
+2026-10-17 (launcher rounds 1-3). Scope: launcher/app mark AND the six event glyphs.
+
+## 0. Round 4 verdict on prior assets (ruthless audit, visual harness)
+
+Rendered the shipped set at 24/48/96 px + tinted chips. Verdict: diaper read as a
+bowl, pumping as a mortar-and-pestle, notes had a pencil stabbing the page, feeding
+was a heavy blob at 24px, tummy time was abstract. Only the crescent survived.
+Root cause: the original six were drawn blind, with no visual iteration loop.
+
+## 1. Event glyphs (round 4 — SHIPPED)
+
+**Design language:** 24dp grid, 2dp strokes, round caps/joins (Lucide/Feather
+grammar — inspiration, not assets; AGENTS.md asset rule respected), one glyph per
+event, optical sizing checked at 24/48/96. Tummy time is the deliberate exception:
+**filled silhouette** (fills read unambiguously at 24px where the stroke prone-baby
+kept failing — v1-v8 of stroke attempts read as bowl/snail/golf-club/mouse).
+
+Final designs (source of truth = the drawable XMLs; design iterations in
+`candidates/icon-round2/`, iteration harness `/tmp/icons/design.py` pattern):
+
+| Glyph | Motif | Notes |
+|---|---|---|
+| Feeding | baby bottle, upright, wavy milk line | teat + collar + body + wave |
+| Diaper | briefs silhouette + waistband + two corner tabs | tabs are the diaper tell (original-app-inspired) |
+| Sleep | crescent moon | kept from round 1 (was already clean) |
+| Notes | sticky note, folded corner, two lines | replaced page+pencil |
+| Pumping | pump flange (wide funnel) + neck + collection bottle w/ ticks + one drop | ticks sell "collection" |
+| Tummy time | filled silhouette: head propped on forearm, body on ground line | only filled glyph; ground line seats it |
+
+**Recraft-v3-svg test (rejected):** 1 × $0.08 — line_art output was a thin
+stick-figure in a huge canvas; normalization cost > value. Hand-drawn set shipped.
+
+## 2. Launcher / app mark (round 4 — SHIPPED)
+
+**Winner: `launcher-candidate-2`** — deep-indigo baby bottle with a cream
+CRESCENT-MOON cutout + measurement ticks on a cream rounded square. Single motif,
+reads at 48px, one idea (bottle = logging, crescent = sleep). Replaces the round-3
+badge (crescent + bottle + two stars + shadows — busy, sticker-style).
+
+Adaptive icon pipeline (PIL, `candidates/icon-round2/`):
+- crop recraft canvas (black side bars, white margins), flood-fill keying of the
+  cream/white background from the borders (paper texture defeated plain color
+  keying) — interior cream details survive as holes that show the background layer.
+- foreground: 432×432 RGBA, bottle at 58% (safe zone), `drawable-nodpi/ic_launcher_foreground.png`
+- monochrome: same alpha (the cutouts keep the silhouette readable)
+- background: sampled cream `#F1E2B3`
+- vector foreground XML deleted (replaced by bitmap); minSdk 29 → adaptive-only is safe.
+
+Rejected: candidate 1 (regressed to stars + tilted bottle), candidate 3 (face +
+blush + stars + dots — decorative noise, off-palette coral), candidate 4 (onesie =
+generic baby, not a tracker).
+
+## 3. Spend
+
+- Round 4: recraft-v3 raster 4 × $0.04 = **$0.16**; recraft-v3-svg 1 × $0.08 =
+  **$0.08**. **Round 4 total: $0.24.**
+- Cumulative (rounds 1-3): ≈ $0.36. **Grand total ≈ $0.60 of the $1 budget.**
+- Token handling: read at runtime from `~/Documents/Projects/ai-image-transformer/.env`
+  (`REPLICATE_API_TOKEN`); never printed, never committed.
+
+## 4. Legacy docs (rounds 1-3, launcher mark v1 — superseded)
 
 ## 1. Launcher / app mark
 

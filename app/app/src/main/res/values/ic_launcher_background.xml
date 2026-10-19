@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher background: deep indigo from the app palette (DarkPrimaryContainer). -->
-    <color name="ic_launcher_background">#413E8D</color>
+    <color name="ic_launcher_background">#F1E2B3</color>
 </resources>

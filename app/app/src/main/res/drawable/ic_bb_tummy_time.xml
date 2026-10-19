@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Original artwork: baby propped on forearms (Tummy time). -->
+<!-- Original artwork: baby lying on tummy, propped (Tummy time). Grammar: 24dp grid, 2dp round strokes (tummy time: filled silhouette for 24dp legibility). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
+ android:width="24dp" android:height="24dp"
+ android:viewportWidth="24" android:viewportHeight="24">
     <path
-        android:fillColor="#FF000000"
-        android:pathData="M7.6,2.2 a2.7,2.7 0 1,0 0,5.4 a2.7,2.7 0 1,0 0,-5.4 Z" />
+ android:pathData="M3.1000000000000005,11.9 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" android:fillColor="#FF000000" />
     <path
-        android:fillColor="#FF000000"
-        android:pathData="M10.4,8.1 c3.6,-1.6 7.7,0.4 8.8,4.4 l-4.6,1.3 c-0.7,-2.3 -2.4,-3.5 -4.5,-3.1 Z" />
+ android:pathData="M6.0,12.6 h0.0 a1.3,1.3 0 0,1 1.3,1.3 v2.3000000000000003 a1.3,1.3 0 0,1 -1.3,1.3 h-0.0 a1.3,1.3 0 0,1 -1.3,-1.3 v-2.3000000000000003 a1.3,1.3 0 0,1 1.3,-1.3 z" android:fillColor="#FF000000" />
     <path
-        android:fillColor="#FF000000"
-        android:pathData="M3.6,13.2 h12.6 v2.7 c-4,1.7 -8.6,1.7 -12.6,0 Z" />
+ android:pathData="M8.9,12.9 C10.6,10.9 13.8,10.2 16.2,11.5 C18.1,12.6 19.1,14.7 19.25,16.6 C19.3,17.2 18.9,17.5 18.3,17.5 L8.9,17.5 C8.2,16 7.9,14.4 8.9,12.9 Z" android:fillColor="#FF000000" />
+    <path
+ android:pathData="M2.8,17.5 H21" android:strokeColor="#FF000000" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000" />
 </vector>
