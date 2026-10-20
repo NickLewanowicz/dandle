@@ -7,69 +7,63 @@ hide:
 
 # An offline-first Android client for Baby Buddy
 
-A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy),
-the self-hosted baby tracker — rebuilt with Kotlin, Jetpack Compose, and Material 3.
-The Room database is the app's source of truth; server sync is a background concern
-that can fail quietly and catch up later.
+Log feeds, diapers, sleep, and more — even with no signal. It syncs to your own server when you're back on WiFi.
 
-![The new app's dashboard — six quick actions, live timers, and the timeline](screenshots/new-app/flows/99-final-dashboard.png)
+![The dashboard at 1:47 a.m. — six quick actions and Today's timeline.](screenshots/new-app/flows/99-final-dashboard.png)
 
-## Why a rewrite
-
-Three gaps in the original app drive this one:
-
-- **Offline queue** — creates and edits work with no network, queue locally, and surface
-  conflicts in-app with an edit-or-delete resolution path.
-- **In-app time editing** — timers and start/end times are correctable inline, midnight
-  crossings included, instead of pushing you to the web UI.
-- **Home-screen widgets** — glanceable quick actions and running timers via Glance, so
-  logging a feed never requires opening the app.
-
-## Try it
-
-The fastest end-to-end tour is the [QA runbook](qa/RUNBOOK.md): a seeded local server, an
-emulator, and tap-by-tag steps for every flow. The
-[functional spec](flows/new-app/00-functional-spec.md) is the canonical contract — every
-user path, feature, state, and flow must be documented there before it counts as done.
-
-## Explore the docs
+*1:47 a.m. Like most of this project.*
 
 <div class="grid cards" markdown>
 
-- :material-file-document-edit-outline:{ .lg .middle } **Functional spec**
+- :material-alarm:{ .lg .middle } **Last feed — 1h · 149 mL**
 
-    The rewrite contract — every user path, feature, and flow, in one document.
+    The 3 a.m. question, answered in one glance. Amount included, no math.
 
-    [:octicons-arrow-right-24: Read the spec](flows/new-app/00-functional-spec.md)
+- :material-bed:{ .lg .middle } **Asleep since 23:32**
 
-- :material-gesture-tap-button:{ .lg .middle } **Quick actions**
-
-    The six pinned logging flows: Feeding, Diaper, Sleep, Notes, Pumping, Tummy time.
-
-    [:octicons-arrow-right-24: Flow spec](flows/new-app/20-quick-actions.md)
-
-- :material-wifi-off:{ .lg .middle } **Offline & sync**
-
-    How edits queue offline and how conflicts surface with a resolution path.
-
-    [:octicons-arrow-right-24: Flow spec](flows/new-app/40-offline-sync.md)
-
-- :material-widgets:{ .lg .middle } **Widgets**
-
-    Glance quick actions and timer widgets, with placement and refresh behavior.
-
-    [:octicons-arrow-right-24: Flow spec](flows/new-app/50-widgets.md)
-
-- :material-clipboard-check-outline:{ .lg .middle } **QA runbook**
-
-    Operationalized device testing: scripts, testTags, server log tails, screenshots.
-
-    [:octicons-arrow-right-24: Run the app](qa/RUNBOOK.md)
-
-- :material-palette-outline:{ .lg .middle } **Icon design**
-
-    How the app's own icon set was designed — original visuals, no copied assets.
-
-    [:octicons-arrow-right-24: Design notes](design/icons.md)
+    The 3 a.m. relief. Started with one tap, still counting.
 
 </div>
+
+[:material-download: Get the app](get-the-app.md){ .md-button .md-button--primary }
+
+## See it in action: no signal
+
+The best trust argument we have. Airplane mode on, save a note, a quiet "Will sync" pill appears. Airplane mode off, it syncs itself — nothing red, nothing lost.
+
+![](media/demo-offline.gif)
+
+## What it does
+
+- **Six big buttons** — Feeding, Diaper, Sleep, Notes, Pumping, Tummy time. Nothing competes with them.
+- **Tap once to log; tap again to stop a timer.** A second tap under ten seconds counts as a mis-tap and logs nothing — a pocket-tap can't invent a nap.
+- **A duplicate guard that asks instead of double-logging.** *"Diaper change logged 1 min ago. Add anyway?"*
+- **Fix any time in the app** with a real clock-face picker. Move a feed's start and its length follows.
+- **The escape hatch:** long-press any entry to open it on your server's web UI. The web always has more fields — on purpose.
+- **Home-screen widgets** to start a nap timer and read the last feed without opening anything.
+
+## Two doors
+
+<div class="grid cards" markdown>
+
+- :material-book-open-variant:{ .lg .middle } **I want to use it**
+
+    The guide: logging, timers, offline, widgets — one short page each.
+
+    [:octicons-arrow-right-24: Read the guide](guide/logging.md)
+
+- :material-hammer-wrench:{ .lg .middle } **I want to see how it's built**
+
+    The workshop: the functional spec, QA evidence, and the AI-agent team.
+
+    [:octicons-arrow-right-24: Open the build docs](build-docs.md)
+
+</div>
+
+## Field notes from a tired parent
+
+> "One tap. The app never opened. This is the entire reason I would keep this app. I have never once successfully logged a nap on the old app."
+>
+> "I fixed a sync conflict without understanding a single technical word. That never happens."
+
+— Sam, the other parent, after a day with the beta. [More field notes — this way into the workshop](flows/new-app/80-persona-feedback/sam.md)

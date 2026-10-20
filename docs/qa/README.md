@@ -15,7 +15,7 @@ UI; never test blind). Flow specs with per-feature verification steps live in
 | `ui-text.sh` | Print a node's text by resource-id (e.g. read `login/error_banner`). |
 | `applog.sh` | Stream (`-d` = dump once) device log filtered to `BB/*` + OkHttp. |
 | `server-log.sh` | Baby Buddy docker request lines (gunicorn access log); `-f` follow, `-n N` tail. |
-| `api.sh` | Authenticated curl (`METHOD path [json]`) against localhost:8000 using `/tmp/bb_token`. |
+| `api.sh` | Authenticated curl (`METHOD path [json]`) against localhost:8000 using the current API token file (`BB_TOKEN_FILE` env var; regeneration per the API research doc). |
 | `offline.sh` | Toggle emulator airplane mode `on`\|`off`, verified. |
 | `server.sh` | `stop`\|`start`\|`wait` for the `babybuddy` docker container. |
 | `shot.sh` | Screenshot to `docs/screenshots/<name>.png` (creates dirs; works from any cwd). |

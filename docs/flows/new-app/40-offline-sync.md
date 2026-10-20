@@ -31,7 +31,7 @@ Force-stop with 5 queued ops and a running pumping timer → relaunch (still off
 
 **5. Two devices / near-duplicates:** not tested (single emulator) — accepted tradeoff per spec §6.3.5.
 
-**6. 401 during sync (SKIPPED with note).** No debug mechanism exists to revoke the session without touching the admin API key used by `/tmp/bb_token`; per mission instructions the scenario is skipped. The session-expired login prefill path exists in code (LoginViewModel reads the stored session for prefill) but could not be triggered black-box.
+**6. 401 during sync (SKIPPED with note).** No debug mechanism exists to revoke the session without touching the admin API key used by the QA scripts; per mission instructions the scenario is skipped. The session-expired login prefill path exists in code (LoginViewModel reads the stored session for prefill) but could not be triggered black-box.
 
 ## Branches / states
 

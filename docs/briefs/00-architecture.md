@@ -51,3 +51,44 @@ Debug builds allow cleartext (self-hosted servers are often plain HTTP on LAN). 
 ## Out of scope (beta)
 
 Accounts/onboarding beyond login, backgrounds/media sync, medication/measurements (weight/height/temp) CRUD, tags, reports/graphs, multi-user profiles, QR device-transfer, iOS.
+
+## Appendix: queue + data-flow diagrams (2026-10-18)
+
+Every arrow below is code-backed: wiring in `data/AppContainer.kt`, drain semantics in `data/sync/OutboxDrainer.kt` + `SyncWorker.kt`, write-through in `data/repo/EventRepository.kt`; spec sections cited inline.
+
+### Data flow: UI → Room → outbox → server
+
+```mermaid
+flowchart LR
+    UI["UI — Compose screens + Glance widgets<br/>(create / edit / delete)"]
+    REPO["Repositories — EventRepository,<br/>TimerRepository (write-through)"]
+    EVENTS[("Room: events<br/>localUuid, serverId?, syncState")]
+    OUTBOX[("Room: outbox ops<br/>(id order = replay order)")]
+    WORKER["SyncWorker — WorkManager:<br/>NETWORK_CONNECTED, exponential backoff"]
+    DRAIN["OutboxDrainer.drain() — oldest-first;<br/>one failure never blocks the queue"]
+    SERVER["Baby Buddy server — serverUrl + /api/…<br/>(the ONLY network destination)"]
+
+    UI --> REPO
+    REPO --> EVENTS
+    REPO -- "every write enqueues an op (§6.1)" --> OUTBOX
+    OUTBOX --> WORKER --> DRAIN --> SERVER
+    SERVER -- "2xx: serverId set / row → SYNCED, op deleted" --> EVENTS
+    SERVER -- "network down: op stays queued, order kept;<br/>WorkManager retries with backoff (§6.3.1)" --> OUTBOX
+    SERVER -- "400 content rejected: row → FAILED + reason,<br/>op dropped, drain continues (§6.2)" --> EVENTS
+    SERVER -- "401 / token-invalid 403: queue paused<br/>(session expired), nothing deleted (§6.3.6)" --> OUTBOX
+```
+
+### Queue-entry state machine (`SyncState`, spec §6.1–6.3)
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING : write applied locally — entry shows its Will sync badge (§6.1, §6.2)
+    PENDING --> SYNCED : server 2xx — serverId filled on create, op deleted (§6.1)
+    PENDING --> FAILED : 400 rejected content (overlap, future time…) or PATCH-404 deleted-on-server (§6.2, §6.3.2)
+    PENDING --> PENDING : server unreachable — op stays queued, retried with backoff (§6.3.1)
+    PENDING --> PENDING : auth expired — whole queue paused, rows kept for re-login (§6.3.6)
+    FAILED --> PENDING : Retry in the failure dialog re-queues the entry (§6.2)
+    FAILED --> [*] : user resolves — edit or delete locally, never auto-deleted (§6.2)
+    SYNCED --> [*] : deleted in-app — row removed, queued DELETE replays, 404 counts as done (§4.2)
+```
+

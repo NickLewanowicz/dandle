@@ -19,7 +19,8 @@ event, optical sizing checked at 24/48/96. Tummy time is the deliberate exceptio
 kept failing — v1-v8 of stroke attempts read as bowl/snail/golf-club/mouse).
 
 Final designs (source of truth = the drawable XMLs; design iterations in
-`candidates/icon-round2/`, iteration harness `/tmp/icons/design.py` pattern):
+`candidates/icon-round2/`, iterated with a throwaway local preview script —
+not committed):
 
 | Glyph | Motif | Notes |
 |---|---|---|
@@ -62,9 +63,9 @@ resources/{feeding-breast,left_breast,right_breast}.svg`, rendered via qlmanage)
 Grammar: mirrored curves crossing at the cleavage; OUR curves redrawn (no copied
 paths); stroke 1.4dp for this glyph (2dp merged the pair into a solid shield).
 
-- NEW drawables: `ic_bb_feeding_left/right/both` (generated from bezier data in
-  `/tmp/icons/feed_gen.py` — dashed variants are sampled dash-segment polylines,
-  VectorDrawable has no dash effect); timeline/card/widgets pick them via
+- NEW drawables: `ic_bb_feeding_left/right/both` (generated from bezier data via
+  a throwaway local generator script, not committed — dashed variants are sampled
+  dash-segment polylines, VectorDrawable has no dash effect); timeline/card/widgets pick them via
   `SharedUi.feedingIconRes(method)`; bottle stays for bottle/parent/self feeds
   and the quick-action button. Wired in TimelineSection, RunningTimerCard,
   CareDashboardWidget (CareRow.feedingMethod).

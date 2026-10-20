@@ -114,6 +114,9 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 - `SyncWorker` drains the outbox oldest-first when connectivity exists; exponential backoff; runs on app open, connectivity regain, and write.
 - Local IDs (uuid) + nullable serverId; serverId filled on successful create.
 - **Running timers reconcile both ways** [N, v0.4]: refresh adopts this child's server `-BBapp:` timers not tracked locally (process death, started on another device), and drops a local timer whose SERVER id no longer exists (it was stopped elsewhere — it must not keep "running" here forever). Offline-created timers (no server id) are never dropped: they are still waiting to sync.
+- **Multi-device semantics [N, v0.4]**:
+  - **Server entry deleted before a queued edit replays** → the replayed PATCH gets a 404; the op is resolved locally (dropped from the outbox) and the entry REMAINS on this device, flagged FAILED with the reason "This entry was deleted on the server." — resolvable through the §6.2 dialog (edit / delete locally / retry). Queued data never silently vanishes. (Counterpart: a 404 on a queued DELETE is treated as SUCCESS — the entry is already gone server-side, likely deleted elsewhere — and the local row is removed too.)
+  - **Concurrent edits from two devices are last-write-wins at the ENTRY level.** A queued edit stores the FULL entry body at queue time (outbox payload = `{"serverId", body}` write DTO — never a per-field diff) and replays it as a PATCH. There is no field-level merge and no server-side versioning: whichever device's write reaches the server last replaces the whole entry, so a stale device can overwrite a newer edit made elsewhere. Accepted tradeoff — merge machinery is disproportionate for entries this small and this rarely co-edited; the Baby Buddy web UI remains the place to reconcile a surprising overwrite.
 
 ### 6.2 Sync-state badge per entry (timeline + sheets)
 - **SYNCED**: no badge (clean look).

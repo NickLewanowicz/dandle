@@ -1,6 +1,11 @@
 # =============================================================================
 # babybuddy-next documentation site — MkDocs + Material for MkDocs
 #
+# Structure (persona-reviewed 2026-10-20): a small PARENT surface in front
+# (Home / Get the app / Guide / About) and ALL contributor + AI-agent
+# machinery under one clearly-labeled "Build docs" tab. Content is not
+# deleted — it is housed.
+#
 # Local preview (from repo root):
 #   python3 -m venv .venv
 #   .venv/bin/pip install -r requirements-docs.txt
@@ -16,11 +21,12 @@
 #   (Python 3.13+ runtime; no extra environment variables required.)
 # =============================================================================
 
-site_name: babybuddy-next
+site_name: Baby Buddy Next
 site_description: >-
-  Offline-first Android client for Baby Buddy — flow specs, QA runbooks,
-  API research, and the functional contract for the rewrite.
-copyright: babybuddy-next — docs for an open-source Baby Buddy client
+  An offline-first Android client for Baby Buddy — log feeds, diapers, sleep,
+  and more, even with no signal. Docs for parents and for contributors.
+site_url: ""  # set once the repo is public (enables social cards too)
+copyright: Baby Buddy Next — an open-source Baby Buddy client
 
 # The repo root (README.md, AGENTS.md) intentionally stays outside docs_dir;
 # docs/index.md is the site's landing page.
@@ -62,6 +68,8 @@ theme:
   icon:
     logo: material/baby-face-outline
   features:
+    - navigation.instant
+    - navigation.instant.progress
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
@@ -70,6 +78,7 @@ theme:
     - toc.follow
     - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
     - content.tooltips
 
@@ -78,6 +87,11 @@ extra_css:
 
 plugins:
   - search
+  # Click-to-zoom on every screenshot — the flows set is the site's evidence;
+  # being able to inspect it full-screen is the premium touch.
+  # v0.5.2 stripped every <img> from built pages (caught by the post-build
+  # <img> smoke check in deploy-docs.yml); 0.4.0 verified clean.
+  - glightbox
 
 # Keep raw icon-iteration HTML sheets (design working files, not documentation)
 # out of the published site. Grep confirmed no docs page links them.
@@ -97,7 +111,12 @@ markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      # Mermaid (queue-state + data-flow diagrams) renders natively in Material.
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:
@@ -106,63 +125,77 @@ markdown_extensions:
 # Hand-crafted nav: every markdown file under docs/ is reachable from here
 # (strict mode flags any that are not). Do not let this drift — new docs
 # files must be added to the right group.
+#
+# Audience split (persona-reviewed): everything a parent needs sits in the
+# first four tabs; the workshop lives under "Build docs".
 nav:
   - Home: index.md
-  - Functional spec: flows/new-app/00-functional-spec.md
-  - Using the app:
-      - Login: flows/new-app/10-login.md
-      - Quick actions: flows/new-app/20-quick-actions.md
-      - Timeline & quick edit: flows/new-app/30-timeline-and-edit.md
-      - Offline & sync: flows/new-app/40-offline-sync.md
-      - Widgets: flows/new-app/50-widgets.md
-      - Help & about: flows/new-app/60-help-about.md
-      - UI shell spec: flows/new-app/01-ux-spec.md
-  - Design & history:
-      - Owner UI rework: flows/new-app/90-owner-ui-rework.md
-      - Widget UX review: flows/new-app/70-widget-ux-review.md
-      - User persona review: flows/new-app/02-user-persona-review.md
-      - QA findings: flows/new-app/99-qa-findings.md
-      - Icon design: design/icons.md
-      - Persona feedback (round 1):
-          - Plan: flows/new-app/80-persona-feedback/00-plan.md
-          - Triage: flows/new-app/80-persona-feedback/00-triage.md
-          - Elena: flows/new-app/80-persona-feedback/elena.md
-          - Jordan: flows/new-app/80-persona-feedback/jordan.md
-          - Priya: flows/new-app/80-persona-feedback/priya.md
-          - Sam: flows/new-app/80-persona-feedback/sam.md
-  - QA:
-      - QA runbook: qa/RUNBOOK.md
-      - Feature checklists: qa/FEATURE-CHECKLISTS.md
-      - QA overview: qa/README.md
-      - Widget QA reference: flows/new-app/widgets.md
-  - Research:
-      - Baby Buddy API: research/babybuddy-api.md
-      - Existing app architecture: research/existing-app-architecture.md
-  - Original app reference:
-      - Overview: flows/existing-app/00-overview.md
-      - Login: flows/existing-app/01-login.md
-      - Dashboard: flows/existing-app/02-dashboard.md
-      - Sleep: flows/existing-app/03-sleep.md
-      - Feeding: flows/existing-app/04-feeding.md
-      - Diaper: flows/existing-app/05-diaper.md
-      - Notes: flows/existing-app/06-note.md
-      - Pumping: flows/existing-app/07-pumping.md
-      - Tummy time: flows/existing-app/08-tummytime.md
-      - History: flows/existing-app/09-history.md
-      - Child switching: flows/existing-app/10-childswitch.md
-      - Settings: flows/existing-app/11-settings.md
-      - Edge cases: flows/existing-app/12-edge.md
-      - Discrepancies: flows/existing-app/99-discrepancies.md
-  - Project:
-      - Personas: PERSONAS.md
-      - Briefs:
-          - Architecture: briefs/00-architecture.md
-          - Login & data layer: briefs/01-login-and-data-layer.md
-          - Stages 2–5: briefs/02-stages-2-to-5.md
-          - Icons & theming: briefs/03-icons-and-theming.md
-          - Independent framework review: briefs/independent-review.md
-          - Framework evaluation:
-              - Decision: briefs/framework-eval/DECISION.md
-              - Kotlin + Compose: briefs/framework-eval/kotlin-compose.md
-              - React Native: briefs/framework-eval/react-native.md
-              - Flutter: briefs/framework-eval/flutter.md
+  - Get the app: get-the-app.md
+  - Guide:
+      - Logging a feed, diaper, or nap: guide/logging.md
+      - Timers, and fixing a time: guide/timers-and-editing.md
+      - No signal? Keep logging: guide/offline.md
+      - Widgets: guide/widgets.md
+      - Your data & security: guide/data-and-privacy.md
+  - About: about.md
+  - Build docs:
+      - Build docs home: build-docs.md
+      - The rewrite contract:
+          - Functional spec: flows/new-app/00-functional-spec.md
+          - UI shell spec: flows/new-app/01-ux-spec.md
+      - Flow verification (QA):
+          - Login: flows/new-app/10-login.md
+          - Quick actions: flows/new-app/20-quick-actions.md
+          - Timeline & quick edit: flows/new-app/30-timeline-and-edit.md
+          - Offline & sync: flows/new-app/40-offline-sync.md
+          - Widgets: flows/new-app/50-widgets.md
+          - Help & about: flows/new-app/60-help-about.md
+          - Widget QA reference: flows/new-app/widgets.md
+      - Design & history:
+          - Owner UI rework: flows/new-app/90-owner-ui-rework.md
+          - Widget UX review: flows/new-app/70-widget-ux-review.md
+          - User persona review: flows/new-app/02-user-persona-review.md
+          - Icon design: design/icons.md
+          - Persona feedback (round 1):
+              - Plan: flows/new-app/80-persona-feedback/00-plan.md
+              - Triage: flows/new-app/80-persona-feedback/00-triage.md
+              - Elena: flows/new-app/80-persona-feedback/elena.md
+              - Jordan: flows/new-app/80-persona-feedback/jordan.md
+              - Priya: flows/new-app/80-persona-feedback/priya.md
+              - Sam: flows/new-app/80-persona-feedback/sam.md
+      - QA:
+          - QA runbook: qa/RUNBOOK.md
+          - Feature checklists: qa/FEATURE-CHECKLISTS.md
+          - QA overview: qa/README.md
+          - QA findings: flows/new-app/99-qa-findings.md
+      - Research:
+          - Baby Buddy API: research/babybuddy-api.md
+          - Existing app architecture: research/existing-app-architecture.md
+      - Original app reference:
+          - Overview: flows/existing-app/00-overview.md
+          - Login: flows/existing-app/01-login.md
+          - Dashboard: flows/existing-app/02-dashboard.md
+          - Sleep: flows/existing-app/03-sleep.md
+          - Feeding: flows/existing-app/04-feeding.md
+          - Diaper: flows/existing-app/05-diaper.md
+          - Notes: flows/existing-app/06-note.md
+          - Pumping: flows/existing-app/07-pumping.md
+          - Tummy time: flows/existing-app/08-tummytime.md
+          - History: flows/existing-app/09-history.md
+          - Child switching: flows/existing-app/10-childswitch.md
+          - Settings: flows/existing-app/11-settings.md
+          - Edge cases: flows/existing-app/12-edge.md
+          - Discrepancies: flows/existing-app/99-discrepancies.md
+      - Project:
+          - Personas: PERSONAS.md
+          - Briefs:
+              - Architecture: briefs/00-architecture.md
+              - Login & data layer: briefs/01-login-and-data-layer.md
+              - Stages 2–5: briefs/02-stages-2-to-5.md
+              - Icons & theming: briefs/03-icons-and-theming.md
+              - Independent framework review: briefs/independent-review.md
+              - Framework evaluation:
+                  - Decision: briefs/framework-eval/DECISION.md
+                  - Kotlin + Compose: briefs/framework-eval/kotlin-compose.md
+                  - React Native: briefs/framework-eval/react-native.md
+                  - Flutter: briefs/framework-eval/flutter.md

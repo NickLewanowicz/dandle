@@ -69,7 +69,7 @@ After a data wipe, login's request chain omits `GET /api/timers/` (verified in a
 
 ## Skipped / not covered
 
-- **Spec §6.3.6 (401/session expired):** no debug mechanism to revoke the session without touching the admin API key used by `/tmp/bb_token`; skipped per mission instruction. Code path exists (LoginViewModel session prefill) but was not triggered black-box.
+- **Spec §6.3.6 (401/session expired):** no debug mechanism to revoke the session without touching the admin API key used by the QA scripts; skipped per mission instruction. Code path exists (LoginViewModel session prefill) but was not triggered black-box.
 - **Spec §6.3.5 (two devices, near-duplicate diapers):** single emulator; accepted tradeoff.
 - **Sign-out flow (checklist 8):** not in this pass's mission scope (A–F); overflow menu verified to list it.
 - **Pagination of older pages:** seed data only reaches "Yesterday" in the loaded window; older-page loading not exercised.
@@ -135,7 +135,7 @@ overlap-resolve failures (RUNBOOK rule 7).
 
 **6/6 PASS** (grid icons light+dark · timeline trio glyphs + range rows · adopted-timer
 STARTED row after relaunch · long-press web escape hatch · both widgets · offline
-PENDING→synced). Evidence: /tmp/qa-final/ (QA session, not committed). New findings,
+PENDING→synced). Evidence: local QA session artifacts (not committed). New findings,
 none blocking:
 
 - **P2-11 new-note sheet restores stale draft text** — after a note save + sync, the

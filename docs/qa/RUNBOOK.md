@@ -3,7 +3,7 @@
 **Owner:** qa-engineer persona · **Consumers:** every agent that touches the emulator, and future maintainers.
 
 ## Why this exists
-AI agents repeatedly re-derive the same device dance (fresh install → login → drive UI → verify server) from scratch. It wastes tokens, bloats context, and produces stale-coordinate mistakes (the keyboard shifts the layout between taps — never reuse coordinates across steps). The scripts and runbook below are the canonical, cheap path.
+AI agents repeatedly re-derive the same device dance (fresh install → login → drive UI → verify server) from scratch. Repeating that dance by hand is slow, error-prone, and produces stale-coordinate mistakes (the keyboard shifts the layout between taps — never reuse coordinates across steps). The scripts and runbook below are the canonical, cheap path.
 
 ## The rules (also in AGENTS.md)
 1. **Never hand-drive a fresh-install login again** — use `scripts/qa/fresh-install-login.sh`.

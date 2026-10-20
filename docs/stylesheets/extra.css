@@ -21,3 +21,56 @@
   display: block;
   margin-inline: auto;
 }
+
+/* --- Persona-wave additions (2026-10-20) -------------------------------- */
+
+/* Sam's finding: the H1 was the lowest-contrast text on the page. */
+.md-typeset h1 {
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+}
+
+/* Landing "3am answers" stat cards — mimic the app's glanceable widgets. */
+.stat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  max-width: 560px;
+  margin: 1.2rem auto;
+}
+.stat-cards .stat-card {
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  background: rgba(63, 81, 181, 0.10);
+  border: 1px solid rgba(63, 81, 181, 0.25);
+}
+[data-md-color-scheme="slate"] .stat-cards .stat-card {
+  background: rgba(140, 158, 255, 0.10);
+  border-color: rgba(140, 158, 255, 0.30);
+}
+.stat-cards .stat-label {
+  font-size: 0.72rem;
+  opacity: 0.72;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.stat-cards .stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.stat-cards .stat-hint {
+  font-size: 0.78rem;
+  opacity: 0.66;
+}
+
+/* "Designed for one hand" promise box. */
+.promise-box {
+  border: 1px solid rgba(63, 81, 181, 0.45);
+  border-radius: 12px;
+  padding: 0.6rem 1.1rem;
+  margin: 1.2rem 0;
+}
+[data-md-color-scheme="slate"] .promise-box {
+  border-color: rgba(140, 158, 255, 0.45);
+}

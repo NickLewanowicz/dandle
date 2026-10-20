@@ -42,6 +42,14 @@ jobs:
 
       - name: Build site (strict)
         run: mkdocs build --strict --site-dir site
+      # Post-build smoke check: a plugin regression once stripped every <img>
+      # from the built pages while the build stayed green (2026-10-20). The
+      # screenshots ARE the documentation — a deploy without them is a lie.
+      - name: Verify media survived the build
+        run: |
+          count=$(grep -rl '<img' site --include='*.html' | wc -l)
+          echo "pages with <img>: $count"
+          test "$count" -ge 10
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
