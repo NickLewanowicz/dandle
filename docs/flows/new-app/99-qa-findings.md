@@ -128,3 +128,30 @@ installed it, so a full PNG set was captured and committed against the previous
 build; the gate now syncs + verifies the install (`sync_apk`, RUNBOOK rule 6). A
 hand-saved demo entry overlapping the A2 edit window also cascaded A2b +
 overlap-resolve failures (RUNBOOK rule 7).
+
+---
+
+## Final acceptance pass — 2026-10-19 (round-7 icons + startedLabel fix)
+
+**6/6 PASS** (grid icons light+dark · timeline trio glyphs + range rows · adopted-timer
+STARTED row after relaunch · long-press web escape hatch · both widgets · offline
+PENDING→synced). Evidence: /tmp/qa-final/ (QA session, not committed). New findings,
+none blocking:
+
+- **P2-11 new-note sheet restores stale draft text** — after a note save + sync, the
+  NEXT new-note sheet opens pre-filled with the previous note's text; one accidental
+  Save ships junk. Recommendation: clear the text draft on successful save (keep the
+  process-death restore for *open* drafts, which is by design). Fix needs a JVM test +
+  a capture assertion (03 note panel starts empty) per the regression rule.
+- **P3-12 quick-actions widget "Bottle" last-line keys on any feeding method** — the
+  cell shows the last FEEDING regardless of method under a "Bottle" label (reads 44m
+  for a breastfeed). Arguably by design (cell label = the tap action, not the stat);
+  if kept, consider relabeling the line "Fed 44m ago". UX call, owner to decide.
+- **P3-13 `edit/delete_confirm` testTag covers the whole dialog** — center taps are a
+  silent no-op; script deletes must target the "Delete" text node. Fix the tag bounds
+  next time QA scripts are touched.
+
+Observation (deliberate-decision backlog): the app pulls server data only on process
+start — no pull on resume, and server-side deletions don't propagate to the local
+timeline. Consistent with offline-first so far, but worth an explicit spec decision
+(pull-to-refresh? tombstones?).
