@@ -105,3 +105,26 @@ All P1 and P2 findings were fixed with regression tests and re-verified on the e
 ## Regression gate — 2026-10-18
 
 After the owner UI rework (v0.4, `90-owner-ui-rework.md`), persona round 2 (widget running-first row, info rows open the app — `widgets.md`), and the ">5-minute range" timeline tweak, `scripts/qa/capture-flows.sh --assert` ran **fully green: 4/4 canaries** — A1 save→row visibility, A2a native-picker edit, A2b in-place row update, overlap→FAILED→resolve. All flow PNGs under `docs/screenshots/new-app/flows/` were regenerated and committed in the same commits as the changes. The findings and verdicts above are unchanged.
+
+---
+
+## Finding (Maintainer QA, 2026-10-19): adopted-timer STARTED row showed "just now" — FIXED (P2, display-only)
+
+**Found while** verifying the round-7 icons on-device: after an app relaunch with a
+running timer, the auto-reopened card read "Started 19:58 · just now" on a
+~50-minute-old timer (and kept claiming the current minute). The elapsed counter and
+the save path were correct — `startedLabel` read the restored draft's relative
+`startedMinutesAgo` (0 after restore) instead of the adopted timer's absolute start.
+
+**Fix:** `startedLabel` now derives the age from the timer's `startedAtMillis` (plus
+any Adjust backdate, mirroring `TimerRepository.stopAndSave`'s `start = timerStart −
+adjust`, so the row and the saved start cannot disagree). Pinned by
+`StartedLabelTest` (5 cases incl. adjust-vs-save consistency) and the new **A3
+capture canary** (restart-mid-timer → STARTED row must read "…m ago", never
+"just now").
+
+**Same-day process find:** the 2026-10-19 icon gate rebuilt the APK but never
+installed it, so a full PNG set was captured and committed against the previous
+build; the gate now syncs + verifies the install (`sync_apk`, RUNBOOK rule 6). A
+hand-saved demo entry overlapping the A2 edit window also cascaded A2b +
+overlap-resolve failures (RUNBOOK rule 7).

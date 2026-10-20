@@ -516,8 +516,19 @@ private fun StartedAgoRow(
  * Jordan+Elena, persona round 2), relative in parentheses for drift sense.
  */
 internal fun startedLabel(panel: OpenPanel, nowMillis: Long): String {
-    val minutesAgo = panel.draft.startedMinutesAgo
-    val clock = java.time.Instant.ofEpochMilli(nowMillis - minutesAgo * 60_000L)
+    // An adopted/restored timer (app relaunch while running) must drive the age from its
+    // ABSOLUTE start — the draft's relative minutesAgo is 0 for a restored panel, which
+    // claimed "just now" on a hours-old timer (QA 2026-10-19). The Adjust backdate adds on
+    // top, mirroring the save path (TimerRepository.stopAndSave: start = timerStart −
+    // adjust), so the row and the saved start can't disagree.
+    val minutesAgo = when (val timer = panel.timer) {
+        null -> panel.draft.startedMinutesAgo
+        else -> ((nowMillis - timer.startedAtMillis + 30_000L) / 60_000L).toInt()
+            .coerceAtLeast(0) + panel.draft.startedMinutesAgo
+    }
+    val startMillis = (panel.timer?.startedAtMillis ?: nowMillis) -
+        panel.draft.startedMinutesAgo * 60_000L
+    val clock = java.time.Instant.ofEpochMilli(startMillis)
         .atZone(java.time.ZoneId.systemDefault())
         .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
     return when {

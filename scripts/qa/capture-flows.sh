@@ -843,10 +843,34 @@ if isinstance(data, dict):
 PYEOF
 }
 
+# Build the tree's debug APK and install it over the device copy. The
+# 2026-10-19 stale-icon incident: this gate rebuilt but never installed, and
+# every flow PNG was captured against an outdated binary — the docs set is the
+# visual source of truth, so a stale build here poisons the docs silently.
+# (fresh-install-login.sh clears DATA; it has never updated the APK.)
+sync_apk() {
+  local apk="$REPO_ROOT/app/app/build/outputs/apk/debug/app-debug.apk"
+  local before after
+  if [ -x "$REPO_ROOT/app/gradlew" ]; then
+    step "APK sync"
+    (cd "$REPO_ROOT/app" && ./gradlew -q :app:assembleDebug) \
+      || die "gradle :app:assembleDebug failed (source scripts/dev-env.sh first)"
+  fi
+  [ -f "$apk" ] || die "app-debug.apk not found at $apk — build it first"
+  before="$(ash dumpsys package "$PKG" 2>/dev/null | tr -d '\r' | sed -n 's/.*lastUpdateTime=//p')"
+  "$ADB" -s "$SERIAL" install -r "$apk" >/dev/null 2>&1 || die "adb install -r $apk failed"
+  after="$(ash dumpsys package "$PKG" 2>/dev/null | tr -d '\r' | sed -n 's/.*lastUpdateTime=//p')"
+  if [ -n "$before" ] && [ "$before" = "$after" ]; then
+    die "install -r left lastUpdateTime unchanged ($before) — refusing to capture a stale build"
+  fi
+  printf '    installed build: %s\n' "${after:-new-install}"
+}
+
 check_env() {
   step "Preconditions"
   ash echo >/dev/null 2>&1 || die "device $SERIAL not reachable via adb"
   "$SCRIPT_DIR/server.sh" wait >/dev/null 2>&1 || die "Baby Buddy server not answering (scripts/qa/server.sh wait)"
+  sync_apk
   ash pm list packages 2>/dev/null | tr -d '\r' | grep -q "package:$PKG" || die "$PKG not installed"
   # disable animations — uiautomator-friendly (same as fresh-install-login.sh)
   ash settings put global window_animation_scale 0
@@ -1143,6 +1167,23 @@ g03_quickactions() {
   step "03: SLEEP running card (below the buttons), then >10s stop-guard dialog"
   if open_timer_card SLEEP; then
     shot 03-quickactions-06-sleep-running   # live counter visible
+    if (( ASSERT )); then
+      # A3 adopted-timer started-row (QA 2026-10-19): restarting the app while the
+      # timer runs auto-reopens the card with the ADOPTED timer; the STARTED row used
+      # to show "just now" + the current time on a minutes-old timer (the row read the
+      # restored draft's 0, not the timer's start). After ≥65 s of age the row must
+      # read "· Nm ago" with a clock matching the counter.
+      step "03/A3: adopted-timer started-row (restart while running)"
+      sleep 60                              # age ≥65 s by dump time → "1m ago"
+      restart_app
+      sleep 4                               # auto-open adopts the running timer
+      a3=0
+      if a3xml="$(dump_with_retry)"; then
+        echo "$a3xml" | grep -qE 'Started [0-9]{2}:[0-9]{2} · [0-9]+m ago' && a3=1
+      fi
+      assert_chk "$a3" "A3 adopted-timer: STARTED row ages with the timer after restart ('…m ago', never 'just now')"
+      scroll_top
+    fi
     sleep 12                                # must exceed 10 s for the stop guard
     scroll_top
     if tap_tag "dashboard/quick_action/SLEEP"; then   # U3: tap-to-stop (no ✕ on the card)
