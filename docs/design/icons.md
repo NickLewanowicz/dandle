@@ -140,6 +140,51 @@ stupid-looking — redraw simple, with a very strict visual reviewer gate.
   the five; inert — all usage sites tint).
 - Spend: **$0.** All tracing/redraw hand-computed; no generation APIs.
 
+### 2.3 Round 8 — owner rejection of hand-drawn diaper/pump/tummy; APK-original img2img (SHIPPED)
+
+Owner: the trio is "still stupid looking" — use the ORIGINAL app's icons as the
+base and generate versions that look like them but SLIGHTLY DIFFERENT.
+Supersedes the diaper/pumping/tummy-time glyphs of §2.2 (feeding variants stay).
+
+- **Extraction:** the v2.6.4 APK's `pkg_diaper` / `pkg_pumping` / `pkg_crawl`
+  (tummy time) drawables mapped across density buckets via aapt2; the 96px
+  (xxxhdpi) rasters are ground truth (`/tmp/icon-src/orig_*.png`) with 512px
+  upscaled references (`ref_*_512.png`). Gotcha: the refs are single-color
+  strokes carried entirely by the ALPHA channel — the gray channel is ≈black
+  at strokes — so the silhouette, not the luminance, is the asset. Upscale is
+  soft; composition is law.
+- **img2img:** 1 × `openai/gpt-image-2` per icon (1:1, quality=medium,
+  `input_images` = the 512 ref on black, output_format=png), prompt pattern:
+  "Recreate this baby-care icon as a clean white line icon on a plain black
+  background. Keep the exact same composition and elements. Slightly
+  different: [diaper: thicker strokes, rounder waistband-tab corners /
+  pumping: simplify bottle marks, thicken outline / tummy: smooth curves,
+  rounder head circle]. Minimal flat vector style, no shading, no gradients,
+  single line weight. No text." All 3 succeeded first try (~30s each); no
+  retries, spare unused. Model notes: gpt-image-2's schema has NO fidelity
+  knob (`input_fidelity` is gone; `input_images` is a LIST; output arrives as
+  a LIST — index [0]); close reproduction with subtle drift comes from the
+  prompt, and it held.
+- **Post-process (round-6 pipeline, throwaway PIL in `/tmp/icon-src/stage/`,
+  not committed):** autocrop → luminance→alpha (white strokes → white pixels
+  + alpha) → square-pad 512×512 → `/tmp/icon-src/gen_{diaper,pumping,tummy}.png`;
+  side-by-side sheets `/tmp/icon-src/compare_{diaper,pumping,tummy}.png`
+  (original LEFT, generated RIGHT, 48px chips on light/dark below).
+- **Verdicts (512 + 48px light/dark visual gate):** all three PASS —
+  composition recognizable at a glance, visibly-but-slightly different, clean
+  single-weight lines, no text/artifacts. Diaper: six rounded waistband cells
+  + leg cutouts kept, strokes thicker. Pumping: flange/handle/bottle kept,
+  marks simplified to rounded dashes. Tummy: pose identical, head rounder;
+  the original's three back dashes are now a solid back + one small accent
+  dot (drift derived from the original's own dash motif — reads clean at 48px).
+- **Integration:** rasters shipped as
+  `app/app/src/main/res/drawable-nodpi/ic_bb_{diaper,pumping,tummy_time}.png`
+  (512 RGBA, tintable — round-6 raster pattern); the §2.2 vector XMLs deleted,
+  resource names unchanged → zero Kotlin/layout changes. All usage-site tints
+  verified: Compose `Icon(tint=)`, Glance `ColorFilter.tint`, preview-layout
+  `android:tint`.
+- Spend: 3 × gpt-image-2 ≈ **$0.19**. Cumulative ≈ **$0.98 of $1**.
+
 ## 3. Spend
 
 - Round 4: recraft-v3 raster 4 × $0.04 = **$0.16**; recraft-v3-svg 1 × $0.08 =
