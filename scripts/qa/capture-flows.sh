@@ -497,7 +497,7 @@ restart_app() {  # force-stop + relaunch. The ONE reliable way to re-render the
       sleep 2
     fi
   done
-  wait_for_tag "dashboard" 10 2 >/dev/null || { warn "dashboard not visible after restart"; return 1; }
+  wait_for_tag "dashboard" 20 2 >/dev/null || { warn "dashboard not visible after restart"; return 1; }
   sleep 2
 }
 
@@ -914,8 +914,13 @@ do_login_drive() {
   # The cleartext dialog's own testTag never reaches the uiautomator dump (a
   # Compose dialog window exposes only its text nodes — and while it is up the
   # login fields are absent) — detect it via the unique "Continue" text node.
-  if wait_continue_and_tap 60; then
-    shot 01-login-02-cleartext-dialog
+  # Screenshot-audit fix: SHOOT WHILE THE DIALOG IS UP (Continue not yet
+  # tapped). The old wait_continue_and_tap-then-shot order captured whatever
+  # landed after the acknowledgement — the wrong-password banner — not the
+  # dialog the step claims.
+  if wait_continue_visible 60; then
+    shot 01-login-02-cleartext-dialog   # dialog still on screen
+    wait_continue_and_tap 30 || true    # NOW acknowledge; the login attempt proceeds
   else
     warn "cleartext dialog did not appear (may be suppressed for a pre-acknowledged URL)"
   fi
@@ -932,6 +937,20 @@ do_login_drive() {
   wait_continue_and_tap 60 || true
   wait_for_tag "dashboard" 90 2 >/dev/null || { warn "dashboard never appeared after login"; return 1; }
   printf '    logged in, dashboard visible\n'
+}
+
+# wait_continue_visible <timeout_s>: poll for the cleartext dialog's Continue
+# text node WITHOUT tapping it — the caller captures the dialog first. 0 when
+# visible, 1 on timeout.
+wait_continue_visible() {
+  local timeout="$1" i xml
+  for i in $(seq 1 $(( timeout / 3 ))); do
+    if xml="$(dump_with_retry 2>/dev/null)"; then
+      if bounds_by_text "$xml" "Continue" >/dev/null; then return 0; fi
+    fi
+    sleep 3
+  done
+  return 1
 }
 
 # wait_continue_and_tap <timeout_s>: poll for the cleartext dialog's Continue
@@ -1355,19 +1374,31 @@ g05_sync_states() {
   fi
 
   step "05: back online, then server stopped -> another pending entry"
+  # Screenshot-audit fix (determinism + honesty): require the server to be
+  # ACTUALLY stopped before driving the state, and on ANY failure path DELETE
+  # the target PNG — a missing capture fails honestly; a stale earlier-era PNG
+  # (the 2026-10-17 capture this step silently kept) lies about the app.
+  local sd02="$SHOTDIR/05-sync-states-02-serverdown-pending.png" sd02_ok=0
   if "$SCRIPT_DIR/offline.sh" off; then OFFLINE_ON=0; else warn "airplane mode OFF failed"; fi
-  "$SCRIPT_DIR/server.sh" stop && SERVER_STOPPED=1
+  if "$SCRIPT_DIR/server.sh" stop; then
+    SERVER_STOPPED=1
+  else
+    warn "server stop failed — server-down pending state cannot be produced"
+  fi
   sleep 2
-  if offline_note "QA serverdown pending entry"; then
+  if (( SERVER_STOPPED )) && offline_note "QA serverdown pending entry"; then
     restart_app || warn "restart (server-down) failed"
-    if wait_for_tag "dashboard/badge_pending" 20 2 >/dev/null; then
+    if wait_for_tag "dashboard/badge_pending" 30 2 >/dev/null; then
+      rm -f "$sd02"   # a failed fresh shot must never leave a stale-era PNG
       shot 05-sync-states-02-serverdown-pending
+      if [[ -f "$sd02" ]]; then sd02_ok=1; fi
     else
       warn "server-down pending badge not captured"
     fi
   else
     warn "server-down note could not be saved"
   fi
+  (( sd02_ok )) || rm -f "$sd02"
 
   step "05: server returns -> drain (verified host-side) -> badges clear"
   if "$SCRIPT_DIR/server.sh" start; then SERVER_STOPPED=0; else warn "server start failed"; fi
@@ -1378,6 +1409,36 @@ g05_sync_states() {
     warn "queued notes did not drain within 60 s"
   fi
   restart_app || true
+  # Screenshot-audit fix: this shot used to catch a restored create sheet (draft
+  # restore is a feature) instead of the drained dashboard. Close any restored
+  # sheet, then wait for the CLEARED synced state before shooting: the transient
+  # "All synced ✓" chip (T3 — settles a few seconds, so catching it is bonus),
+  # else the steady proof — dashboard visible with NO pending/failed badge and
+  # NO Offline chip. Never shoot a covered dashboard.
+  local cleared=0 ci3 xmlS
+  for ci3 in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    xmlS="$(dump_with_retry 2>/dev/null || true)" || xmlS=""
+    if [[ -n "$xmlS" ]] && bounds_of "$xmlS" "dashboard/panel/close" >/dev/null 2>&1; then
+      warn "restored create sheet before the synced shot — closing it"
+      tap_tag "dashboard/panel/close" || true
+      sleep 2
+      continue
+    fi
+    if [[ -n "$xmlS" ]] && printf '%s' "$xmlS" | grep -q 'All synced'; then
+      cleared=1
+      break
+    fi
+    if [[ -n "$xmlS" ]] \
+       && bounds_of "$xmlS" "dashboard" >/dev/null 2>&1 \
+       && ! bounds_of "$xmlS" "dashboard/badge_pending" >/dev/null 2>&1 \
+       && ! bounds_of "$xmlS" "dashboard/badge_failed" >/dev/null 2>&1 \
+       && ! printf '%s' "$xmlS" | grep -q 'text="Offline"'; then
+      cleared=1
+      break
+    fi
+    sleep 2
+  done
+  (( cleared )) || warn "synced/cleared dashboard state not confirmed — shooting anyway"
   shot 05-sync-states-03-synced-badge-cleared
 
   step "05: overlapping sleep -> FAILED badge + failure dialog"
@@ -1686,17 +1747,36 @@ g06_widgets() {
   fi
 
   step "06: sleep running on the widget"
-  # No waits on the ticking-timer screen (dumps get flaky): tap, go home, shoot.
+  # Screenshot-audit fix: the old step shot blindly 3 s after HOME and captured
+  # the IDLE widget. Now: start SLEEP via the app (verified via the strip's
+  # timer card), go HOME, and poll the launcher dump for the care widget's
+  # running row ("Asleep since …" — the Glance refresh is not instantaneous)
+  # BEFORE shooting; on any failure DELETE the stale target (a missing PNG
+  # fails honestly, a stale idle-state one lies). The timer is discarded via
+  # the stop guard afterwards (end-state contract: no running timers).
+  local w03="$SHOTDIR/06-widgets-03-home-sleep-running.png" w03_ok=0 wi3 xml3
   if open_app && tap_tag "dashboard/quick_action/SLEEP"; then
-    sleep 3
+    wait_for_tag "dashboard/timer/SLEEP" 15 2 >/dev/null || warn "sleep strip card not confirmed (continuing)"
     press_home
     wait_launcher 15 || true
-    sleep 3   # widget refresh lands within a beat
-    shot 06-widgets-03-home-sleep-running
+    for wi3 in 1 2 3 4 5 6 7 8; do
+      sleep 2   # settle for the widget refresh
+      xml3="$(dump_with_retry 2>/dev/null || true)" || xml3=""
+      if printf '%s' "$xml3" | grep -q "Asleep since"; then w03_ok=1; break; fi
+    done
+    if (( w03_ok )); then
+      rm -f "$w03"   # a failed fresh shot must never leave a stale idle-state PNG
+      shot 06-widgets-03-home-sleep-running
+      [[ -f "$w03" ]] || warn "widget running shot failed to write"
+    else
+      warn "care widget never showed the running row — removing the stale capture"
+      rm -f "$w03"
+    fi
     open_app || true
     discard_timer "SLEEP"
   else
     warn "could not start sleep for the widget running state"
+    rm -f "$w03"
   fi
   wait_launcher 5 || true
 

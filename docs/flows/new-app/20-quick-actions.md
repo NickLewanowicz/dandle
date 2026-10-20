@@ -33,6 +33,12 @@ How to verify (scripted): group 03 of `capture-flows.sh --assert` (canary A1 = d
 4. Save → `DELETE /api/timers/` 204 + `POST /api/feedings/` 201. Server entry: `{type: "formula", method: "bottle", amount: 120.0, start = timer start, end = stop}` — exact.
 5. Learned defaults: reopen FEEDING for Milo → `formula` + `bottle` pre-checked ✓. Switch child to **Zoe** → panel defaults `breast milk` + `bottle` (fallback), full 6-method cascade → per-child independence ✓ (spec §3.1, UX §3).
 
+**Watch it happen — logging a feed.**
+
+![Feeding quick action: tap Feeding, pick Breast milk and Both breasts, save — the entry lands at the top of Today.](../../media/demo-feeding-log.gif)
+
+*26 s — timer starts with the tap, the type→method cascade re-renders, and the saved row appears under Today; verified server-side (`POST /api/feedings/` 201, breast milk/both breasts).*
+
 ### Diaper (no timer)
 1. Tap `CHANGE` → panel, **Save disabled** (dump: `enabled=false`) until a toggle is on ✓.
 2. Wet + Solid on, `extra_options` disclosure → Color **yellow**, amount `40` → Save → `POST /api/changes/` 201 `{wet:true, solid:true, color:"yellow", amount:40.0}` ✓ (endpoint is `/api/changes/` ✓).
@@ -44,6 +50,12 @@ How to verify (scripted): group 03 of `capture-flows.sh --assert` (canary A1 = d
 3. Stop guard: strip `✕` after 1 h 07 m (adopted orphan timer) → dialog **"Stop timer? You've been tracking Sleep for 1:07:23."** — **Save filled**, Keep/Discard subdued ✓ (UX §3). Discard → `DELETE /api/timers/` 204, no entry created ✓.
 4. <10 s silent discard: start, discard at 5 s → no dialog, no entry, timer deleted ✓ (spec §3 common rules).
 5. Tap `SLEEP` while a timer runs → focuses/opens the running timer instead of starting a duplicate ✓ (verified with the restored orphan timer, spec §3).
+
+**Watch it happen — the sleep timer and its stop guard.**
+
+![Sleep quick action: tap Sleep, the live counter ticks on the running card, tap Sleep again — the stop guard appears — Discard.](../../media/demo-sleep-timer.gif)
+
+*25 s — the running card ticks past the 10 s guard, the re-tap raises "Stop timer?", and Discard removes it with no entry created (`DELETE /api/timers/` 204).*
 
 ### Notes
 Tap `NOTE` → multiline field, auto-focused; typed → Save enables → `POST /api/notes/` 201 `{note, time=now}` ✓. Save disabled when empty (verified in offline run before typing).
@@ -72,7 +84,7 @@ Start → milestone "Grabbed toy" → card Save after 19 s → `POST /api/tummy-
 
 ## Screenshots
 
-`docs/screenshots/new-app/20-quick-actions/01…25` — running panel, solid-food cascade, formula ready-to-save, diaper toggles/extra options, guard dialogs, stop dialog (Save emphasized), sleep saved, note panel, defaults for Milo/Zoe, child persistence.
+`docs/screenshots/new-app/flows/03-quickactions-01…10` — running panel, solid-food cascade, formula ready-to-save, diaper toggles/extra options, guard dialogs, stop dialog (Save emphasized), sleep saved, note panel, defaults for Milo/Zoe, child persistence.
 
 ## Deviations from spec
 

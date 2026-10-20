@@ -1,7 +1,0 @@
-- generic [active] [ref=f15e1]:
-  - heading "Launcher candidates (48px launcher size Â· 96px Â· full)" [level=2] [ref=f15e2]
-  - generic [ref=f15e3]:
-    - generic [ref=f15e4]: launcher-candidate-1
-    - generic [ref=f15e9]: launcher-candidate-2
-    - generic [ref=f15e14]: launcher-candidate-3
-    - generic [ref=f15e19]: launcher-candidate-4

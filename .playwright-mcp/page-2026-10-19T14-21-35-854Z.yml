@@ -1,6 +1,0 @@
-- generic [active] [ref=f6e1]:
-  - heading "Feeding side variants v3 (solid = fed, dashed = unfed, L/R corner; both = both solid)" [level=2] [ref=f6e2]
-  - generic [ref=f6e3]:
-    - generic [ref=f6e4]: left
-    - generic [ref=f6e35]: right
-    - generic [ref=f6e63]: both

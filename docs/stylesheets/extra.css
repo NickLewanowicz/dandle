@@ -1,0 +1,23 @@
+/* Small polish on top of Material for MkDocs. Keep this file tiny. */
+
+/* Round the corners of embedded screenshots (hero image + flow docs). */
+.md-typeset img {
+  border-radius: 0.4rem;
+}
+
+/* Cap the hero image on the landing page so it reads as a screenshot, not a banner. */
+.md-content img[src*="99-final-dashboard"] {
+  max-width: 42rem;
+}
+
+/* Wide tables scroll instead of stretching the page. */
+.md-typeset table:not([class]) {
+  display: block;
+  overflow-x: auto;
+}
+
+/* Center screenshots and diagrams within the content column. */
+.md-typeset img {
+  display: block;
+  margin-inline: auto;
+}

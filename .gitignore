@@ -13,3 +13,9 @@ app/build/
 local.properties
 .DS_Store
 .kotlin/
+
+# Docs site (mkdocs)
+site/
+.venv/
+
+.playwright-mcp/

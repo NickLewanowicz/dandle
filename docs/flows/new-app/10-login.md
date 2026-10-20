@@ -15,7 +15,13 @@
 2. Server log shows exactly the chain above (verified line-by-line; see screenshots/`server-log.sh -n 25` at run time).
 3. Wrong-password run (`--pass wrongpass`, full fresh install): error banner **"Wrong username or password."** in `login/error_banner`; username + password fields get error styling; URL field stays clean — matches UX spec §1 state table.
 4. Persisted-credential skip verified: with valid stored session, `fresh-install-login.sh --keep-data` finds no login screen (app goes straight to dashboard) — spec §1.6.
-5. Child switcher defaults to first child (Milo) and the selection persists across restarts (verified after switching to Zoe and force-stopping: switcher still "Zoe", screenshot `20-quick-actions/24-child-persisted-zoe.png`).
+5. Child switcher defaults to first child (Milo) and the selection persists across restarts (verified after switching to Zoe and force-stopping: switcher still "Zoe", screenshot `docs/screenshots/new-app/flows/02-dashboard-04-child-zoe.png`).
+
+**Watch it happen — child switching.**
+
+![Child switch: open the header picker, switch to Zoe — the dashboard re-renders with Zoe's timeline — then switch back to Milo.](../../media/demo-child-switch.gif)
+
+*12 s — the picker lives under the header chevron; each switch re-renders the quick actions and timeline for the selected child.*
 
 ## Branches / states
 
@@ -28,10 +34,13 @@
 
 ## Screenshots
 
-- `docs/screenshots/new-app/10-login/01-fresh-login-screen.png`
-- `docs/screenshots/new-app/10-login/02-dashboard-after-login.png`
-- `docs/screenshots/new-app/10-login/03-wrong-password-banner.png`
-- `docs/screenshots/new-app/10-login/04-dashboard-final.png`
+Committed flow set (`docs/screenshots/new-app/flows/`):
+
+- `01-login-01-initial.png` — fresh-install login screen
+- `01-login-02-cleartext-dialog.png` — `http://` cleartext warning (Continue proceeds)
+- `01-login-03-error-banner.png` — wrong-password banner
+- `02-dashboard-01-idle.png` — dashboard after login
+- `99-final-dashboard.png` — final dashboard state
 
 ## Deviations from spec
 

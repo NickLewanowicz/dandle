@@ -2,7 +2,7 @@
 
 Researched October 2026 against `babybuddy/babybuddy` master (commit `09629cf`, 2026-10-12) and the official docs at <https://docs.baby-buddy.net/api/>. Every field name, route, and validation rule below is taken directly from the source (`api/serializers.py`, `api/views.py`, `api/urls.py`, `api/filters.py`, `api/permissions.py`, `api/authentication.py`, `core/models.py`, `core/urls.py`, `babybuddy/settings/base.py`, `api/tests.py`, `docs/api.md`, `openapi-schema.yml`) — not guessed.
 
-Local source used for verification: `~/Documents/Projects/babybuddy-next/.scratch/babybuddy`.
+Local clone used for verification: `.scratch/babybuddy`.
 
 ---
 

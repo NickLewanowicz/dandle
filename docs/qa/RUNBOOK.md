@@ -28,3 +28,9 @@ AI agents repeatedly re-derive the same device dance (fresh install → login �
 5. The script handles the app being logged in or on the login screen, always restores airplane mode/server/timers/active child (even on failure), and deletes only the test entries it created (marker-tagged, via `api.sh DELETE`). Preconditions: server up, both widgets placed, children Milo + Zoe present.
 6. **The gate syncs the APK itself** (`sync_apk`: `:app:assembleDebug` + `adb install -r` + `lastUpdateTime`-changed guard) — it refuses to capture a stale binary. This was added 2026-10-19 after a stale-install incident: the gate rebuilt but never installed, and a full PNG set was captured and committed against the previous build. `source scripts/dev-env.sh` first (Gradle needs the JBR).
 7. **Keep human/demo entries out of the capture's edit windows.** The A2 edit moves its target entry's START one hour earlier; if any REAL (unmarked) entry's span covers that wall-clock window, the server legitimately rejects the edit as an overlap and the entry goes FAILED — A2b and the overlap-resolve canary then fail as a cascade (2026-10-19: a hand-saved 18:09–19:11 breastfeed did exactly this). Before a gate run, delete or reschedule demo entries overlapping roughly the last 2 hours; hand-saved demo data belongs in the quieter parts of the day.
+8. **Known flaky steps (2026-10-20):** group 05's offline-restart → server-down → drain sequence
+   flaked in three consecutive full-gate runs (dashboard-not-visible cascade after airplane-mode
+   restarts; the app itself verified fine offline by hand). `06-widgets-03-home-sleep-running.png`
+   was captured out-of-gate (documented deviation — same steps, driven by hand with dump-verified
+   coordinates) and `05-sync-states-02-serverdown-pending.png` is intentionally absent pending a
+   fix of the step sequence. Do not "restore" these files from old runs — a stale capture lies.

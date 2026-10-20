@@ -6,9 +6,16 @@
 
 - Scripts: `scripts/qa/server.sh stop|start|wait` (server-down flavor), `scripts/qa/offline.sh on|off` (airplane flavor — use one flavor per run, both verified), `scripts/qa/applog.sh` (`BB/SYNC drain/dispatch/rejected`), `scripts/qa/server-log.sh` (replayed requests in outbox order), `scripts/qa/api.sh` (post-conditions).
 - Tags: `dashboard/sync_chip`, `dashboard/badge_pending`, `dashboard/badge_failed` (badge tags absent from a11y tree in the broken states — finding #8; verify visually via screenshots + text `Will sync`).
+- Current UI (2026-10-19): offline → header "Offline" chip + "Will sync" pill on pending entries; on recovery the queue drains (oldest-first) and the badges clear — both visible in the demo clip below.
 - Expected requests: while offline — none to the server (access log flat); on recovery — queued `POST`s in creation order (oldest first), each 201; a rejected op logs `BB/SYNC … op #N … rejected:` and shows the server's `non_field_errors` text.
 
 ## Observed — scenario by scenario (spec §6.3)
+
+**Watch it happen — going offline and draining.**
+
+![Offline note: airplane mode on, save the note "docs-demo", the row shows "Will sync", airplane off — the badge clears and the row syncs.](../../media/demo-offline.gif)
+
+*32 s — the airplane flavor of the PENDING → replay path: the note is queued while offline ("Will sync" pill + header "Offline" chip), then drains with the correct timestamp the moment the network returns (`POST /api/notes/` 201) and the badge clears.*
 
 **1. Server down → create → PENDING → replay (PASS).**
 `server.sh stop` → created offline: note ("offline note one"), diaper (wet), note two (guard fired: "Note logged 1 min ago. Add anyway?" → Add), sleep B, sleep D (guard: "Sleep logged just now" → Add) → outbox queued (BB/SYNC `drain … NetworkDown`). `server.sh start` → on next app start the drain replayed **oldest-first, all 201**: `#16 CREATE NOTE`, `#17 CREATE CHANGE`, `#18 CREATE NOTE`, `#19 CREATE SLEEP`, `#20 CREATE SLEEP` (server log lines in order) ✓. PENDING badge verified on sleep D's row after relaunch ("Will sync", screenshot 13/14) ✓. The offline diaper/nap appear in the CareDashboard widget immediately after the drain (widget drain-completion refresh ✓, checklist 10).
@@ -39,10 +46,11 @@ Force-stop with 5 queued ops and a running pumping timer → relaunch (still off
 
 ## Screenshots
 
-`docs/screenshots/new-app/40-offline-sync/00…15` — online conflict-dialog attempt (dashboard after silent close), chip states, pending badge after relaunch, airplane timer + guard dialog, final states.
+`docs/screenshots/new-app/flows/05-sync-states-01…06` — online conflict-dialog attempt (dashboard after silent close), chip states, pending badge after relaunch, airplane timer + guard dialog, final states.
 
 ## Deviations from spec
 
 - **P1** — finding #3 (rejection surfacing + resolution path broken; spec §3.8, §6.2, §6.3.2 unmet).
 - No "Offline" chip: while offline the header keeps showing the stale "N failed" chip and never shows the "Offline" state (UX §5 SyncStatusChip table). Rolled into finding #3's fix or tracked separately as P3.
+- **Update 2026-10-19:** shipped — header "Offline" chip + "Will sync" pill on pending entries; on recovery the entry drains and the badge clears. The offline-indicator concern recorded above (rolled into finding #3) is resolved; the historical notes are left as recorded.
 - Scenario 6 skipped (no debug mechanism), per mission instruction.

@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Static widget-picker preview for the CareDashboard widget (UX-review W7). Plain
-    RemoteViews-compatible views (no Glance): child-name header, four data rows, and the
-    rounded primaryContainer running row. Mirrors CareDashboardWidget's compact branch;
-    literal baseline colors (see preview_widget_bg.xml).
+    RemoteViews-compatible views (no Glance): child-name header (bold, full contrast —
+    T4/W8), the ACCENTED running-timer row FIRST reading as state ("Asleep since HH:MM ·
+    elapsed", persona round 2 / Priya P2), then the Last feed / Last diaper / Last nap /
+    Last pump rows. Mirrors CareDashboardContent's compact branch (running row position,
+    wording, order, and CareRow metrics); literal baseline colors (see preview_widget_bg.xml).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -12,14 +14,57 @@
     android:background="@drawable/preview_widget_bg"
     android:padding="10dp">
 
-    <!-- W8 child-name header -->
+    <!-- T4/W8 child-name header: bold, full contrast — the widget's WHO. -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:paddingBottom="4dp"
         android:text="Milo"
-        android:textSize="11sp"
-        android:textColor="#49454F"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#1D1B20"
         android:maxLines="1" />
+
+    <!-- Running row: FIRST, a rounded primaryContainer chip reading as STATE
+         ("Asleep since HH:MM · elapsed"), not a stop button (persona round 2).
+         Colors are the onPrimaryContainer literals (W6). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/preview_chip_running"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_bb_sleep"
+            android:tint="#21005D"
+            android:contentDescription="@string/care_dashboard_widget_label" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="Asleep since 13:05"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#21005D"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1h 10m"
+            android:textSize="12sp"
+            android:textColor="#21005D"
+            android:maxLines="1" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -40,9 +85,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:text="Last feed"
             android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:textColor="#1D1B20"
             android:maxLines="1" />
 
@@ -74,9 +120,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:text="Last diaper"
             android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:textColor="#1D1B20"
             android:maxLines="1" />
 
@@ -108,9 +155,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:text="Last nap"
             android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:textColor="#1D1B20"
             android:maxLines="1" />
 
@@ -142,9 +190,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:text="Last pump"
             android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:textColor="#1D1B20"
             android:maxLines="1" />
 
@@ -155,45 +204,6 @@
             android:text="9h"
             android:textSize="12sp"
             android:textColor="#1D1B20"
-            android:maxLines="1" />
-    </LinearLayout>
-
-    <!-- Running row: rounded primaryContainer chip with horizontal padding (W6). -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="4dp"
-        android:background="@drawable/preview_chip_running"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
-
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@drawable/ic_bb_sleep"
-            android:tint="#21005D"
-            android:contentDescription="@string/care_dashboard_widget_label" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="Running: Sleep"
-            android:textSize="13sp"
-            android:textColor="#21005D"
-            android:maxLines="1" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="12m — tap to stop"
-            android:textSize="12sp"
-            android:textColor="#21005D"
             android:maxLines="1" />
     </LinearLayout>
 </LinearLayout>

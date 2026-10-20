@@ -40,6 +40,7 @@ See [AGENTS.md](AGENTS.md) for the full working agreement. Short version:
 - **Build**: `source scripts/dev-env.sh && cd app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` (uses the Android Studio JBR; the system JDK breaks Gradle). Debug builds install as `net.babybuddy.next.debug`.
 - **Emulator QA**: `scripts/qa/fresh-install-login.sh` and friends — see [`docs/qa/RUNBOOK.md`](docs/qa/RUNBOOK.md). Debug builds log every network call and user action under `BB/*` tags (`scripts/qa/applog.sh`).
 - **Docs**: `docs/research/` (verified API + original-app internals), `docs/flows/` (user flows old & new, with the canonical [functional spec](docs/flows/new-app/00-functional-spec.md)), `docs/briefs/` (maintainer briefs incl. the [framework evaluation and decision](docs/briefs/framework-eval/DECISION.md)), `docs/qa/` (runbook + per-feature test checklists).
+- **Docs site**: MkDocs Material — `.venv/bin/mkdocs serve` for live preview, `.venv/bin/mkdocs build --strict` (pinned in `requirements-docs.txt`; strict mode fails the build on broken links). Deploys to GitHub Pages via `.github/workflows/deploy-docs.yml` on every push touching docs; Cloudflare Pages recipe is documented in the `mkdocs.yml` header. Flow demo GIFs/MP4s live in `docs/media/`.
 
 ## Tech
 

@@ -135,6 +135,13 @@ class DashboardViewModel(
     private val _events = MutableSharedFlow<DashboardEvent>(extraBufferCapacity = 1)
     val events = _events
 
+    /**
+     * Set once `uiState` (declared below the deep-link init block) has been constructed.
+     * viewModelScope runs on Main.immediate, so a pending widget deep link delivered during
+     * init collects SYNCHRONOUSLY and would read `uiState` mid-construction — an NPE crash
+     * on every cold-start widget stop tap (QA 2026-10-19). Deep-link handling awaits this.
+     */
+    private val uiStateConstructed = kotlinx.coroutines.CompletableDeferred<Unit>()
     private val activeChildId = MutableStateFlow<Long?>(null)
     private val refreshing = MutableStateFlow(false)
     private val openPanel = MutableStateFlow<OpenPanel?>(null)
@@ -316,6 +323,7 @@ class DashboardViewModel(
      */
     private suspend fun awaitDashboardReady(): DashboardUiState? =
         withTimeoutOrNull(10_000) {
+            uiStateConstructed.await()
             uiState.first { it.activeChild != null }
         }
 
@@ -412,6 +420,11 @@ class DashboardViewModel(
             showLongPressHint = showLongPressHint.value,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
+
+    /** `uiState` above is now constructed — pending deep links may proceed past the gate. */
+    init {
+        uiStateConstructed.complete(Unit)
+    }
 
     /** Shows the long-press hint once, on the first populated timeline render (UX spec §2). */
     fun maybeShowLongPressHint() {

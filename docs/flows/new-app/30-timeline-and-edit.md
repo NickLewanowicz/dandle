@@ -38,6 +38,12 @@ How to verify (scripted): group 04 (canaries A2a value changed via picker, A2b r
 - **Delete:** sheet Delete → confirm dialog "Delete entry? / This removes it from the app and the server." (Cancel/Delete) → confirm → `DELETE /api/changes/10/` 204, row removed in place immediately ✓ (spec §4.2).
 - Edit save updates the row in place (times in rows changed after edits: 22:22, 21:47 visible) ✓.
 
+**Watch it happen — a quick edit.**
+
+![Quick edit: tap the 19:35–19:55 feeding row, expand the sheet, open the START picker, spin the dial to 19:25, OK, Save — the row updates in place.](../../media/demo-quick-edit.gif)
+
+*31 s — START moved through the native dial; the row re-renders as 19:25–19:45 (duration preserved) without leaving the timeline (`PATCH /api/feedings/90/` 200).*
+
 ## Branches / states
 
 | Branch | Result |
@@ -50,7 +56,7 @@ How to verify (scripted): group 04 (canaries A2a value changed via picker, A2b r
 
 ## Screenshots
 
-`docs/screenshots/new-app/30-timeline-edit/01…12` — edit sheet (diaper + feeding), nudged time, duration-preserving move, delete confirm, post-delete list, day headers (Yesterday), list states.
+`docs/screenshots/new-app/flows/04-edit-01…04` — edit sheet (diaper + feeding), nudged time, duration-preserving move, delete confirm, post-delete list, day headers (Yesterday), list states.
 
 ## Deviations from spec
 

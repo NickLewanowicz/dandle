@@ -155,3 +155,31 @@ Observation (deliberate-decision backlog): the app pulls server data only on pro
 start — no pull on resume, and server-side deletions don't propagate to the local
 timeline. Consistent with offline-first so far, but worth an explicit spec decision
 (pull-to-refresh? tombstones?).
+
+---
+
+## Docs-site capture wave findings (2026-10-20)
+
+**P1-14 (FIXED): cold-start widget stop deep link crashed the app** — NPE in
+`awaitDashboardReady` (uiState read mid-construction; Main.immediate synchronous
+collection). Fixed via `uiStateConstructed` gate; pinned by
+`DashboardDeepLinkColdStartTest` (red/green verified). Found by the demo-widget
+capture; also surfaced the ≤10s silent-discard branch consuming early taps (by design).
+
+**P2-15 group-05 offline/serverdown capture steps env-flake in every full-gate run**
+(3 runs, incl. one on a cold-booted emulator): after airplane-on + restart, the helper
+reports "dashboard not visible" (final wait now bumped 10→20 s), the NOTE quick-action
+tag then goes unfound, and the server-down pending entry + drain shots cascade.
+Manual verification shows the app itself renders the dashboard correctly offline in
+~8 s — the failure is in the step sequence, not the app. `05-sync-states-02-serverdown-pending.png`
+is therefore intentionally ABSENT from docs/screenshots/new-app/flows/ as of 2026-10-20
+(the new honest-failure rm replaced an Oct-17 stale file). Re-capture it once the step
+sequence is fixed. A hand-capture attempt (2026-10-20, ~02:00) also failed silently —
+the note sheet's Save closed without creating the entry — reinforcing that this step
+needs a proper fix, not retries. `06-widgets-03-home-sleep-running.png` was captured
+out-of-gate the same night (documented deviation) after three gate runs failed its
+running-row poll; the state itself verified trivially by hand. Canaries in the same runs: 5/5 green on run 3 (cold boot).
+
+**Also filed today:** P2-11 stale note-sheet draft, P3-12 widget "Bottle" last-line
+keys on any feeding method, P3-13 `edit/delete_confirm` tag bounds. P2-11 did NOT
+reproduce during the server-down hand-capture attempt (fresh sheet opened empty).

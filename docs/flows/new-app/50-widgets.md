@@ -33,6 +33,12 @@ Screenshots: `06-widgets-01-home-both-widgets` (idle tiles with last-lines), `06
 - **CareDashboard nap-row tap:** timer starts (`POST /api/timers/` 201) **but the app comes to the foreground** — reproduced twice cleanly (launcher resumed → tap → `MainActivity` resumed). The QuickActions path (broadcast) correctly stays on the launcher; the dashboard nap row uses an activity trampoline that lands on the app task. **P2 — finding #5.** **[Resolved by design, persona round 2, 2026-10-18: info rows opening the app is now the specified behavior — timers are never started from the widget.]**
 - **Configure:** long-press on a placed widget goes straight to launcher resize mode; **no Configure entry** — `android:reconfigurable` is not declared in either `*widget_info.xml` (only `android:configure`), so reconfiguration is unreachable after placement (remove + re-add only). Add-time config screens verified by the engineer (`widgets/quick_actions_config.png`, `widgets/care_dashboard_config.png`). **P3 — finding #7.**
 
+**Watch it happen — the widget tap contract.**
+
+![Widgets: tap the QuickActions Sleep cell — the timer starts via broadcast and the launcher stays foreground (no app launch) while both widgets flip to a running state, the care widget gaining a first "Asleep since HH:MM · Xm" row — then the care widget's Last feed row opens the app, which auto-opens the running timer's card.](../../media/demo-widgets.gif)
+
+*The idle Sleep-cell tap starts the timer (`POST /api/timers/` 201) without leaving the launcher; both widgets flip to running — the care widget's first row reads "Asleep since HH:MM · Xm" — then the Last feed row opens the app straight onto the running timer's card.*
+
 ## Branches / states
 
 | Branch | Result |
@@ -46,7 +52,7 @@ Screenshots: `06-widgets-01-home-both-widgets` (idle tiles with last-lines), `06
 
 ## Screenshots
 
-`docs/screenshots/new-app/50-widgets/01…13` — live widgets, running state, deep-link, nap-tap result, long-press resize, widget picker (preview copy "Four tappable care buttons…", "Last feed, diaper, nap, and pump at a glance"), config attempts. Engineer's: `docs/screenshots/new-app/widgets/*`.
+`docs/screenshots/new-app/flows/06-widgets-01…03` — live widgets, running state, deep-link, nap-tap result, long-press resize, widget picker (preview copy "Four tappable care buttons…", "Last feed, diaper, nap, and pump at a glance"), config attempts. Engineer's: `docs/screenshots/new-app/widgets/*` (widget close-ups).
 
 ## Deviations from spec
 
