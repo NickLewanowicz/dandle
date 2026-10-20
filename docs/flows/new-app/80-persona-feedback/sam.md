@@ -1,3 +1,7 @@
+---
+title: "Persona feedback: Sam"
+---
+
 # Sam — beta feedback, round 1 (2026-10-17)
 
 **Who I am:** the other parent. I did not choose this app and I do not love it. My phone lives face-down on the counter; I open this thing maybe twice a day, usually because someone is asking me a question ("has she been fed?") or because a diaper happened on my watch. What I want from it is answers and one-tap actions **from the lock/home screen** — the app itself is what I tolerate, not what I enjoy.

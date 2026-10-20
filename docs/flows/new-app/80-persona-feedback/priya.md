@@ -1,3 +1,7 @@
+---
+title: "Persona feedback: Priya"
+---
+
 # Priya — beta feedback, round 1 (2026-10-17)
 
 **Who I am:** I run Baby Buddy myself, in Docker, behind a reverse proxy, for two kids (Milo, 4 months; Zoe, 1y7m). I read API logs for fun. I don't need to be protected from the server — I need the app to be **exactly** as honest on the wire as it is on the screen. My trust model is simple: I type it, I should be able to find it in `curl` and in the access log, byte for byte.

@@ -1,3 +1,7 @@
+---
+title: "Brief 00: Architecture blueprint"
+---
+
 > **STATUS: Draft for the native-Kotlin contingency.** Framework decision pending (see docs/briefs/framework-eval/). The canonical product spec is docs/flows/new-app/00-functional-spec.md — framework-agnostic.
 
 # Brief 00 — Architecture Blueprint

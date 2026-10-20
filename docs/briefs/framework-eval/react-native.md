@@ -1,3 +1,7 @@
+---
+title: "Framework brief: React Native"
+---
+
 # Framework evaluation: React Native (Expo) for babybuddy-next
 
 *Authored by the React Native Expert persona, October 2026. Research current as of 2026-10-16; local toolchain verified on this machine (see §8). Read alongside the Kotlin/Compose and Flutter briefs.*
@@ -55,7 +59,7 @@ This is the section that decides the evaluation, so here is the concrete mechani
 This is a **real accessibility tree** — the agent gets the same snapshot quality it has when testing a plain web app. That is the single biggest QA-ergonomics win of the three frameworks: Flutter web draws to a canvas (no DOM nodes to target), and native emulator snapshots are coarser (§3.2).
 
 **Timings, honestly:**
-- Metro cold start: ~2–5 s. Hot reload after a source edit: **<1 s**. 
+- Metro cold start: ~2–5 s. Hot reload after a source edit: **\<1 s**. 
 - One agent iteration (snapshot → click → verify): **~1–3 s**.
 - A full user flow (login → timeline → start timer → edit event → assert): **~10–30 s**.
 - Determinism: **very high (~95%+)**. Flakes come almost entirely from animations — disable them on web (one `useReducedMotion`-style gate) and it gets boring.
@@ -182,7 +186,7 @@ Measured, not assumed:
 2. **JDK note (the one real snag):** Expo SDK 56/57-era Gradle/AGP is happiest on JDK 17–21; Homebrew's JDK 25 on PATH may trip Gradle's version matrix. Fix is **zero-install**: point `JAVA_HOME` (or `org.gradle.java.home`) at the existing Android Studio JBR 21. The working agreement's "JDK 17" note aligns.
 3. First `prebuild` + `assembleDebug`: ~5–15 min (Gradle downloads RN/Expo artifacts into the existing 4.6 GB cache; disk has plenty of headroom). Incremental debug builds thereafter: ~15–40 s.
 
-**Iteration-loop speed vs the existing Gradle scaffold:** the scaffold's incremental build is comparably fast (~10–30 s), but *every* UI change costs an APK reinstall + launch + UiAutomator snapshot (~10–20 s end-to-end). RN adds Loop A on top: **<1 s HMR with DOM assertions, no APK at all**, with Loop B available at roughly the scaffold's cost. For an AI QA agent running dozens of iterations per feature, that is a 5–10× difference in feedback throughput, which is exactly what the client optimized for.
+**Iteration-loop speed vs the existing Gradle scaffold:** the scaffold's incremental build is comparably fast (~10–30 s), but *every* UI change costs an APK reinstall + launch + UiAutomator snapshot (~10–20 s end-to-end). RN adds Loop A on top: **\<1 s HMR with DOM assertions, no APK at all**, with Loop B available at roughly the scaffold's cost. For an AI QA agent running dozens of iterations per feature, that is a 5–10× difference in feedback throughput, which is exactly what the client optimized for.
 
 ---
 

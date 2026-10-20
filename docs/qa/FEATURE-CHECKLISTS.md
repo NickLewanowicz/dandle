@@ -1,3 +1,7 @@
+---
+title: "Feature checklists"
+---
+
 # Feature checklists — concrete verification steps
 
 > **Flow screenshots:** the canonical PNG set under `docs/screenshots/new-app/flows/` can be regenerated with `scripts/qa/capture-flows.sh` (see RUNBOOK "Flow capture & regression canaries") instead of hand-capturing. Run it after any UI-affecting change; `--assert` adds the save-visibility/edit-update regression canaries.
@@ -77,7 +81,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 3. Kill the app (`adb shell am kill net.babybuddy.next.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
 4. Stop after >10s: `ui-tap-tag.sh dashboard/timer/SLEEP` -> stop dialog `dashboard/stop_dialog` with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
 5. Save: `ui-tap-tag.sh dashboard/stop_dialog/save`; verify `scripts/qa/api.sh GET /api/sleep/`.
-6. <10s path: repeat quickly — stop must discard silently (no dialog).
+6. \<10s path: repeat quickly — stop must discard silently (no dialog).
 
 **Tags:** `dashboard/quick_action/SLEEP` (re-tap = tap-to-stop), `dashboard/panel/SLEEP` (the card), `dashboard/timer/SLEEP/save`, `dashboard/stop_dialog/{save,keep,discard}`.
 
@@ -85,7 +89,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **Expected UI states:** card only while running, always below the (never-moving) buttons; elapsed H:MM:SS; re-tap >10s -> "Stop timer?" dialog with Save emphasized, ≤10s silent discard; timeline entry SYNCED and scrolled into view.
 
-**JVM tests:** `StopGuardTest` (>10s vs <10s), `TimerRepositoryTest` (restore after process death).
+**JVM tests:** `StopGuardTest` (>10s vs \<10s), `TimerRepositoryTest` (restore after process death).
 
 ## 5. Quick edit time nudge (spec §5)
 
@@ -102,7 +106,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **Expected server requests:** `PATCH /api/{type}/{id}/` (never PUT — always 405 on Baby Buddy).
 
-**Expected UI states:** sheet with type-appropriate fields; inline validation (end after start, no future times, <=24h) disables save with a reason; no dialog on clean save.
+**Expected UI states:** sheet with type-appropriate fields; inline validation (end after start, no future times, \<=24h) disables save with a reason; no dialog on clean save.
 
 **JVM tests:** `TimeEditLogicTest` (duration-preserving shift, constraints), `EventRepositoryEditTest`.
 
@@ -213,19 +217,19 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 ## TEMPLATE (copy for every new feature)
 
-## N. <Feature name> (spec §<ref>)
+## N. `<Feature name>` (spec §`<ref>`)
 
-**Goal:** <one line: what user outcome is proven>.
+**Goal:** `<one line: what user outcome is proven>`.
 
 **Steps**
-1. `scripts/qa/<script>.sh` <args> — <what it proves>.
-2. `scripts/qa/ui-tap-tag.sh <tag>` — <action>.
-3. Verify server: `scripts/qa/api.sh <METHOD> <path>` — <expected>.
+1. `scripts/qa/<script>.sh` `<args>` — `<what it proves>`.
+2. `scripts/qa/ui-tap-tag.sh <tag>` — `<action>`.
+3. Verify server: `scripts/qa/api.sh <METHOD> <path>` — `<expected>`.
 
 **Tags:** `<tag/a>`, `<tag/b>`.
 
-**Expected server requests:** `<METHOD> <path>` <body/shape>.
+**Expected server requests:** `<METHOD> <path>` `<body/shape>`.
 
-**Expected UI states:** <before / during / after, incl. badges & dialogs>.
+**Expected UI states:** `<before / during / after, incl. badges & dialogs>`.
 
-**JVM tests:** `<TestClass>` (<what it pins>).
+**JVM tests:** `<TestClass>` (\<what it pins>).

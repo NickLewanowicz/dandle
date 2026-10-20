@@ -14,8 +14,11 @@ local.properties
 .DS_Store
 .kotlin/
 
-# Docs site (mkdocs)
+# Docs site (Docusaurus; content stays in docs/, site config in website/)
 site/
+website/node_modules/
+website/build/
+website/.docusaurus/
 .venv/
 
 .playwright-mcp/

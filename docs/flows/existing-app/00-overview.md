@@ -1,3 +1,7 @@
+---
+title: "Original app: Overview"
+---
+
 # Baby Buddy for Android v2.6.4 — App Map & Overview
 
 Black-box QA study of the installed app `eu.pkgsoftware.babybuddywidgets` (v2.6.4, versionCode 54)
@@ -73,7 +77,7 @@ from the same scheme — the create call always used that exact name).
 | Dashboard visible | `GET api/children/` (+ cached), `GET api/timers/?child=`, `GET api/{sleep,feedings,changes,pumping,notes,tummy-times}/` | merged timeline; ~5s polling implied by refreshes during the session |
 | Tap Feeding/Sleep/Pumping/Tummy time | `POST api/timers/ {child, name:"<Type>-BBapp:<n>", start}` | timer appeared server-side within ~1s of tap |
 | Save sleep (after 4:17) | `POST api/sleep/` + `DELETE api/timers/1/` | sleep id=6: start == timer start exactly; end = save moment; notes persisted |
-| Cancel timer <10s | `DELETE api/timers/{id}/` (no dialog) | timer gone, nothing logged |
+| Cancel timer \<10s | `DELETE api/timers/{id}/` (no dialog) | timer gone, nothing logged |
 | Cancel timer >10s → "Stop" | `DELETE api/timers/{id}/` after "Stop timer?" dialog | timer gone, nothing logged |
 | Cancel timer >10s → "Keep" | (no request) | timer kept running |
 | Save feeding | `POST api/feedings/` + DELETE timer | id=10: `type:"formula", method:"bottle", amount:3.0` |

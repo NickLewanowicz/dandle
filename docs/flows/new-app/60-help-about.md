@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Help & about"
+---
+
 # 60 — Help / About / overflow (spec §9) — QA flow doc
 
 **Purpose:** verify the overflow menu contents and that Help (slideshow) and About (version, licenses, upstream links) open and render.

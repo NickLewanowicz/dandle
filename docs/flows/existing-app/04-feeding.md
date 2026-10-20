@@ -1,3 +1,7 @@
+---
+title: "Original app: Feeding"
+---
+
 # 04 — Feeding flow (all type → method combos)
 
 ## Purpose

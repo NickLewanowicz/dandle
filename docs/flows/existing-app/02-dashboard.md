@@ -1,3 +1,7 @@
+---
+title: "Original app: Dashboard"
+---
+
 # 02 — Dashboard (all-in-one main screen)
 
 ## Purpose

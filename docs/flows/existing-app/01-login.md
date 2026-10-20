@@ -1,3 +1,7 @@
+---
+title: "Original app: Login"
+---
+
 # 01 — Login / connection setup
 
 ## Purpose

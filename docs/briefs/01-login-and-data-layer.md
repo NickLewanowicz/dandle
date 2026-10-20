@@ -1,3 +1,7 @@
+---
+title: "Brief 01: Login, settings, data layer"
+---
+
 > **STATUS: Draft for the native-Kotlin contingency.** Framework decision pending (see docs/briefs/framework-eval/). The canonical product spec is docs/flows/new-app/00-functional-spec.md — framework-agnostic.
 
 # Brief 01 — Login, Settings, Data Layer (online core)

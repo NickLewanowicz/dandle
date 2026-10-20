@@ -1,3 +1,7 @@
+---
+title: "Brief 03: Icons & theming"
+---
+
 # Brief 03 — Iconography, semantic type colors, breast-side glanceability
 
 **Status:** Approved by Maintainer. Owner directives: better icons (own or generated via Replicate, ≤$1 budget, no "AI-generated" vibe), semantic per-type colors for glanceable scanning (light+dark, system-default theme), and breast side (left/right/both) visible at a glance for feeding AND pumping.

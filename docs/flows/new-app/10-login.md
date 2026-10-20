@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Login"
+---
+
 # 10 — Login (spec §1.1–1.2) — QA flow doc
 
 **Purpose:** prove the fresh-install path (clear data → login screen → cleartext warning → dashboard) and the wrong-password branch, fully scripted, with the server-side request chain verified.

@@ -1,3 +1,7 @@
+---
+title: "Existing app architecture"
+---
+
 # Baby Buddy for Android — Architecture & Scope Study
 
 Studied from source at commit of `main` (October 2026). Local checkout used for this study:
@@ -143,7 +147,7 @@ Order in layout: **Feeding, Diaper change, Sleep, Note, Pumping, Tummy time**. C
 2. Timer→activity mapping by name: regex `^.*-bbapp:([0-9]+)$` (lowercased), legacy names "sleep"/"tummy time"/"feeding", or exact API names. **Any other timer on the server is ignored** (user's manual "Quick timers" don't pollute the UI).
 3. Panel shows a live `HH:MM:ss` counter (updated every 500 ms, `timerHandler()`), type-specific fields, and a note editor. **Save button appears only when required fields are valid.**
 4. **Save**: create the time entry via v2 API with `start = timer.start`, `end = max(timer.start, nowServer())` and the note text, then **stop = DELETE the server timer** (`GenericLoggingController.store`). Per-type payloads in §2.3.
-5. Tap the button again while running = **cancel**: if the timer has run **> 10 s**, a confirmation dialog "Stop timer? The {activity} timer is running for a long time already…" with **Stop / Keep** (`stopTimerFromSwitch`, strings `cancel_timer_warning_*`); cancelling just deletes the timer (nothing logged).
+5. Tap the button again while running = **cancel**: if the timer has run **> 10 s**, a confirmation dialog "Stop timer? The `{activity}` timer is running for a long time already…" with **Stop / Keep** (`stopTimerFromSwitch`, strings `cancel_timer_warning_*`); cancelling just deletes the timer (nothing logged).
 6. On failure to save: dialog "Could not store activity" with server message (JSON errors parsed) or generic I/O text, options **Cancel / Stop timer** (`GenericLoggingController.error`).
 
 Per-type panels:
@@ -158,7 +162,7 @@ Per-type panels:
 
 Draft persistence (all local, cleared after successful save): diaper wet/solid/note/open-state/color/amount, feeding type/method/amount/note, pumping amount/note, generic-timer notes, and which panels are open (`LoggingButtonControllerStoreState`). Notes typed for a running timer are stored **locally only** (keyed `virttimer_<childId>_<n>` / `timer_<id>`) until the timer is saved — they are *not* pushed to the server timer.
 
-**Conflict handling** (`MainActivity.storeActivity`, `MainActivity.kt:242-395`): if saving fails, the app queries overlapping entries for that activity (`start_max` = timer's projected server end, `end_min` = timer start, `child` filter, limit 50). If conflicts exist, a non-cancelable dialog "Overlapping time entries" offers **Modify (resolve)** — patch each conflicting entry so it ends at the timer's start, then retry save up to 3× —, **Cancel**, or **Stop timer** (discard). A progress spinner ("Storing {activity}…") runs throughout.
+**Conflict handling** (`MainActivity.storeActivity`, `MainActivity.kt:242-395`): if saving fails, the app queries overlapping entries for that activity (`start_max` = timer's projected server end, `end_min` = timer start, `child` filter, limit 50). If conflicts exist, a non-cancelable dialog "Overlapping time entries" offers **Modify (resolve)** — patch each conflicting entry so it ends at the timer's start, then retry save up to 3× —, **Cancel**, or **Stop timer** (discard). A progress spinner ("Storing `{activity}`…") runs throughout.
 
 ### 4.5 Timeline / history (`history/ChildEventHistoryLoader.kt`, `history/TimelineEntry.kt`)
 - Reverse-chronological merged stream of the 6 implemented entry types; infinite scroll (`updateTop()` triggers fetch when within 20 items of the loaded set); new entries are inserted at top after a save (`addEntryToTop`).
@@ -177,7 +181,7 @@ A **single** preference: `setting_dark_light_mode` ListPreference (system / ligh
 - **Help** (`Help.kt`): 2-level ViewPager2 slideshow — horizontal topics × vertical sections, arrows, per-section title in toolbar (content in §5).
 - **Contact developer** (`ContactDeveloperFragment.kt`): form sent to maintainer's PHP endpoint.
 - **Debug log display** (`debugging/DebugLogDisplay.kt`): in-memory log from `GlobalDebugObject` (raw request/response logging via `DebugNetworkInterceptor`).
-- **Update notice** (`UpdateNotifications.kt`): on app-version change shows an "Update {version}" info dialog once.
+- **Update notice** (`UpdateNotifications.kt`): on app-version change shows an "Update `{version}`" info dialog once.
 
 ---
 
@@ -212,7 +216,7 @@ Overlay tutorials also exist inside the app (`tutorial/TutorialManagement.kt`): 
 - **Date/time pickers: none.** Entries are always logged "now"; corrections happen via the long-press → web UI. (No `DatePicker`/`TimePicker` anywhere in `app/src/main/java`.)
 - **Long-running timer cancel guard**: >10 s timers ask "Stop / Keep" before discarding (§4.4).
 - **HTTP plaintext**: allowed (`usesCleartextTraffic="true"` + `res/xml/network_security_configuration.xml`) but warned at login; no cert pinning.
-- **In-app update notice**: one-time "Update {version}" dialog after app upgrade, gated per version by `upgrade_latest_info_version_less_than_or_equal`.
+- **In-app update notice**: one-time "Update `{version}`" dialog after app upgrade, gated per version by `upgrade_latest_info_version_less_than_or_equal`.
 
 ---
 

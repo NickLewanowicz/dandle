@@ -1,3 +1,7 @@
+---
+title: "Original app: Note"
+---
+
 # 06 — Note flow (event, no timer)
 
 ## Purpose

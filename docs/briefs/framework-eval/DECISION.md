@@ -1,3 +1,7 @@
+---
+title: "Framework decision"
+---
+
 # FRAMEWORK DECISION — Native Kotlin + Jetpack Compose
 
 **Decided by:** Maintainer · **Date:** 2026-10-16 · **Status:** FINAL for the beta; revisit triggers in §4.
@@ -8,7 +12,7 @@ Candidate briefs: [kotlin-compose.md](kotlin-compose.md) · [flutter.md](flutter
 
 | Criterion (owner's order) | Kotlin/Compose | Flutter | RN/Expo |
 |---|---|---|---|
-| **AI-agent QA ability** | **1** — measured <10 s warm build→install→drive loop on this machine; `testTagsAsResourceId` gives the most stable agent selectors of the three; ~80% of tests JVM-only | 3 — web QA only via opt-in semantics bridge; no `resource-id` on device (upstream issue) = flaky emulator automation | 2 — real-DOM browser loop is genuinely the fastest for ~90% of UI flows, but widgets/background/install (our headline features) can NEVER be browser-QA'd by any framework; two loops = twice the maintenance |
+| **AI-agent QA ability** | **1** — measured \<10 s warm build→install→drive loop on this machine; `testTagsAsResourceId` gives the most stable agent selectors of the three; ~80% of tests JVM-only | 3 — web QA only via opt-in semantics bridge; no `resource-id` on device (upstream issue) = flaky emulator automation | 2 — real-DOM browser loop is genuinely the fastest for ~90% of UI flows, but widgets/background/install (our headline features) can NEVER be browser-QA'd by any framework; two loops = twice the maintenance |
 | **Performance & reliability** | **1** — ~0.5–1 s startup, ~5–8 MB APK, no JS/Dart runtime, no yearly SDK treadmill | 2 | 3 — 1–2 s start, 15–25 MB APK, ~3 Expo SDKs/year churn |
 | **Feature fit (widgets! M3! offline!)** | **1** — Glance 1.2 stable, M3 reference implementation incl. Expressive + one-line dynamic color, WorkManager native | 2 — both widgets need ~500–800 LOC native Kotlin anyway; declined M3 Expressive upstream | 3 — single-maintainer widget lib = our biggest supply-chain risk on a headline feature |
 | **Cross-platform upside (iOS later)** | 2 — domain-only KMP ~2–4 wks; full CMP ~4–8 wks; iOS widgets SwiftUI regardless | 2 | **1** — ~95% shared iOS; but iOS widgets are a separate effort for everyone |

@@ -6,10 +6,13 @@ title: About
 
 Baby Buddy Next is a **beta**. The core flows — logging, timers, editing, offline sync, widgets — work against a real server, and they got there the unfashionable way: a final QA acceptance pass on a real emulator against a real server that found nothing blocking, plus a standing rule that no UI change counts as done until the automated flow checks re-run green and the screenshots are regenerated.
 
-!!! note "Built for one hand, in the dark"
-    Dark by default, big buttons, works offline. Logging a diaper is three taps, and nothing decorative stands between you and the save.
+:::note[Built for one hand, in the dark]
 
-    ![The dashboard: six quick actions and Today's timeline, dark theme.](screenshots/new-app/flows/02-dashboard-01-idle.png)
+Dark by default, big buttons, works offline. Logging a diaper is three taps, and nothing decorative stands between you and the save.
+
+![The dashboard: six quick actions and Today's timeline, dark theme.](screenshots/new-app/flows/02-dashboard-01-idle.png)
+
+:::
 
 ## Credits
 

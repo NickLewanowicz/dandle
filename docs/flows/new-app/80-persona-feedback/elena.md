@@ -1,3 +1,7 @@
+---
+title: "Persona feedback: Elena"
+---
+
 # Elena — beta feedback, round 1 (2026-10-17)
 
 **Who I am:** I'm 68. I watch my grandson Milo two afternoons a week; my granddaughter Zoe goes to preschool most days. My daughter-in-law put this app on my phone for me and texted me a server address and a login. I had never opened it before today. I am careful with phones — I don't press things I can't undo, and I do not like red.

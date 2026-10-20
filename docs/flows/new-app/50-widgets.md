@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Widgets"
+---
+
 # 50 — Widgets (spec §7, checklists 9–10) — QA flow doc
 
 Implementation reference: `docs/flows/new-app/widgets.md`. Engineer's placement/config evidence: `docs/screenshots/new-app/widgets/`.

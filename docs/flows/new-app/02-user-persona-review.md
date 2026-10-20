@@ -1,3 +1,7 @@
+---
+title: "User persona review"
+---
+
 # 02 — User Persona Review ("Jordan") — spec v0.1 BETA
 
 Reviewed from the user's chair against `00-functional-spec.md`. I have a 4-month-old, a partner on another phone logging the same kid, spotty Wi-Fi, and about one free hand at any given moment. I open this app 10–20 times a day, mostly to answer "when did she last eat?" or to make the diaper counter go up.
@@ -15,7 +19,7 @@ Reviewed from the user's chair against `00-functional-spec.md`. I have a 4-month
 Order is right: Feeding, Diaper, Sleep are my entire day and they're the first three buttons. Notes I use monthly; fine as button four... wait, five. Fine either way, it's parity.
 
 - **Feeding defaults are wrong for us.** Hardcoded type=breast milk + method=bottle means we re-select *formula* at something like 8 feeds a day, every day, forever. That's the single most repeated annoyance this spec bakes in. The app should remember what we logged last (per kid) and default to that. For a pumping household the current default is great — for us it's a daily tax.
-- **The stop-timer dialog asks me a question I answer the same way every time.** Every real nap end: Stop → read three buttons → Save. The <10s auto-discard already catches my accidental pocket-taps, so the dialog is mostly friction. If it stays, Save needs to be the visually obvious answer, not one of three equal options I have to read in the dark.
+- **The stop-timer dialog asks me a question I answer the same way every time.** Every real nap end: Stop → read three buttons → Save. The \<10s auto-discard already catches my accidental pocket-taps, so the dialog is mostly friction. If it stays, Save needs to be the visually obvious answer, not one of three equal options I have to read in the dark.
 - **No way to log something that already happened.** Start-timer-then-edit is the only create path for timed types. At 3 a.m. I start the timer halfway through the feed, save, then fix the start. It works, but the "after the fact" case is my *primary* case and it's currently a two-step dance.
 
 ## 2. Quick Edit (§5)

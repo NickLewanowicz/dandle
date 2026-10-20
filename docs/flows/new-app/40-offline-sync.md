@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Offline & sync"
+---
+
 # 40 — Offline & sync (spec §6.3) — QA flow doc
 
 **Purpose:** verify the offline-first guarantees — local-first writes with PENDING badges, oldest-first replay, FAILED surfacing with a resolution path, timer + queue survival across process death, and the airplane-mode timer flow.

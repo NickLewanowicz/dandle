@@ -1,3 +1,7 @@
+---
+title: "Independent framework review"
+---
+
 # Independent review — 2026-10-16
 
 Fresh-eyes audit of the plan + the login dead-end. Verdicts are evidence-backed; file/line refs are absolute.

@@ -1,3 +1,7 @@
+---
+title: "Functional spec"
+---
+
 # babybuddy-next — Canonical Functional Specification (v0.4 BETA)
 
 > **This document is the product of record.** Any implementation (Kotlin/Compose, Flutter, React Native, or a future rewrite) must satisfy every MUST here. Screenshots referenced under `docs/screenshots/` are normative evidence. Parity baselines: the existing Baby Buddy for Android v2.6.4 flows mapped in `docs/flows/existing-app/`, and server behavior in `docs/research/babybuddy-api.md`.
@@ -46,32 +50,32 @@ Empty state (fresh server): friendly illustration + "Log your first event with a
 Common rules:
 - Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer and shows its card below the grid (§2.3); **tapping the same button again is tap-to-stop** — it runs the stop guard below (>10s dialog, ≤10s silent discard). Never a duplicate timer. **[P: exact original tap semantics, v0.4]**
 - The card's only action is the icon-only save (check). There is no discard/✕ on the card: discard = re-tap → Discard in the dialog.
-- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save** is a full-width filled button; below it, "Keep running" (left) and **Discard** (right, subdued) sit on a SECOND row — the destructive action must not sit adjacent to Save (thumb-slip = erased nap; persona round 2, Jordan). The body SPELLS durations ("2 min 52 sec", never bare "0:16"). <10s → discard silently. **[P: original semantics, v0.4 layout]**
+- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save** is a full-width filled button; below it, "Keep running" (left) and **Discard** (right, subdued) sit on a SECOND row — the destructive action must not sit adjacent to Save (thumb-slip = erased nap; persona round 2, Jordan). The body SPELLS durations ("2 min 52 sec", never bare "0:16"). \<10s → discard silently. **[P: original semantics, v0.4 layout]**
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
 - Save = create entry with start = timer start, end = stop time. **[P]**
 - **"Started X min ago" adjust (timed panels) [N, v0.3]**: the four timer panels carry one compact line — "Started just now" / "Started 20m ago" — with an **Adjust** expander offering **−15m / −5m / +5m / +15m** nudges and a **Pick time** platform time picker. The adjust backdates the ENTRY START only (start = timer start − adjust, clamped to the stop time); end and duration rules are unchanged. Clamp 0..24h; a future start is unreachable by construction. The adjustment persists with the panel draft and applies to both the panel Save and the stop-dialog Save.
 
 ### 3.1 Feeding **[P]**
-- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ {breast milk, formula, fortified breast milk, solid food}; method ∈ {bottle, left breast, right breast, both breasts, parent fed, self fed} — **solid food offers bottle, parent fed, self fed** (verified in the existing app: docs/flows/existing-app/04-feeding.md). Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
-- Save → `POST /api/feedings/` {child, start, end, type, method, amount?}. Amount optional for breast methods.
+- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ `{breast milk, formula, fortified breast milk, solid food}`; method ∈ `{bottle, left breast, right breast, both breasts, parent fed, self fed}` — **solid food offers bottle, parent fed, self fed** (verified in the existing app: docs/flows/existing-app/04-feeding.md). Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
+- Save → `POST /api/feedings/` `{child, start, end, type, method, amount?}`. Amount optional for breast methods.
 - Server timer (created on start, named `Feeding-BBapp:<n>`) DELETEd on save/discard. **[P]**
 
 ### 3.2 Diaper change **[P]**
 - Opens a **modal sheet** (v0.4 — creation is an edit-like action, same UI family as §5): a **TIME** row (native picker, defaults to now — "it happened 20 minutes ago" is an everyday correction; the duplicate guard anchors on the chosen time), toggles **Wet** and **Solid** (both allowed). **Save disabled until at least one is on** (a one-line hint says so).
 - "Extra options" disclosure: **Color** choice (black, brown, green, yellow, pink/red — server enum, exact strings per research doc) and **Amount** (numeric).
-- Save → `POST /api/changes/` {child, time, wet, solid, color?, amount?}. time = the sheet's TIME (default now).
+- Save → `POST /api/changes/` `{child, time, wet, solid, color?, amount?}`. time = the sheet's TIME (default now).
 
 ### 3.3 Sleep **[P]**
-- Start/stop timer; note field in running panel. Save → `POST /api/sleep/` {child, start, end, notes?}. Nap flag auto by server rules (don't send).
+- Start/stop timer; note field in running panel. Save → `POST /api/sleep/` `{child, start, end, notes?}`. Nap flag auto by server rules (don't send).
 
 ### 3.4 Notes **[P]**
-- Opens a **modal sheet** (v0.4): TIME row (native picker, default now) + note text; Save (disabled when empty) → `POST /api/notes/` {child, note, time}.
+- Opens a **modal sheet** (v0.4): TIME row (native picker, default now) + note text; Save (disabled when empty) → `POST /api/notes/` `{child, note, time}`.
 
 ### 3.5 Pumping **[P]**
-- Start/stop timer; amount (mL) + note fields. Save → `POST /api/pumping/` {child, start, end, amount?, notes?}.
+- Start/stop timer; amount (mL) + note fields. Save → `POST /api/pumping/` `{child, start, end, amount?, notes?}`.
 
 ### 3.6 Tummy time **[P]**
-- Start/stop timer; milestone text + note. Save → `POST /api/tummy-times/` {child, start, end, milestone?, notes?}.
+- Start/stop timer; milestone text + note. Save → `POST /api/tummy-times/` `{child, start, end, milestone?, notes?}`.
 
 ### 3.7 Duplicate guard at save **[N]**
 Before saving, if the same type already has an entry for this child within the last **4 minutes** (server data or local), show one calm line: e.g. "Wet diaper logged 4 min ago. Add anyway?" — **Add is the default action**; "View last entry" secondary. Never blocks; never silent-dedupes.

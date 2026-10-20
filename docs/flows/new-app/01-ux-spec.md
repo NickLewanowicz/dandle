@@ -1,3 +1,7 @@
+---
+title: "UI shell spec"
+---
+
 # babybuddy-next — UI/UX Specification (v0.1 BETA)
 
 > Companion to `00-functional-spec.md` (canonical). This document describes **what the user sees and feels**, per screen and component: layout, states, copy, motion. It is framework-agnostic — engineers map each named component to their toolkit's equivalent. Colors are named as Material 3 **roles** (primary, secondaryContainer, surfaceVariant, error, errorContainer, onSurfaceVariant…), never hex. Section numbers (§) reference the functional spec.
@@ -160,7 +164,7 @@ Details:
 - All four timer panels share: live counter (per-second text tick), fields per table above, Save (= stop + log), close ✕ (= cancel path).
 - **Stop guard** (§3): tapping the quick-action button again, the strip card's ✕, or the panel's ✕ —
   - Timer **≤ 10s**: discard silently. Rationale: nothing meaningful is lost; a dialog on every mis-tap would be the real friction.
-  - Timer **> 10s**: dialog. Title: "Stop timer?" Body: "You've been tracking {Feeding} for {12:34}." Buttons: **Save** (filled — most likely intent), **Discard** (text, error color — logs nothing, deletes the timer), **Keep** (text — dismiss, keep running). Non-destructive default = Keep.
+  - Timer **> 10s**: dialog. Title: "Stop timer?" Body: "You've been tracking `{Feeding}` for `{12:34}`." Buttons: **Save** (filled — most likely intent), **Discard** (text, error color — logs nothing, deletes the timer), **Keep** (text — dismiss, keep running). Non-destructive default = Keep.
 
 **Design note (flag for Maintainer):** §3.7 says an online conflict "keeps the entry form open with values intact." Our local-first model (§6.1) closes the form on Save and applies locally immediately — so the conflict surfaces moments later as a FAILED badge + failure dialog whose **Edit** opens the Quick Edit sheet with the original values intact. Same forgiveness, faster happy path. Requires Maintainer sign-off as a deliberate deviation.
 

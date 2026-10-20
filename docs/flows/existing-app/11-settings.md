@@ -1,3 +1,7 @@
+---
+title: "Original app: Settings"
+---
+
 # 11 — Overflow menu, Settings, Help slideshow, About, Contact developer
 
 ## Purpose
@@ -21,7 +25,7 @@ Single preference screen titled "Settings":
 Nothing else. Changing it re-themes live (not exercised further).
 
 ### Help (in-app slideshow)
-Toolbar "Help: <topic>". Structure = 2-level pager: horizontal topics, vertical sections within a
+Toolbar "Help: `<topic>`". Structure = 2-level pager: horizontal topics, vertical sections within a
 topic; large hollow right-arrow (next topic) at mid-right, hollow down-arrow (next section) at
 bottom-center, up-arrow appears once past the first section. NOTE: tapping the arrows did NOT
 advance in this environment; vertical/horizontal SWIPES work reliably.

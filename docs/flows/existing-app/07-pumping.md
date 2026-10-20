@@ -1,3 +1,7 @@
+---
+title: "Original app: Pumping"
+---
+
 # 07 — Pumping flow
 
 ## Purpose
@@ -16,7 +20,7 @@ Dashboard → tap `Pumping` button (row 2, middle; breast-pump icon).
    "M/D/YY h:MM - h:MM (0:01)" + "Amount: 1" (`.0` stripped).
 
 ## Branches / states
-- Cancel behaves like all timer activities (<10 s silent, >10 s "Stop timer?" dialog).
+- Cancel behaves like all timer activities (\<10 s silent, >10 s "Stop timer?" dialog).
 - Amount cannot go below 0 / cannot be null.
 
 ## Server effect (verified)

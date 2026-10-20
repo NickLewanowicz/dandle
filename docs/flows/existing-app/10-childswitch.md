@@ -1,3 +1,7 @@
+---
+title: "Original app: Child switching"
+---
+
 # 10 — Child switcher & per-child history
 
 ## Purpose

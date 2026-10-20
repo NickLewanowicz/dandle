@@ -1,3 +1,7 @@
+---
+title: "Personas"
+---
+
 # The Team — Agent Personas
 
 This project is built by an AI-driven team. One orchestrator (the **Maintainer**) plus five persona subagents. The persona definitions live in `.zcode/agents/*.md` so any ZCode session in this repo can spawn them; this document explains the team and how it works together.

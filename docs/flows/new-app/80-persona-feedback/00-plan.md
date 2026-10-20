@@ -1,3 +1,7 @@
+---
+title: "Persona feedback (round 1): Plan"
+---
+
 # User persona panel — beta feedback round 1 (2026-10-17)
 
 **Protocol:** Personas test the built app on the emulator (emulator-5554), one at a time (shared device), driven through `scripts/qa/*` per `docs/qa/RUNBOOK.md`. Each persona works from their own context — not from engineering docs — and writes a feedback file in this folder: `<name>.md` (walkthrough narrated in first person + verdict SHIP/FIX/REJECT + prioritized asks, each phrased as the experience wanted, never the implementation). They must VIEW the screens (screenshots via `scripts/qa/shot.sh` + Read) and may add events on the dev server (never delete seeded data). No code changes. After all sessions the Maintainer triages into `00-triage.md` (accept/defer/reject + rationale) and accepted items go to the engineer.

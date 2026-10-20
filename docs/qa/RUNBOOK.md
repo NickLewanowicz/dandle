@@ -1,3 +1,7 @@
+---
+title: "QA runbook"
+---
+
 # Common flows — QA automation & runbook
 
 **Owner:** qa-engineer persona · **Consumers:** every agent that touches the emulator, and future maintainers.

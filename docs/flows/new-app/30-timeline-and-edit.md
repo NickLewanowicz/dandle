@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Timeline & quick edit"
+---
+
 # 30 — Timeline + Quick Edit (spec §4–§5) — QA flow doc
 
 **Purpose:** verify timeline structure (day groups, §4.1 headlines, durations, pull-to-refresh, pagination order) and the Quick Edit sheet (steppers, duration-preserving start moves, inline validation, delete-with-confirm, server PATCH).

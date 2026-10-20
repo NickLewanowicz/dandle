@@ -1,10 +1,14 @@
+---
+title: "Implementation stages 2-5"
+---
+
 # Implementation Stages 2–5 (post data-layer)
 
 **Status:** Approved by Maintainer. Each stage is one android-engineer engagement, gated by build+tests, then QA on the emulator. The canonical behavior source is always [docs/flows/new-app/00-functional-spec.md](../flows/new-app/00-functional-spec.md) (v0.2) and [01-ux-spec.md](../flows/new-app/01-ux-spec.md).
 
 ## Stage 2 — Dashboard parity core (six quick actions + timeline)
 
-Deliver: dashboard per spec §2–§4 and UX spec §2–§3 — child switcher (persisted), six quick-action buttons (order Feeding, Diaper, Sleep, Notes, Pumping, Tummy time), quick-action panels incl. running-timer state (live HH:MM:ss counter from TimerRepository), stop-guard dialog (>10s: Save emphasized / Discard / Keep; <10s silent), Feeding type→method cascade with **per-child learning defaults** (spec v0.2), Diaper wet/solid + extra-options disclosure, duplicate guard (spec §3.7), timeline (day-grouped, pull-to-refresh, scroll pagination, entry headlines per spec §4.1), long-press → open web (`{server}/{uiPath}/{serverId}/`, inert + explained when no serverId), SyncStatusChip (UX spec §5: Offline/Syncing…/N failed, tap = force sync), empty states. Timer restore across process death. Exit: full online parity core + offline writes visible as PENDING; tests for timer logic + learning defaults.
+Deliver: dashboard per spec §2–§4 and UX spec §2–§3 — child switcher (persisted), six quick-action buttons (order Feeding, Diaper, Sleep, Notes, Pumping, Tummy time), quick-action panels incl. running-timer state (live HH:MM:ss counter from TimerRepository), stop-guard dialog (>10s: Save emphasized / Discard / Keep; \<10s silent), Feeding type→method cascade with **per-child learning defaults** (spec v0.2), Diaper wet/solid + extra-options disclosure, duplicate guard (spec §3.7), timeline (day-grouped, pull-to-refresh, scroll pagination, entry headlines per spec §4.1), long-press → open web (`{server}/{uiPath}/{serverId}/`, inert + explained when no serverId), SyncStatusChip (UX spec §5: Offline/Syncing…/N failed, tap = force sync), empty states. Timer restore across process death. Exit: full online parity core + offline writes visible as PENDING; tests for timer logic + learning defaults.
 
 ## Stage 3 — Quick edit + offline states (Feature 1 complete)
 

@@ -1,3 +1,7 @@
+---
+title: "Persona feedback (round 1): Triage"
+---
+
 # Persona round 1 — Maintainer triage (FINAL 2026-10-17)
 
 Inputs: [jordan.md](jordan.md) · [sam.md](sam.md) · [priya.md](priya.md) · [elena.md](elena.md) · Verdicts: 4× FIX FIRST (0 REJECT). Consensus #1 across all four personas: saves must appear in the timeline instantly (T1). The core logging, wire fidelity, parent-language failure dialog, widgets' glance value, and duplicate guard all landed as intended.

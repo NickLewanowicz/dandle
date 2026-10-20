@@ -1,3 +1,7 @@
+---
+title: "Original app: Edge cases"
+---
+
 # 12 — Edge behaviors (logout, bad server, background/resume, delete)
 
 ## Purpose

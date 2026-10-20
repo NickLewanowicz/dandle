@@ -1,3 +1,7 @@
+---
+title: "Persona feedback: Jordan"
+---
+
 # Jordan — beta feedback, round 1 (2026-10-17)
 
 **Who I am:** parent of a 4-month-old. I log 10–20 times a day, one-handed, usually with a baby on my other arm, often at 3 a.m. from memory. If the app makes me think, I make mistakes. If the app lies to me once, I stop trusting it.

@@ -1,3 +1,7 @@
+---
+title: "Your data & security"
+---
+
 # Your data & security
 
 Baby Buddy Next talks to exactly one place: **your own Baby Buddy server**. There is no

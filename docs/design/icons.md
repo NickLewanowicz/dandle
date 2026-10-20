@@ -1,3 +1,7 @@
+---
+title: "Icon design"
+---
+
 # Icons & mark — asset documentation (Brief 03 §2, §4.1)
 
 Date: 2026-10-19 (round 4 — owner-directed "ruthless" icon overhaul). Prior rounds:

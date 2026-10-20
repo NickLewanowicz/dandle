@@ -1,3 +1,7 @@
+---
+title: "Flow verification: Quick actions"
+---
+
 # 20 — Quick actions: all six create flows (spec §3) — QA flow doc
 
 **Purpose:** drive all six quick actions end-to-end on the emulator and verify each save server-side (endpoint + fields), plus the timer stop-guard, the type→method cascade, per-child learned defaults, and the duplicate guard.
@@ -48,7 +52,7 @@ How to verify (scripted): group 03 of `capture-flows.sh --assert` (canary A1 = d
 1. Tap `SLEEP` → server timer `Sleep-BBapp:n` + strip card. Note field typed "QA night nap".
 2. Card **Save** (direct) after 21 s → `POST /api/sleep/` 201 `{start, end, notes:"QA night nap}`, `nap` not sent (server-computed `false`) ✓, timer DELETEd ✓.
 3. Stop guard: strip `✕` after 1 h 07 m (adopted orphan timer) → dialog **"Stop timer? You've been tracking Sleep for 1:07:23."** — **Save filled**, Keep/Discard subdued ✓ (UX §3). Discard → `DELETE /api/timers/` 204, no entry created ✓.
-4. <10 s silent discard: start, discard at 5 s → no dialog, no entry, timer deleted ✓ (spec §3 common rules).
+4. \<10 s silent discard: start, discard at 5 s → no dialog, no entry, timer deleted ✓ (spec §3 common rules).
 5. Tap `SLEEP` while a timer runs → focuses/opens the running timer instead of starting a duplicate ✓ (verified with the restored orphan timer, spec §3).
 
 **Watch it happen — the sleep timer and its stop guard.**

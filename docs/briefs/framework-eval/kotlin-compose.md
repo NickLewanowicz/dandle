@@ -1,3 +1,7 @@
+---
+title: "Framework brief: Kotlin + Compose"
+---
+
 # Framework evaluation: Native Kotlin + Jetpack Compose
 
 *Candidate brief by the Native Kotlin Expert persona. Date: 2026-10-16. Companion briefs: Flutter, React Native/Expo. All version claims checked against release pages on this date; local claims verified by running the scaffold at `app/`.*

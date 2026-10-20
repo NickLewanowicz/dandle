@@ -1,3 +1,7 @@
+---
+title: "Widget QA reference"
+---
+
 # New app — Widgets (spec §7, Stage 4)
 
 QA reference for the two Glance widgets. Implementation: `app/app/src/main/java/net/babybuddy/next/widget/`.
@@ -46,7 +50,7 @@ Re-verified on device; specified behavior now:
   a live elapsed label ("Sleep · 12m").
 - **Range rule on widget timestamps:** entry timestamps follow the same >5-minute rule as the
   timeline — a start–end range (duration on the second line) for entries longer than 5 minutes
-  or crossing local midnight, plain time-of-day for shorter entries; sub-minute renders "<1m".
+  or crossing local midnight, plain time-of-day for shorter entries; sub-minute renders "\"\<1m\"".
 
 ## Refresh (spec §7.2)
 

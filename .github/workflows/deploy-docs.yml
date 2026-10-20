@@ -1,6 +1,8 @@
-# Builds the MkDocs site and publishes it to GitHub Pages.
-# Local equivalent: see the header comment in mkdocs.yml.
-# Cloudflare Pages alternative: build `pip install -r requirements-docs.txt && mkdocs build --strict`, output dir `site`.
+# Builds the Docusaurus docs site and publishes it to GitHub Pages.
+# Local equivalent: cd website && npm ci && npm run build   (output: website/build)
+# Cloudflare Pages alternative (no workflow file needed):
+#   Build command:     cd website && npm ci && npm run build
+#   Build output dir:  website/build
 
 name: Deploy docs
 
@@ -9,8 +11,8 @@ on:
     branches: [main]
     paths:
       - "docs/**"
-      - mkdocs.yml
-      - requirements-docs.txt
+      - "website/**"
+      - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,26 +32,50 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: requirements-docs.txt
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
 
       - name: Install docs dependencies
-        run: pip install -r requirements-docs.txt
+        run: npm ci
+        working-directory: website
 
-      - name: Build site (strict)
-        run: mkdocs build --strict --site-dir site
+      - name: Build site
+        run: npm run build -- --out-dir ../site
+        working-directory: website
+
       # Post-build smoke check: a plugin regression once stripped every <img>
-      # from the built pages while the build stayed green (2026-10-20). The
-      # screenshots ARE the documentation — a deploy without them is a lie.
+      # from the built pages while the build stayed green (2026-10-20, the
+      # MkDocs era). The screenshots ARE the documentation — a deploy without
+      # them is a lie.
       - name: Verify media survived the build
         run: |
           count=$(grep -rl '<img' site --include='*.html' | wc -l)
           echo "pages with <img>: $count"
           test "$count" -ge 10
+          test -f site/media/demo-offline.gif
+          test -f site/img/favicon.png
+          # Every <img> src must resolve to a real file in the build output.
+          python3 - <<'PY'
+          import re, os, glob, sys
+          missing = []
+          for page in glob.glob('site/**/*.html', recursive=True):
+              html = open(page, encoding='utf-8').read()
+              for src in re.findall(r'<img[^>]*\ssrc="([^"]+)"', html):
+                  path = src.split('?')[0].split('#')[0]
+                  if path.startswith('http'):
+                      continue
+                  if not os.path.isfile(os.path.join('site', path.lstrip('/'))):
+                      missing.append((page, src))
+          if missing:
+              for page, src in missing:
+                  print(f"BROKEN IMG: {src} on {page}")
+              sys.exit(1)
+          print("all <img> srcs resolve")
+          PY
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

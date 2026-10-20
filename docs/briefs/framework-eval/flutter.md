@@ -1,3 +1,7 @@
+---
+title: "Framework brief: Flutter"
+---
+
 > **STATUS: Draft — Flutter candidacy for framework evaluation.** One of three candidates (Native Kotlin/Compose, React Native/Expo, Flutter). Written by the Flutter-engineer persona, 2026-10-16. Versions verified against pub.dev / flutter.dev on this date; local machine facts verified read-only on this Mac.
 
 # Framework brief — Flutter (candidate)
@@ -25,7 +29,7 @@ Everything we would use, verified October 2026:
 | workmanager | **0.10.10** (39 days old; 2.4k likes) | Wraps Jetpack WorkManager; periodic work floor is 15 min (Android-enforced). Web/macOS support is experimental (Service Worker). Historically slow-maintained under fluttercommunity — a watch-item, though for our single `SyncWorker` the API surface is tiny. [pub.dev/packages/workmanager](https://pub.dev/packages/workmanager) |
 | State management | flutter_riverpod **3.4.3** (42 days old) | For an app this size, even `ValueNotifier`+`InheritedWidget` would do; Riverpod 3 is the mainstream default. [pub.dev/packages/flutter_riverpod](https://pub.dev/packages/flutter_riverpod) |
 | HTTP | `dio` 5.x or `package:http` | Both mature; cleartext HTTP is a pure AndroidManifest concern (same as native). |
-| Hot reload | Android/iOS: excellent (<1 s), as always. **Web: default since 3.35** (3.32 introduced it experimentally) | [Flutter 3.32 blog](https://flutter.dev/blog/whats-new-in-flutter-3-32) |
+| Hot reload | Android/iOS: excellent (\<1 s), as always. **Web: default since 3.35** (3.32 introduced it experimentally) | [Flutter 3.32 blog](https://flutter.dev/blog/whats-new-in-flutter-3-32) |
 
 ## 3. AI-agent QA ergonomics (the #1 criterion)
 
@@ -110,7 +114,7 @@ For a self-hosted baby tracker on Android 10+ hardware, this section barely matt
 - **Java:** `java` on PATH is Homebrew **OpenJDK 25.0.1** — too new for Gradle 8.x (the project scaffold's wrapper is 8.10.2, and Flutter's AGP template rides the same 8.x line). However **`openjdk@17` is installed** via Homebrew, so the fix is `JAVA_HOME`/`org.gradle.java.home` pointing at 17 (AGENTS.md already prescribes JDK 17). No install needed; configuration only.
 - **Android:** SDK complete for us — platforms 29–35 (incl. 35), build-tools 35/36, emulator, and the `Pixel5` AVD our QA already uses. `flutter doctor` + license acceptance: minutes.
 - **Node 25.8.1 + Chrome installed:** the web QA lane needs nothing new. Xcode 26.3 present for iOS sims.
-- **Install/first-build estimate (M1 Pro, 16 GB, 83 GB free):** SDK download 3–15 min (network-dependent); total new disk ≈ **6–8 GB** (SDK ~4 GB, pub cache ~0.5 GB, Gradle/AGP/Kotlin caches ~1.5–2 GB); first `flutter run` on the emulator 5–10 min cold; steady-state `flutter run` 30–60 s, hot reload <1 s, `flutter run -d chrome` 30–90 s. **Setup cost: roughly 30–45 minutes, one time.**
+- **Install/first-build estimate (M1 Pro, 16 GB, 83 GB free):** SDK download 3–15 min (network-dependent); total new disk ≈ **6–8 GB** (SDK ~4 GB, pub cache ~0.5 GB, Gradle/AGP/Kotlin caches ~1.5–2 GB); first `flutter run` on the emulator 5–10 min cold; steady-state `flutter run` 30–60 s, hot reload \<1 s, `flutter run -d chrome` 30–90 s. **Setup cost: roughly 30–45 minutes, one time.**
 - **vs the existing Gradle scaffold:** the working scaffold (`app/`, AGP 8.7.3, Kotlin 2.0.21, Compose BOM, min 29/target 35) is Kotlin-specific and would be **discarded** — `flutter create` generates its own `android/` host. That's the honest toolchain loss versus the native candidate: the Flutter path starts by throwing away working scaffolding, while its iteration loop afterward is at least as fast (hot reload parity with Compose, plus the web lane the native path lacks).
 
 ## 9. Weaknesses vs Kotlin and RN (what the client must accept)

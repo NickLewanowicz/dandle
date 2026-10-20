@@ -1,3 +1,7 @@
+---
+title: "QA findings"
+---
+
 # 99 — QA findings — beta acceptance pass (2026-10-16)
 
 QA engineer pass on emulator-5554, app `net.babybuddy.next.debug`, server `babybuddy` @ `http://10.0.2.2:8000`. Full pass over checklists 1–10 (see `10-login.md` … `60-help-about.md`). Known/triaged items from the engineer handoff (widget-picker preview, days-old "Xd" staleness) are NOT re-filed.

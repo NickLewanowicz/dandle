@@ -1,3 +1,7 @@
+---
+title: "Original app: Discrepancies"
+---
+
 # 99 — Discrepancies: live app v2.6.4 vs docs/research/existing-app-architecture.md
 
 The research doc is largely accurate. Everything below is where the live black-box session

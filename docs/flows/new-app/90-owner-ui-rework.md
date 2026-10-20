@@ -1,3 +1,7 @@
+---
+title: "Owner UI rework"
+---
+
 # Owner UI rework — triage & decisions (2026-10-18)
 
 Direct owner feedback, one pass. Every item is **decided here** (owner pre-approved the
