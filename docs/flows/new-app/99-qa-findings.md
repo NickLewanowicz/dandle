@@ -187,3 +187,12 @@ running-row poll; the state itself verified trivially by hand. Canaries in the s
 **Also filed today:** P2-11 stale note-sheet draft, P3-12 widget "Bottle" last-line
 keys on any feeding method, P3-13 `edit/delete_confirm` tag bounds. P2-11 did NOT
 reproduce during the server-down hand-capture attempt (fresh sheet opened empty).
+
+**P3-16 gate harness: the SECOND full-gate run on a warm emulator fails group 03/04**
+(2026-10-20, twice observed): the FEEDING panel's Save tap doesn't close the panel
+(three attempts), the marker bottle row never exists, and the A2a/A2b edit canaries
+starve. A cold emulator boot clears it — both post-boot runs went 5/5. Workaround:
+cold-boot before gate runs; root-cause (panel state or uiautomator drag heuristics
+after long uptime) still open. Also recurring: the group-05 server-down and
+widget-running steps flake on warm runs (see RUNBOOK rule 8) — the widget-running
+shot was again honestly removed by the gate on the round-8 run.
