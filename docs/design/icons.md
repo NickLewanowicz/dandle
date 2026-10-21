@@ -345,3 +345,11 @@ Maintainer-approved choice is the **`notes` prefix `[Left]` / `[Right]` / `[Both
 (stripped from visible note text, rendered as the §3 badge). Suggested follow-up for
 the spec owner: note this finding in `docs/research/babybuddy-api.md` or the flows
 spec for pumping when §5 is updated (v0.4).
+
+**Weight-matching pass (2026-10-20, owner: "line widths must match"):** measurement
+showed the three rasters' strokes at 9-12px/512 (≈0.5dp at 24dp) vs the vector set's
+2dp — visibly wispy in the grid. Fixed via distance-transform thickening (chamfer
+EDT, delta per icon to land ≈26-31px ≈ 1.2dp): preserves the AI compositions that
+uniform blur/threshold destroyed. Pump measurement dashes erased pre-fatten (they
+merged under growth) and redrawn as crisp rounded bars. Median strokes: diaper 31,
+pumping 26, tummy 26.
