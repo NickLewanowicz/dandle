@@ -1,6 +1,6 @@
-# Baby Buddy Next
+# Dandle
 
-A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source, self-hosted baby tracker.
+An offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy), the open-source, self-hosted baby tracker.
 
 **Status: beta.** It builds, installs, and runs against a real Baby Buddy server. It is not on an app store yet.
 
@@ -37,7 +37,7 @@ Two things make that setup actually work:
 See [AGENTS.md](AGENTS.md) for the full working agreement. Short version:
 
 - **Server**: `docker run -d --name babybuddy -p 8000:8000 -v babybuddy_config:/config lscr.io/linuxserver/babybuddy` (default login `admin`/`admin`), seed with `python3 scripts/seed_demo_data.py`.
-- **Build**: `source scripts/dev-env.sh && cd app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` (uses the Android Studio JBR; the system JDK breaks Gradle). Debug builds install as `net.babybuddy.next.debug`.
+- **Build**: `source scripts/dev-env.sh && cd app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` (uses the Android Studio JBR; the system JDK breaks Gradle). Debug builds install as `app.dandle.debug`.
 - **Emulator QA**: `scripts/qa/fresh-install-login.sh` and friends — see [`docs/qa/RUNBOOK.md`](docs/qa/RUNBOOK.md). Debug builds log every network call and user action under `BB/*` tags (`scripts/qa/applog.sh`).
 - **Docs**: `docs/research/` (verified API + original-app internals), `docs/flows/` (user flows old & new, with the canonical [functional spec](docs/flows/new-app/00-functional-spec.md)), `docs/briefs/` (maintainer briefs incl. the [framework evaluation and decision](docs/briefs/framework-eval/DECISION.md)), `docs/qa/` (runbook + per-feature test checklists).
 - **Docs site**: Docusaurus (the stack Immich uses) — the content stays canonical in `docs/`; the site itself lives in `website/`. Preview: `cd website && npm ci && npm start`; static build: `npm run build` (output `website/build`). Deploys to GitHub Pages via `.github/workflows/deploy-docs.yml` on every push touching docs or the site; Cloudflare Pages recipe: build command `cd website && npm ci && npm run build`, output dir `website/build`. Flow demo GIFs/MP4s live in `docs/media/` (mirrored into `website/static/media/` so `/media/…` URLs are stable).

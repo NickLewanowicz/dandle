@@ -54,15 +54,17 @@ private val SIZE_RELAXED = DpSize(250.dp, 180.dp) // 4×3 breathing room
 /**
  * CareDashboard widget (spec §7.2, UX spec §6): 4×2 (resizable 4×3) with a child-name header
  * (UX-review W8; T4 — bold, full-contrast, the widget's WHO) and rows Last feed / Last diaper /
- * Last nap / Last pump (minute-granular, staleness documented), a running-timer row when one is
- * active, and a QUIET cross-child line when a timer runs for the other child (T7: "Zoe's nap ·
- * 32m" — opens the app). Two size buckets (W11): compact (4×2) and relaxed (4×3). Data is a
- * Room snapshot; refresh on app writes, drain completion, trampoline actions, and the 15-min
- * periodic job (see [WidgetRefresher]).
+ * Last nap / Last pump (minute-granular, staleness documented), one accented running row per
+ * RUNNING timer — sleep + pumping + tummy time can run simultaneously and each gets its own
+ * "… since HH:MM · Xm" row, longest-running first — and QUIET cross-child lines when timers run
+ * for other children (T7: "Zoe's nap · 32m" — opens the app). Two size buckets (W11): compact
+ * (4×2) and relaxed (4×3). Data is a Room-only snapshot (no network at render time); refresh on
+ * app writes, drain completion, trampoline actions, the ~60s live tick while a timer runs, and
+ * the 15-min periodic job (see [WidgetRefresher]).
  *
- * Taps: nap row → starts the sleep timer via broadcast; feed / diaper / pump rows → deep-link
- * into the app with that panel pre-opened; running-timer row (T5) → deep-links into the app's
- * stop-guard dialog for that timer — the label says "tap to stop" and the tap now does it.
+ * Taps (persona round 2 — timers are never started from the dashboard widget): all info rows
+ * open the app; a running-timer row (T5) deep-links into the app's stop-guard dialog for that
+ * timer — the label says "tap to stop" and the tap does it.
  */
 class CareDashboardWidget : GlanceAppWidget() {
 
@@ -76,24 +78,24 @@ class CareDashboardWidget : GlanceAppWidget() {
         val container = (context.applicationContext as App).container
         val prefs = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
         val childId = container.quickActionActions.activeChildId()
+        // Room-only reads at render time (spec §7.2: the widget never blocks on the network;
+        // sync happens in SyncWorker and refreshes the widget when it lands).
         val state = if (childId == null) {
-            WidgetStateMapper.CareDashboardState(rows = emptyList(), runningSince = null, running = null)
+            WidgetStateMapper.CareDashboardState()
         } else {
+            val children = container.childRepository.children.first()
             // W8: resolve the child name for the header from the Room snapshot.
-            val childName = container.childRepository.children
-                .first()
-                .firstOrNull { it.id == childId }
-                ?.firstName
-            // T7: a timer running for the OTHER child surfaces as one quiet line.
+            val childName = children.firstOrNull { it.id == childId }?.firstName
+            // T7: timers running for OTHER children surface as quiet lines (one per timer).
             val timers = container.timerRepository.snapshotRunning()
-            val otherChildName = timers.firstOrNull { it.childId != childId }?.let { t ->
-                container.childRepository.children.first()
-                    .firstOrNull { c -> c.id == t.childId }?.firstName
-            }
-            val crossChild = WidgetStateMapper.crossChildTimer(
+            val otherChildNames = timers.filter { it.childId != childId }
+                .map { it.childId }
+                .distinct()
+                .associateWith { otherId -> children.firstOrNull { it.id == otherId }?.firstName }
+            val crossChild = WidgetStateMapper.crossChildTimers(
                 timers = timers,
                 childId = childId,
-                otherChildFirstName = otherChildName,
+                otherChildFirstNames = otherChildNames,
                 nowMillis = container.serverClock.nowMillis(),
             )
             WidgetStateMapper.careDashboard(
@@ -169,20 +171,15 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 modifier = GlanceModifier.padding(bottom = 4.dp),
             )
         }
-        // Priya (persona round 2): "is she asleep RIGHT NOW" is the first check — the
-        // running row moves to the TOP and reads as STATE ("Asleep since 13:05 · 1h 10m"),
-        // not as a stop button. Tap still deep-links into the stop guard (T5 semantics).
-        state.runningSince?.let { runningSince ->
-            val verb = when (runningSince.kind) {
-                EventType.SLEEP -> "Asleep since"
-                EventType.FEEDING -> "Feeding since"
-                EventType.PUMPING -> "Pumping since"
-                EventType.TUMMY_TIME -> "Tummy time since"
-                else -> "Tracking since"
-            }
+        // Priya (persona round 2): "is she asleep RIGHT NOW" is the first check — the running
+        // rows move to the TOP and read as STATE ("Asleep since 13:05 · 1h 10m"), not as a stop
+        // button. Sleep + pumping + tummy time can run simultaneously; every running timer gets
+        // its own accented row, longest-running first (spec §7.2). Tap still deep-links into the
+        // stop guard (T5 semantics).
+        state.runningSince.forEach { runningSince ->
             CareRow(
                 icon = runningSince.kind.iconRes(),
-                label = "$verb ${runningSince.sinceText}",
+                label = runningStateLabel(runningSince.kind, runningSince.sinceText),
                 detail = runningSince.elapsedText,
                 accent = true,
                 action = WidgetActions.openStopTimerModifier(context, runningSince.kind),
@@ -206,9 +203,9 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
                 relaxed = relaxed,
             )
         }
-        // T7 (Priya): a timer running for the OTHER child surfaces here as one quiet line —
-        // "Zoe's nap · 32m" — opening the app (its stop guard lives on that child's screen).
-        state.crossChild?.let { cross ->
+        // T7 (Priya): timers running for OTHER children surface here as quiet lines —
+        // "Zoe's nap · 32m" — opening the app (their stop guards live on that child's screen).
+        state.crossChild.forEach { cross ->
             CareRow(
                 icon = cross.kind.iconRes(),
                 label = "${cross.childFirstName}'s ${WidgetStateMapper.friendlyNoun(cross.kind)}",
@@ -219,6 +216,18 @@ private fun CareDashboardContent(context: Context, state: WidgetStateMapper.Care
             )
         }
     }
+}
+
+/** The running row's STATE phrasing — "Asleep since 13:05" (spec §7.2 wording shape). */
+private fun runningStateLabel(kind: EventType, sinceText: String): String {
+    val verb = when (kind) {
+        EventType.SLEEP -> "Asleep since"
+        EventType.FEEDING -> "Feeding since"
+        EventType.PUMPING -> "Pumping since"
+        EventType.TUMMY_TIME -> "Tummy time since"
+        else -> "Tracking since"
+    }
+    return "$verb $sinceText"
 }
 
 @Composable

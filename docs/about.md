@@ -4,7 +4,7 @@ title: About
 
 # About
 
-Baby Buddy Next is a **beta**. The core flows — logging, timers, editing, offline sync, widgets — work against a real server, and they got there the unfashionable way: a final QA acceptance pass on a real emulator against a real server that found nothing blocking, plus a standing rule that no UI change counts as done until the automated flow checks re-run green and the screenshots are regenerated.
+Dandle is a **beta**. The core flows — logging, timers, editing, offline sync, widgets — work against a real server, and they got there the unfashionable way: a final QA acceptance pass on a real emulator against a real server that found nothing blocking, plus a standing rule that no UI change counts as done until the automated flow checks re-run green and the screenshots are regenerated.
 
 :::note[Built for one hand, in the dark]
 

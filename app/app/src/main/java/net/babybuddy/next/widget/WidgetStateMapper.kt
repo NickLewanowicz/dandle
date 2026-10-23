@@ -25,8 +25,6 @@ object WidgetStateMapper {
         val lastText: String?,
     )
 
-    data class RunningTimerState(val kind: EventType, val elapsedText: String)
-
     /**
      * T7 (Priya): a timer running for ANOTHER child — "Zoe's nap · 32m". Isolation of data is
      * right; isolation of awareness is a forgotten-nap factory.
@@ -53,15 +51,17 @@ object WidgetStateMapper {
 
     data class CareDashboardState(
         val childName: String? = null,
-        /** "Asleep since 13:05 · 1h 10m" — the first thing an at-work parent checks. */
-        val runningSince: RunningSinceState? = null,
-        val rows: List<CareRow>,
-        val running: RunningTimerState?,
-        /** T7: quiet cross-child running line; null = nothing to show. */
-        val crossChild: CrossChildTimerState? = null,
+        /**
+         * Every timer running for this child, longest-running first — sleep + pumping + tummy can
+         * run simultaneously, and EACH gets its own accent row ("Asleep since 13:05 · 1h 10m").
+         */
+        val runningSince: List<RunningSinceState> = emptyList(),
+        val rows: List<CareRow> = emptyList(),
+        /** T7: quiet cross-child running lines (one per other-child timer); empty = nothing to show. */
+        val crossChild: List<CrossChildTimerState> = emptyList(),
     )
 
-    /** The running timer phrased as STATE ("Asleep since 13:05"), not an action. */
+    /** A running timer phrased as STATE ("Asleep since 13:05"), not an action. */
     data class RunningSinceState(
         val kind: EventType,
         val sinceText: String,
@@ -119,9 +119,10 @@ object WidgetStateMapper {
     }
 
     /**
-     * CareDashboard rows (spec §7.2): last event per type, newest activity first per row,
-     * plus the running-timer row when one is active. [visible] filters configured rows;
-     * [childName] feeds the widget header (UX-review W8).
+     * CareDashboard rows (spec §7.2): last event per type, newest activity first per row, plus
+     * one accent row per RUNNING timer (longest-running first — sleep, pumping, and tummy time
+     * can run simultaneously). [visible] filters configured rows; [childName] feeds the widget
+     * header (UX-review W8).
      */
     fun careDashboard(
         events: List<Event>,
@@ -145,17 +146,17 @@ object WidgetStateMapper {
                 feedingMethod = event.feedingMethod,
             )
         }
-        val running = timers.firstOrNull { it.childId == childId }?.let {
-            RunningTimerState(it.kind, elapsedMinutesText(nowMillis - it.startedAtMillis))
-        }
-        val runningSince = timers.firstOrNull { it.childId == childId }?.let {
-            RunningSinceState(
-                kind = it.kind,
-                sinceText = clockTime(it.startedAtMillis),
-                elapsedText = elapsedMinutesText(nowMillis - it.startedAtMillis),
-            )
-        }
-        return CareDashboardState(childName = childName, runningSince = runningSince, rows = rows, running = running)
+        val runningSince = timers
+            .filter { it.childId == childId }
+            .sortedBy { it.startedAtMillis }
+            .map {
+                RunningSinceState(
+                    kind = it.kind,
+                    sinceText = clockTime(it.startedAtMillis),
+                    elapsedText = elapsedMinutesText(nowMillis - it.startedAtMillis),
+                )
+            }
+        return CareDashboardState(childName = childName, runningSince = runningSince, rows = rows)
     }
 
     fun rowLabel(type: EventType): String = when (type) {
@@ -178,24 +179,27 @@ object WidgetStateMapper {
     }
 
     /**
-     * T7: the first timer running for a child OTHER than [childId], phrased as
-     * "[firstName]'s [noun]" + minute-granular elapsed ("Zoe's nap", "32m"). Null when no
-     * other-child timer runs (the line must not render). Unknown child name degrades to
-     * "Another child" rather than lying about whose it is.
+     * T7: every timer running for a child OTHER than [childId], phrased as
+     * "[firstName]'s [noun]" + minute-granular elapsed ("Zoe's nap", "32m"), longest-running
+     * first. Empty when no other-child timer runs (the line must not render). Unknown child
+     * names ([otherChildFirstNames] keyed by child id) degrade to "Another child" rather than
+     * lying about whose it is.
      */
-    fun crossChildTimer(
+    fun crossChildTimers(
         timers: List<RunningTimer>,
         childId: Long,
-        otherChildFirstName: String?,
+        otherChildFirstNames: Map<Long, String?>,
         nowMillis: Long,
-    ): CrossChildTimerState? {
-        val other = timers.firstOrNull { it.childId != childId } ?: return null
-        return CrossChildTimerState(
-            kind = other.kind,
-            childFirstName = otherChildFirstName?.ifBlank { null } ?: "Another child",
-            elapsedText = elapsedMinutesText(nowMillis - other.startedAtMillis),
-        )
-    }
+    ): List<CrossChildTimerState> = timers
+        .filter { it.childId != childId }
+        .sortedBy { it.startedAtMillis }
+        .map { other ->
+            CrossChildTimerState(
+                kind = other.kind,
+                childFirstName = otherChildFirstNames[other.childId]?.ifBlank { null } ?: "Another child",
+                elapsedText = elapsedMinutesText(nowMillis - other.startedAtMillis),
+            )
+        }
 
     /**
      * "12m ago" · amount for feed/pump, wet/solid for diaper, duration for nap (spec §7.2).

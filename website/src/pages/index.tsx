@@ -5,7 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
 /**
  * The site root lands on the Quick Start — the quick, no-choices path to
- * install babybuddy-next and take it for a test drive (Immich-style front
+ * install Dandle and take it for a test drive (Immich-style front
  * door). No 404 at `/`.
  */
 export default function Home(): JSX.Element {

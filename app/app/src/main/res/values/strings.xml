@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Baby Buddy Next</string>
+    <string name="app_name">Dandle</string>
 
     <!-- Widgets (spec §7) -->
     <string name="quick_actions_widget_label">Quick actions</string>

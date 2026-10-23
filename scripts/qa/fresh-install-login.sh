@@ -8,7 +8,7 @@
 # `login/error_banner` tag appears, exits 2 with the banner text.
 #
 # usage: fresh-install-login.sh [--package PKG] [--url URL] [--user U] [--pass P] [--keep-data]
-#   --package PKG   app package (default net.babybuddy.next.debug)
+#   --package PKG   app package (default app.dandle.debug)
 #   --url URL       server URL to type (default http://10.0.2.2:8000; triggers the cleartext dialog)
 #   --user U        username (default admin)      --pass P password (default admin)
 #   --keep-data     skip `pm clear` (fields may be pre-filled; script clears them)
@@ -24,7 +24,7 @@ usage() {
   exit "${1:-0}"
 }
 
-PKG="net.babybuddy.next.debug"
+PKG="app.dandle.debug"
 URL="http://10.0.2.2:8000"
 APP_USER="admin"
 APP_PASS="admin"

@@ -457,7 +457,12 @@ class DashboardViewModel(
             }
         }
         activeChildId.value = childId
-        viewModelScope.launch { container.sessionStore.setActiveChild(childId) }
+        viewModelScope.launch {
+            container.sessionStore.setActiveChild(childId)
+            // Freshness (spec §7.2): the widgets render the ACTIVE child (header, slots,
+            // last-lines) — a switch must not leave the home screen on the previous child.
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
+        }
     }
 
     // -- Refresh / sync --------------------------------------------------------------
@@ -473,6 +478,9 @@ class DashboardViewModel(
             }
             eventRepo.refresh(limitPerType = fetchedLimitPerType)
             refreshing.value = false
+            // Freshness (spec §7.2): timer reconciliation may have adopted or dropped timers
+            // (multi-device), and a pull can bring newer "last X" rows — re-render the widgets.
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
             SyncWorker.enqueue(appContext)
         }
     }
@@ -501,6 +509,9 @@ class DashboardViewModel(
             } else {
                 viewModelScope.launch {
                     timerRepo.start(type, child.id)
+                    // Freshness (spec §7.2): a timer started in-app flips the widgets immediately
+                    // (the widget-broadcast start path refreshes via WidgetTimerStartAction).
+                    net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
                     openPanelFor(type, child.id)
                 }
             }
@@ -907,7 +918,11 @@ class DashboardViewModel(
         net.babybuddy.next.log.BbLog.d(TAG_UI, "entry delete $localUuid")
         editState.value = null
         failureDialog.value = null
-        viewModelScope.launch { eventRepo.delete(localUuid) }
+        viewModelScope.launch {
+            eventRepo.delete(localUuid)
+            // Freshness (spec §7.2): the deleted row may be a widget's "last X" line.
+            net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
+        }
     }
 
     // -- Failure dialog (spec §6.2 / UX spec §5) --------------------------------------
@@ -979,6 +994,12 @@ class DashboardViewModel(
         viewModelScope.launch {
             container.signOut()
             _events.tryEmit(DashboardEvent.SignedOut)
+            // Freshness (spec §7.2): the SignedOut navigation tears this ViewModel (and its
+            // scope) down, so the widget refresh runs on the application scope — the home
+            // screen must not keep showing the signed-out account's rows.
+            (appContext.applicationContext as? net.babybuddy.next.App)?.applicationScope?.launch {
+                net.babybuddy.next.widget.WidgetRefresher.refreshAll(appContext)
+            }
         }
     }
 

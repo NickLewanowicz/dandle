@@ -1,6 +1,6 @@
 // @ts-check
 // =============================================================================
-// babybuddy-next documentation site — Docusaurus 3 (the stack Immich uses).
+// Dandle documentation site — Docusaurus 3 (the stack Immich uses).
 //
 // The canonical content stays in ../docs (the spec is the product of record);
 // this site only renders it: the docs plugin mounts the repo's docs/ directory
@@ -20,9 +20,8 @@
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'Baby Buddy Next',
-  tagline:
-    'An offline-first Android client for Baby Buddy — log feeds, diapers, sleep, and more, even with no signal.',
+  title: 'Dandle',
+  tagline: 'An offline-first Android client for Baby Buddy',
   // Placeholder until the public home is chosen; enables canonical URLs and
   // social previews. Adjust when the repo goes public.
   url: 'https://babybuddy-next.pages.dev',
@@ -122,9 +121,9 @@ const config = {
       },
 
       navbar: {
-        title: 'Baby Buddy Next',
+        title: 'Dandle',
         logo: {
-          alt: 'Baby Buddy Next',
+          alt: 'Dandle',
           src: 'img/favicon.png',
         },
         items: [
@@ -167,7 +166,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Built openly, one hand at a time. Upstream credit: <a href="https://github.com/babybuddy/babybuddy" target="_blank" rel="noopener noreferrer">Baby Buddy</a> (BSD-2-Clause) — the server this independent client connects to; <a href="https://github.com/babybuddy/babybuddy-for-android" target="_blank" rel="noopener noreferrer">Baby Buddy for Android</a> (MIT) — scope baseline & inspiration. Not affiliated with either project.`,
+        copyright: 'Dandle — an open-source Baby Buddy client',
       },
     }),
 };

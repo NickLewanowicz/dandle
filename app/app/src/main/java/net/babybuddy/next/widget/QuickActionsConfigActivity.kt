@@ -62,7 +62,7 @@ class QuickActionsConfigActivity : ComponentActivity() {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Quick actions widget", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Sleep starts/stops the sleep timer; the others open the app.",
+                        "Sleep, Pump, and Tummy start their timer with one tap; the others open the app.",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 2.dp),
                     )

@@ -152,7 +152,7 @@ class WidgetStateMapperTest {
         // Duration detail dropped for timed rows — the range carries it now.
         assertNull(napRange.detailText)
         assertEquals("85 mL", state.rows.first { it.type == EventType.PUMPING }.detailText)
-        assertNull(state.running)
+        assertTrue(state.runningSince.isEmpty())
     }
 
     @Test
@@ -175,7 +175,7 @@ class WidgetStateMapperTest {
         assertEquals("${startClock}–${endClock}", nap.timeText)
         assertNull(nap.detailText)
         // Priya: the running row reads as STATE at the top, not as a stop button.
-        val since = state.runningSince!!
+        val since = state.runningSince.single()
         assertEquals(EventType.SLEEP, since.kind)
         assertEquals(WidgetStateMapper.clockTime(now - 45 * 60_000), since.sinceText)
         assertEquals("45m", since.elapsedText)
@@ -269,51 +269,111 @@ class WidgetStateMapperTest {
             nowMillis = now,
             visible = setOf(EventType.FEEDING),
         )
-        assertEquals(EventType.FEEDING, state.running!!.kind)
-        assertEquals("1h 06m", state.running!!.elapsedText)
+        val since = state.runningSince.single()
+        assertEquals(EventType.FEEDING, since.kind)
+        assertEquals("1h 06m", since.elapsedText)
     }
 
-    // -- T7: cross-child running line ---------------------------------------------------
+    // -- Simultaneous timers (spec §7.2): sleep + pumping + tummy can all run at once -------
+
+    @Test
+    fun `every running timer gets its own row, longest-running first`() {
+        val state = WidgetStateMapper.careDashboard(
+            events = emptyList(),
+            timers = listOf(
+                timer(EventType.PUMPING, startedMinutesAgo = 8),
+                timer(EventType.TUMMY_TIME, startedMinutesAgo = 23),
+                timer(EventType.SLEEP, startedMinutesAgo = 95),
+            ),
+            childId = 1,
+            nowMillis = now,
+            visible = setOf(EventType.SLEEP, EventType.PUMPING),
+        )
+        assertEquals(listOf(EventType.SLEEP, EventType.TUMMY_TIME, EventType.PUMPING), state.runningSince.map { it.kind })
+        assertEquals("1h 35m", state.runningSince[0].elapsedText)
+        assertEquals("23m", state.runningSince[1].elapsedText)
+        assertEquals("8m", state.runningSince[2].elapsedText)
+        // The STATE phrasing inputs: clock time of the sleep timer's start.
+        assertEquals(
+            WidgetStateMapper.clockTime(now - 95 * 60_000),
+            state.runningSince[0].sinceText,
+        )
+    }
+
+    @Test
+    fun `another child's timer is not this widget's running row`() {
+        val state = WidgetStateMapper.careDashboard(
+            events = emptyList(),
+            timers = listOf(timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 40)),
+            childId = 1,
+            nowMillis = now,
+            visible = setOf(EventType.SLEEP),
+        )
+        assertTrue(state.runningSince.isEmpty())
+    }
+
+    // -- T7: cross-child running lines ---------------------------------------------------
 
     @Test
     fun `cross-child timer line names the other child kind and elapsed`() {
-        val cross = WidgetStateMapper.crossChildTimer(
+        val cross = WidgetStateMapper.crossChildTimers(
             timers = listOf(
                 timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5), // own child: ignored
                 timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 32),
             ),
             childId = 1,
-            otherChildFirstName = "Zoe",
+            otherChildFirstNames = mapOf(2L to "Zoe"),
             nowMillis = now,
         )
-        assertEquals(EventType.SLEEP, cross!!.kind)
-        assertEquals("Zoe", cross.childFirstName)
-        assertEquals("32m", cross.elapsedText)
+        val line = cross.single()
+        assertEquals(EventType.SLEEP, line.kind)
+        assertEquals("Zoe", line.childFirstName)
+        assertEquals("32m", line.elapsedText)
     }
 
     @Test
-    fun `cross-child line is null when only this child's timer runs`() {
-        val cross = WidgetStateMapper.crossChildTimer(
+    fun `cross-child lines are empty when only this child's timer runs`() {
+        val cross = WidgetStateMapper.crossChildTimers(
             timers = listOf(timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5)),
             childId = 1,
-            otherChildFirstName = "Zoe",
+            otherChildFirstNames = emptyMap(),
             nowMillis = now,
         )
-        assertEquals(null, cross)
+        assertTrue(cross.isEmpty())
     }
 
     @Test
     fun `cross-child line with unknown child name degrades without lying`() {
-        val cross = WidgetStateMapper.crossChildTimer(
+        val cross = WidgetStateMapper.crossChildTimers(
             timers = listOf(timer(EventType.PUMPING, childId = 2, startedMinutesAgo = 7)),
             childId = 1,
-            otherChildFirstName = null,
+            otherChildFirstNames = mapOf(2L to null),
             nowMillis = now,
         )
-        assertEquals("Another child", cross!!.childFirstName)
-        assertEquals("7m", cross.elapsedText)
+        assertEquals("Another child", cross.single().childFirstName)
+        assertEquals("7m", cross.single().elapsedText)
         assertEquals("pump", WidgetStateMapper.friendlyNoun(EventType.PUMPING))
         assertEquals("nap", WidgetStateMapper.friendlyNoun(EventType.SLEEP))
+    }
+
+    @Test
+    fun `every other-child timer gets a quiet line, longest-running first`() {
+        // Twins: two other children with timers at once — awareness must cover both.
+        val cross = WidgetStateMapper.crossChildTimers(
+            timers = listOf(
+                timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 10), // own child
+                timer(EventType.PUMPING, childId = 3, startedMinutesAgo = 4),
+                timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 31),
+            ),
+            childId = 1,
+            otherChildFirstNames = mapOf(2L to "Zoe", 3L to "Finn"),
+            nowMillis = now,
+        )
+        assertEquals(listOf(EventType.SLEEP, EventType.PUMPING), cross.map { it.kind })
+        assertEquals("Zoe", cross[0].childFirstName)
+        assertEquals("Finn", cross[1].childFirstName)
+        assertEquals("31m", cross[0].elapsedText)
+        assertEquals("4m", cross[1].elapsedText)
     }
 
     // -- U10: subdued "last" line on idle slots -------------------------------------------

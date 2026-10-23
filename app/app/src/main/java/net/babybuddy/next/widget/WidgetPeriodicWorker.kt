@@ -9,9 +9,12 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 /**
- * 15-minute periodic widget refresh (spec §7.2 — the platform minimum), so care rows stay
- * honest even when the app is never opened. App writes, drains, and trampoline actions
- * refresh sooner via [WidgetRefresher].
+ * 15-minute periodic widget refresh (spec §7.2 — the platform minimum): the SAFETY NET behind
+ * the fast paths. While a timer runs, the ~60s [WidgetTickerWorker] chain keeps elapsed counters
+ * live; this job catches everything the fast paths can miss (process restart with a timer still
+ * running, a WorkManager tick lost to quota, server timers adopted/dropped elsewhere). Its
+ * doWork goes through [WidgetRefresher.refreshAll], so a run with a live timer also re-arms the
+ * fast chain. App writes, drains, and trampoline actions refresh sooner via [WidgetRefresher].
  */
 class WidgetPeriodicWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {

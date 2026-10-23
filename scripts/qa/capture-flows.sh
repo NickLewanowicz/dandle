@@ -92,7 +92,7 @@ while (( $# )); do
   esac
 done
 
-PKG="net.babybuddy.next.debug"
+PKG="app.dandle.debug"
 OUTREL="new-app/flows"                    # relative to docs/screenshots/
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SHOTDIR="$REPO_ROOT/docs/screenshots/$OUTREL"

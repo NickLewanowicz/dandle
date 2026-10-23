@@ -17,12 +17,22 @@ Implementation reference: `docs/flows/new-app/widgets.md`. Engineer's placement/
 
 Screenshots: `06-widgets-01-home-both-widgets` (idle tiles with last-lines), `06-widgets-03-home-sleep-running` (sleep tile lit in indigo with elapsed).
 
+## v0.5 — one-tap starts + never-stale freshness
+
+- **One-tap timer starts for every choice-free timer type**: Sleep, Pump, and Tummy tiles all start their timer via a background broadcast (`WidgetTimerStartAction`, keyed by type — replaces the sleep-only `WidgetSleepStartAction`) with no app launch. Bottle/Diaper/Note keep deep-linking into the app with the panel pre-opened (they need choices). RUNNING tiles keep the T5 contract unchanged: tap → stop-guard deep link.
+- **The care widget shows EVERY running timer**: sleep + pumping + tummy time can run simultaneously; each gets its own accented "… since HH:MM · Xm" row at the top, longest-running first (`CareDashboardState.runningSince` is a list — it used to render only the first timer). Cross-child awareness is now one quiet line per other-child timer (`crossChildTimers`), also longest-running first.
+- **Freshness contract (spec §7.2)**: every local state change refreshes both widgets immediately — timer start (in-app AND widget broadcast), timer stop/save/discard, entry create/edit/delete, child switch, sign-out, pull-to-refresh timer reconciliation, outbox drain completion. While any timer runs, a self-chaining ~60s WorkManager one-time tick (`WidgetTickerWorker`, armed/cancelled by `WidgetRefresher` from the running-timer Room state) keeps elapsed counters within a minute; the 15-min periodic job remains the safety net. Render is Room-only — never network-bound.
+- Pinned by `WidgetStateMapperTest` (multi-timer rows, plural cross-child lines, since/elapsed shapes).
+
+Screenshots: `06-widgets-01…03` (v0.4 set) + new v0.5 evidence in `/tmp/widget-qa/` at verification time (one-tap start, running row live tick, post-stop clear).
+
 ## How to verify
 
 - The two Glance widgets live on the launcher — drive with `adb shell uiautomator dump` + `input tap` (cells expose text/content-desc: `Sleep`, `Bottle`, `Diaper`, `Pump`, `Last feed`, …, `Asleep since 13:00 · 12m elapsed` for the running row — which renders FIRST when a timer is active); no in-app tags involved.
 - Foreground checks: `adb shell dumpsys activity activities | grep topResumedActivity` (launcher must stay resumed for trampoline taps).
 - Server: `scripts/qa/server-log.sh` must show `POST /api/timers/` for sleep-start taps and **no** requests for navigation taps; `scripts/qa/api.sh GET /api/timers/` for state.
-- Refresh triggers: in-app save (`BB/SYNC drain … Completed` → both widgets re-read Room), outbox drain completion, trampoline actions.
+- Refresh triggers: in-app save (`BB/SYNC drain … Completed` → both widgets re-read Room), outbox drain completion, trampoline actions, timer start/stop from the app or the widget, entry edit/delete, child switch. Live tick: with a timer running, `adb shell dumpsys jobscheduler | grep -i widget` shows the pending `widget-live-tick` one-time job re-armed every ~60s (absent when no timer runs).
+- v0.5 one-tap starts: idle Pump/Tummy taps must behave like the sleep tap (below) — `POST /api/timers/` with `Pumping-BBapp:4` / `Tummy time-BBapp:3` and the launcher staying resumed. Care widget: start sleep AND pump → TWO accented rows; stop one → only the other remains, immediately.
 
 ## Observed
 
@@ -47,11 +57,12 @@ Screenshots: `06-widgets-01-home-both-widgets` (idle tiles with last-lines), `06
 
 | Branch | Result |
 |---|---|
-| Idle sleep tap | Trampoline timer, no launch ✓ |
-| Running sleep tap | Opens app on strip ✓ |
-| Diaper/feed/pump tap | Deep-link with panel pre-opened ✓ |
+| Idle sleep/pump/tummy tap | Trampoline timer, no launch ✓ (v0.5: all three; sleep re-verified, pump/tummy same broadcast path) |
+| Running tile tap | Opens app into the stop guard ✓ |
+| Diaper/feed/note tap | Deep-link with panel pre-opened ✓ |
 | Nap-row tap | Timer starts, **but app launches (P2)** — resolved by design: the row now just opens the app, no timer started |
-| Timer running | CareDashboard running row appears/clears ✓ |
+| Timers running | CareDashboard running row appears/clears ✓; v0.5: one row per simultaneous timer |
+| Timer running, widget idle ~60s | Elapsed text ticks within a minute (v0.5 `WidgetTickerWorker`); chain cancels on stop |
 | Long-press → Configure | Not offered (P3); resize only |
 
 ## Screenshots

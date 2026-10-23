@@ -10,8 +10,12 @@ Checklists: `docs/qa/FEATURE-CHECKLISTS.md` entries 9–10. Tags: `BB/UI`, `BB/S
 ## QuickActions (2×2 → resizable; renders 4×1 icon-only when wide)
 
 - Four configurable slots (configure: child + 4 buttons; default **Sleep / Bottle / Diaper / Pump**).
-- **Idle timer slot tap** → starts the timer via broadcast (`WidgetSleepStartAction`); NO app launch;
-  both widgets refresh (`BB/TIMER start`, `POST /api/timers/`).
+- **Idle choice-free timer slot tap (Sleep / Pump / Tummy, spec §7.1)** → starts the timer via
+  broadcast (`WidgetTimerStartAction`, keyed by type — v0.5 generalizes the sleep-only action);
+  NO app launch; both widgets refresh (`BB/TIMER start`, `POST /api/timers/`).
+  **Bottle / Diaper / Note taps** → deep-link into the app with that panel pre-opened
+  (`EXTRA_OPEN_PANEL` intent extra → `WidgetDeepLink` channel → dashboard runs the exact in-app
+  tap semantics once the active child resolves; works cold-start and across the login gate).
 - **Running slot tap (T5, spec §7.2)** → deep-links into the app **directly into the stop-guard
   dialog for that timer** (`EXTRA_STOP_TIMER` intent extra → `WidgetDeepLink.stopRequest` → the
   dashboard runs the exact in-app `requestStopGuard` semantics: >10s → "Stop timer?" with
@@ -19,9 +23,6 @@ Checklists: `docs/qa/FEATURE-CHECKLISTS.md` entries 9–10. Tags: `BB/UI`, `BB/S
   the tap does what it says. Widgets still cannot host the dialog themselves — the app hosts it.
   If the timer vanished before the tap lands (stopped on another device), the request falls back
   to the plain quick-action semantics (panel focus) instead of stranding.
-- **Bottle / Diaper / Pump taps** → deep-link into the app with that panel pre-opened
-  (`EXTRA_OPEN_PANEL` intent extra → `WidgetDeepLink` channel → dashboard runs the exact in-app
-  tap semantics once the active child resolves; works cold-start and across the login gate).
 
 ## CareDashboard (4×2, resizable 4×3)
 

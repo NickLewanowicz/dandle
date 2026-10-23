@@ -18,7 +18,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "net.babybuddy.next"
+        // Product identity is "Dandle"; the namespace above stays the legacy
+        // package name (net.babybuddy.next) — the two may differ by design.
+        applicationId = "app.dandle"
         minSdk = 29
         targetSdk = 35
         versionCode = 1

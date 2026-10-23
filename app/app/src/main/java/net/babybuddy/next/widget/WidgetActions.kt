@@ -23,9 +23,10 @@ import net.babybuddy.next.domain.model.EventType
  *   ≤10s branch discards silently, exactly the in-app stop semantics). Pending work around
  *   background-activity-start restrictions never applies to PendingIntents, so deep links are
  *   reliable from the launcher.
- * - `actionRunCallback` (broadcast): UI-free work only — starting a sleep timer — followed by a
- *   widget refresh. Widgets CANNOT host the >10s stop-guard dialog themselves, so the running
- *   slot deep-links into the app's guard instead of stopping in place.
+ * - `actionRunCallback` (broadcast): UI-free work only — starting a timer for a type that needs
+ *   no choices (Sleep, Pumping, Tummy time — spec §7.2 one-tap starts) — followed by a widget
+ *   refresh. Widgets CANNOT host the >10s stop-guard dialog themselves, so the running slot
+ *   deep-links into the app's guard instead of stopping in place.
  */
 object WidgetActions {
 
@@ -79,21 +80,35 @@ object WidgetActions {
 }
 
 /**
- * Broadcast callback backing idle sleep slots: starts the sleep timer for the active child and
- * refreshes the widgets. Never navigates; the running branch is rendered as an app open.
+ * Broadcast callback backing the widget's one-tap timer starts (spec §7.1/§7.2): starts the
+ * timer for the type named in [KEY_TYPE] (Sleep, Pumping, Tummy time — the timer types that
+ * need no field choices) for the active child and refreshes the widgets. Never navigates;
+ * Feeding and Diaper need choices (type/method, wet/solid) and keep deep-linking into the app.
+ * The running branch is never rendered as a broadcast — running slots deep-link to the stop
+ * guard — but a state race (double-tap, timer started elsewhere) is still guarded: the start
+ * is a no-op when that timer already runs ([net.babybuddy.next.data.repo.TimerRepository.start]
+ * returns the existing row).
  */
-class WidgetSleepStartAction : ActionCallback {
+class WidgetTimerStartAction : ActionCallback {
 
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        runStart(context)
+        val type = parameters[KEY_TYPE]
+            ?.let { name -> EventType.entries.firstOrNull { it.name == name } }
+            ?: return
+        runStart(context, type)
     }
 
-    suspend fun runStart(context: Context) {
+    suspend fun runStart(context: Context, type: EventType) {
         val container = (context.applicationContext as App).container
         val childId = container.quickActionActions.activeChildId() ?: return
-        if (container.quickActionActions.runningTimer(EventType.SLEEP, childId) == null) {
-            container.quickActionActions.startTimer(EventType.SLEEP, childId)
+        if (type.isTimed && container.quickActionActions.runningTimer(type, childId) == null) {
+            container.quickActionActions.startTimer(type, childId)
         }
         WidgetRefresher.refreshAll(context)
+    }
+
+    companion object {
+        /** ActionParameters key carrying the [EventType].name this tap asks to start. */
+        val KEY_TYPE = ActionParameters.Key<String>("timer_type")
     }
 }

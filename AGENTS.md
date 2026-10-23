@@ -1,4 +1,6 @@
-# babybuddy-next — Working Agreement
+> Project name: **Dandle** (was the working title babybuddy-next; repo directory keeps its name).
+
+# Dandle — Working Agreement
 
 A modern, offline-first Android client for [Baby Buddy](https://github.com/babybuddy/babybuddy) (self-hosted baby tracker), rebuilt from scratch with an AI-driven team. Scope parity with [Baby Buddy for Android](https://github.com/babybuddy/babybuddy-for-android) (v2.6.4) plus three deliberate additions: in-app quick-edit of events, offline queue with conflict surfacing, and home-screen widgets — all in a Material 3 shell.
 

@@ -21,7 +21,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Goal:** cleared app data -> login screen -> signed in -> dashboard.
 
 **Steps**
-1. `scripts/qa/fresh-install-login.sh` (defaults: `net.babybuddy.next.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). It clears data, disables animations, and types the fields by tag — fresh dump before every tap.
+1. `scripts/qa/fresh-install-login.sh` (defaults: `app.dandle.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). It clears data, disables animations, and types the fields by tag — fresh dump before every tap.
 2. To watch it live: `scripts/qa/applog.sh` in a side terminal; `scripts/qa/server-log.sh -f` for the request lines.
 3. Script exits 0 only when tag `dashboard` is visible. `scripts/qa/shot.sh qa/login/05-dashboard-after-fresh-install.png` for evidence.
 
@@ -78,7 +78,7 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Steps**
 1. Login (checklist 1).
 2. Start: `ui-tap-tag.sh dashboard/quick_action/SLEEP`; the running card appears BELOW the grid (tag `dashboard/panel/SLEEP`) with a ticking `H:MM:SS` counter and an icon-only save (`dashboard/timer/SLEEP/save`). v0.4: no strip, no ✕.
-3. Kill the app (`adb shell am kill net.babybuddy.next.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
+3. Kill the app (`adb shell am kill app.dandle.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
 4. Stop after >10s: `ui-tap-tag.sh dashboard/timer/SLEEP` -> stop dialog `dashboard/stop_dialog` with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
 5. Save: `ui-tap-tag.sh dashboard/stop_dialog/save`; verify `scripts/qa/api.sh GET /api/sleep/`.
 6. \<10s path: repeat quickly — stop must discard silently (no dialog).

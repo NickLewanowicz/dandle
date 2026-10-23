@@ -26,6 +26,8 @@ source scripts/dev-env.sh && cd app && ./gradlew :app:assembleDebug
 
 The first command just picks the right Java version — Gradle is picky about that. The finished app is written to `app/build/outputs/apk/debug/app-debug.apk`. Copy it to your phone and tap it to install; Android asks you to allow installs from this source, which is normal for anything outside the stores. If you'd rather not touch a terminal, open the `app/` folder in Android Studio and press **Run** with your phone plugged in.
 
+One detail for the curious: a build from this source installs under the application ID `app.dandle.debug`, so it sits side-by-side with (rather than replacing) any other copy of the app already on your phone.
+
 ## Path 2: wait for a release
 
 Keep an eye on this project's repository for a **Releases** entry. When the first one lands, installing will be a normal download-and-tap. It ships when it's ready — no date promised.

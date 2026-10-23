@@ -1,12 +1,12 @@
 ---
 title: Quick Start
-description: A quick, no-choices path to install babybuddy-next and take it for a test drive.
+description: A quick, no-choices path to install Dandle and take it for a test drive.
 sidebar_position: 0
 ---
 
 # Quick start
 
-Here is a quick, no-choices path to install babybuddy-next and take it for a test drive. No feature tour, no configuration maze: get the server up, get the app on your phone, connect the two, and log a feed.
+Here is a quick, no-choices path to install Dandle and take it for a test drive. No feature tour, no configuration maze: get the server up, get the app on your phone, connect the two, and log a feed.
 
 ![The dashboard at 1:47 a.m. — six quick actions and Today's timeline.](../screenshots/new-app/flows/99-final-dashboard.png)
 

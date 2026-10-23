@@ -4,7 +4,7 @@ title: "Your data & security"
 
 # Your data & security
 
-Baby Buddy Next talks to exactly one place: **your own Baby Buddy server**. There is no
+Dandle talks to exactly one place: **your own Baby Buddy server**. There is no
 cloud run by us and no account with us — we never see your family's data, so we can't
 lose it, sell it, or leak it.
 

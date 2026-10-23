@@ -74,11 +74,13 @@ private val SIZE_TALL = DpSize(110.dp, 220.dp) // 2×3+ grid, capped cells
  * — no per-second ticking (UX spec §6: minute granularity, staleness documented).
  *
  * Tap semantics mirror the app (spec §3/§7.1):
- *  - idle timer slot (Sleep per default) → starts the timer via [WidgetSleepStartAction];
+ *  - idle timer slots that need no choices (Sleep / Pump / Tummy) → start the timer in place via
+ *    [WidgetTimerStartAction] — one tap, no app launch;
  *  - RUNNING slot → deep-links straight into the app's >10s stop-guard dialog for that timer
  *    (T5: the label reads "tap to stop" and now does; widgets cannot host the dialog themselves,
  *    and the decision renders from state so there is no launch-time race);
- *  - Bottle / Diaper / Pump slots → deep-link into the app with that panel pre-opened.
+ *  - Bottle / Diaper / Note slots → deep-link into the app with that panel pre-opened (those
+ *    need choices — type/method, wet/solid — the widget can't guess them).
  *
  * Config (child + four slots, spec §7.3) lives in this widget's Preferences state, written by
  * [QuickActionsConfigActivity]; one-tap add (no config yet) uses the active child.
@@ -295,8 +297,11 @@ private fun SlotCell(
     }
 }
 
-/** Idle timer slots start in place; everything else deep-links into the app. */
+/** Idle timer slots that need no choices start in place; everything else deep-links into the app. */
 private fun slotAction(context: Context, type: EventType): androidx.glance.action.Action = when (type) {
-    EventType.SLEEP -> actionRunCallback<WidgetSleepStartAction>()
+    EventType.SLEEP, EventType.PUMPING, EventType.TUMMY_TIME ->
+        actionRunCallback<WidgetTimerStartAction>(
+            actionParametersOf(WidgetTimerStartAction.KEY_TYPE to type.name),
+        )
     else -> WidgetActions.openPanelAction(context, type)
 }
