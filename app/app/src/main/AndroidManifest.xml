@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Baby Buddy is self-hosted; every screen talks to the user's own server. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -42,6 +43,21 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/quick_actions_widget_info" />
         </receiver>
+
+        <!-- WorkManager on-demand init (perf: cold start): the default androidx.startup
+             initializer runs on every process start BEFORE Application.onCreate; removing it
+             moves WM construction to the first getInstance, which App.onCreate routes through
+             the application scope (off the main/first-frame path). -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <receiver
             android:name=".widget.CareDashboardWidgetReceiver"

@@ -26,6 +26,12 @@ object BbLog {
     const val TAG_TIMER = "BB/TIMER"
     const val TAG_UI = "BB/UI"
 
+    /**
+     * Cold-start milestones (App.onCreate segments, activity create, nav start destination,
+     * dashboard content ready) — startup attribution for QA/perf work without a profiler.
+     */
+    const val TAG_START = "BB/START"
+
     /** Injectable/stubbable master switch (checked on every call). */
     @Volatile
     var enabled: Boolean = BuildConfig.DEBUG && !(Build.FINGERPRINT ?: "").contains("robolectric", ignoreCase = true)

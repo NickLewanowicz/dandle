@@ -73,6 +73,16 @@ fun DashboardScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // BB/START: first non-loading uiState — the dashboard's real content is about to render.
+    LaunchedEffect(state.loading) {
+        if (!state.loading) {
+            net.babybuddy.next.log.BbLog.d(
+                net.babybuddy.next.log.BbLog.TAG_START,
+                "dashboard content ready",
+            )
+        }
+    }
+
     // One shared per-second tick feeds every live counter (wall-clock based, spec §10).
     var tick by remember { mutableLongStateOf(0) }
     LaunchedEffect(Unit) {

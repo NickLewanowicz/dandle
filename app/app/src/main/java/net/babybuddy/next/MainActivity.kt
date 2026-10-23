@@ -52,6 +52,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        net.babybuddy.next.log.BbLog.d(
+            net.babybuddy.next.log.BbLog.TAG_START,
+            "activity onCreate done (setContent composed)",
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -85,6 +89,10 @@ private fun RootNavigation(container: net.babybuddy.next.data.AppContainer) {
     if (initialStart == null && session != null) {
         initialStart =
             if ((session as Session).isLoggedIn) Routes.DASHBOARD else Routes.LOGIN
+        net.babybuddy.next.log.BbLog.d(
+            net.babybuddy.next.log.BbLog.TAG_START,
+            "start destination resolved: $initialStart",
+        )
     }
 
     when (initialStart) {
