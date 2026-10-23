@@ -27,11 +27,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getProperty("user.home") + "/.dandle-release.keystore")
+            storePassword = System.getenv("DANDLE_STORE_PASSWORD") ?: "__REDACTED__"
+            keyAlias = "dandle"
+            keyPassword = System.getenv("DANDLE_STORE_PASSWORD") ?: "__REDACTED__"
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
