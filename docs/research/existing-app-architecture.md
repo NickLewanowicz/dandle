@@ -234,11 +234,11 @@ Overlay tutorials also exist inside the app (`tutorial/TutorialManagement.kt`): 
 `ATTRIBUTIONS.md` lists all icons as **Flaticon assets with attribution-required licenses** (not MIT, unlike the code):
 - Poop icons (pkg_poop/pkg_no_poop) — Good Ware; Humidity/wet (pkg_wet/pkg_not_wet) — bqlqn; Notes (pkg_notes/pkg_no_notes) — Freepik; Crawling/tummy-time (pkg_crawl) — Freepik; Diaper (pkg_diaper) — Good Ware; Sleep (pkg_sleep) — Good Ware; Baby bottle (pkg_bottle) — juicy_fish; Solid food (pkg_solid_food) — Freepik; Breast pump (pkg_pumping) — srip.
 `app/build.gradle` `generateAboutStrings` parses this file into the About screen — the format is load-bearing.
-`3RDPARTY.md` aggregates library licenses (Apache 2.0 for kotlinx/JetBrains et al., plus others). Conclusion for babybuddy-next: create our own icons; do not copy the Flaticon PNGs/SVGs (in `resources/`, `app/src/main/res/drawable*`), the help screenshots, or the `.xcf` sources. The app icon (`resources/icon/icon.svg`) is project-owned but part of the brand — make our own.
+`3RDPARTY.md` aggregates library licenses (Apache 2.0 for kotlinx/JetBrains et al., plus others). Conclusion for Dandle: create our own icons; do not copy the Flaticon PNGs/SVGs (in `resources/`, `app/src/main/res/drawable*`), the help screenshots, or the `.xcf` sources. The app icon (`resources/icon/icon.svg`) is project-owned but part of the brand — make our own.
 
 ---
 
-## 9. Scope checklist for babybuddy-next (what "at parity" means)
+## 9. Scope checklist for Dandle (what "at parity" means)
 
 1. Login: server URL + user + password (web-session scrape of API key) **and** QR login (`BABYBUDDY-LOGIN:` payload incl. session cookies), http-warning, token validation via children list.
 2. Secure local storage of token + cookies + drafts.

@@ -2,7 +2,7 @@
 title: "Functional spec"
 ---
 
-# babybuddy-next — Canonical Functional Specification (v0.4 BETA)
+# Dandle — Canonical Functional Specification (v0.4 BETA)
 
 > **This document is the product of record.** Any implementation (Kotlin/Compose, Flutter, React Native, or a future rewrite) must satisfy every MUST here. Screenshots referenced under `docs/screenshots/` are normative evidence. Parity baselines: the existing Baby Buddy for Android v2.6.4 flows mapped in `docs/flows/existing-app/`, and server behavior in `docs/research/babybuddy-api.md`.
 >

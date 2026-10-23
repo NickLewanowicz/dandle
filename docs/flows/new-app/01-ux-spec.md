@@ -2,7 +2,7 @@
 title: "UI shell spec"
 ---
 
-# babybuddy-next — UI/UX Specification (v0.1 BETA)
+# Dandle — UI/UX Specification (v0.1 BETA)
 
 > Companion to `00-functional-spec.md` (canonical). This document describes **what the user sees and feels**, per screen and component: layout, states, copy, motion. It is framework-agnostic — engineers map each named component to their toolkit's equivalent. Colors are named as Material 3 **roles** (primary, secondaryContainer, surfaceVariant, error, errorContainer, onSurfaceVariant…), never hex. Section numbers (§) reference the functional spec.
 >

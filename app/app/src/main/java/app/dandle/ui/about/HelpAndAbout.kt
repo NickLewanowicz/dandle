@@ -158,7 +158,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "Baby Buddy Next ${BuildConfig.VERSION_NAME}",
+                    "Dandle ${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )

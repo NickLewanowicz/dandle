@@ -68,4 +68,4 @@ Per-widget Glance Preferences state; one-tap add defaults to the active child.
 
 - Placement opens the configure screen automatically; Save renders the widget in resize mode —
   tap empty space to commit.
-- The widget picker lists the app as "Baby Buddy Next — 2 widgets".
+- The widget picker lists the app as "Dandle — 2 widgets".

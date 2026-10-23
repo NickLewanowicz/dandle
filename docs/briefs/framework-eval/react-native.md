@@ -2,7 +2,7 @@
 title: "Framework brief: React Native"
 ---
 
-# Framework evaluation: React Native (Expo) for babybuddy-next
+# Framework evaluation: React Native (Expo) for Dandle
 
 *Authored by the React Native Expert persona, October 2026. Research current as of 2026-10-16; local toolchain verified on this machine (see §8). Read alongside the Kotlin/Compose and Flutter briefs.*
 
@@ -217,7 +217,7 @@ Where we lose, stated without spin:
 **Package layout:**
 
 ```
-babybuddy-next-rn/
+Dandle-rn/
   app/                        # Expo Router routes
     _layout.tsx               # Paper theme provider + auth gate        (~120)
     (auth)/login.tsx          # server URL + token/login               (~150)

@@ -16,7 +16,7 @@ title: "Flow verification: Help & about"
 
 - Overflow menu: **Sign out**, **Help**, **About** — exactly the §9 set ✓ (sign-out flow itself not exercised in this pass; checklist 8 covers it).
 - **Help:** 4-slide modal slideshow — "Six buttons", "Timers", "Offline first", "Widgets" — plain parent-language copy, page dots, Next/ Done ✓ (spec §9 "short slideshow", UX §2 motion restraint: static slides). Advancing via Next works; Done closes.
-- **About:** dialog with version (**Baby Buddy Next 0.1.0**), one-paragraph description, **Upstream** section crediting Baby Buddy server (BSD-2-Clause, github.com/babybuddy/babybuddy) and Baby Buddy for Android (MIT, © 2022 Paul Konstantin Gerke), plus the independent-client/no-copied-assets note ✓ per §9.
+- **About:** dialog with version (**Dandle 0.1.0**), one-paragraph description, **Upstream** section crediting Baby Buddy server (BSD-2-Clause, github.com/babybuddy/babybuddy) and Baby Buddy for Android (MIT, © 2022 Paul Konstantin Gerke), plus the independent-client/no-copied-assets note ✓ per §9.
 - Both open over the dashboard and dismiss cleanly (OK/Done/BACK).
 
 ## Branches / states

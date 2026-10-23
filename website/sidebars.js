@@ -1,5 +1,5 @@
 // =============================================================================
-// Sidebar for the babybuddy-next docs site.
+// Sidebar for the Dandle docs site.
 //
 // Explicit items, hand-ordered to mirror the MkDocs nav that the persona wave
 // reviewed (2026-10-20): a small PARENT surface first, then ALL contributor +
