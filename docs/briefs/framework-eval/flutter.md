@@ -145,7 +145,7 @@ lib/
   sync/                   # outbox drainer + workmanager registration + conflict mapping
   features/
     login/  dashboard/  quick_actions/  timeline/  quick_edit/  conflicts/
-android/app/src/main/kotlin/net/babybuddy/next/widget/   # KOTLIN, unavoidable:
+android/app/src/main/kotlin/app/dandle/widget/   # KOTLIN, unavoidable:
     TimerWidget.kt  TimelineWidget.kt  (+ AppWidgetProviders, RemoteViews XML)
 test/                     # unit (drift in-memory, clock) + widget tests (no emulator)
 ```
@@ -165,7 +165,7 @@ Comparable to the native estimate within ±15% — Flutter's verbosity in UI rou
 
 **First 3 commits:**
 
-1. **Scaffold + gates.** Replace stale `~/flutter` with 3.47 stable; `flutter create` into `app/` (Flutter host, `net.babybuddy.next`, minSdk 29/target 35); debug-mode `ensureSemantics()` hook; `flutter analyze` + empty `flutter test` green; README pinning `JAVA_HOME` to `openjdk@17`.
+1. **Scaffold + gates.** Replace stale `~/flutter` with 3.47 stable; `flutter create` into `app/` (Flutter host, `app.dandle`, minSdk 29/target 35); debug-mode `ensureSemantics()` hook; `flutter analyze` + empty `flutter test` green; README pinning `JAVA_HOME` to `openjdk@17`.
 2. **Auth + API core.** dio client, login flow against `localhost:8000` (csrf→session→api_key per `docs/research/babybuddy-api.md`), secure token storage, settings screen skeleton; mocked-HTTP unit tests for the offline path.
 3. **Drift + first vertical slice.** drift schema (events/timers/outbox, `syncState`/`failureReason`), repositories as streams, dashboard with child switcher and the Diaper quick action end-to-end (local write → outbox row), in-memory drift tests.
 

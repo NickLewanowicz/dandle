@@ -8,7 +8,7 @@ title: "Flow verification: Login"
 
 ## How to verify
 
-- Script: `scripts/qa/fresh-install-login.sh` (defaults: `net.babybuddy.next.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). Exit 0 only when the `dashboard` tag is visible. Add `--pass wrongpass` for the failure branch (script exits 2 and prints `login/error_banner` text).
+- Script: `scripts/qa/fresh-install-login.sh` (defaults: `app.dandle.debug`, `http://10.0.2.2:8000`, `admin`/`admin`). Exit 0 only when the `dashboard` tag is visible. Add `--pass wrongpass` for the failure branch (script exits 2 and prints `login/error_banner` text).
 - Tags: `login/server_url`, `login/username`, `login/password`, `login/submit`, text node `Continue` (cleartext dialog), `login/error_banner`, `dashboard`.
 - Logs: `scripts/qa/applog.sh` (`BB/LOGIN`, OkHttp), `scripts/qa/server-log.sh -f`.
 - Expected server requests: `GET /login/` (csrf) → `POST /login/` 302 → `GET /api/profile` → `GET /api/children/?limit=1` → full sync chain (`GET /api/children/?limit=100`, `GET /api/{feedings,changes,sleep,notes,pumping,tummy-times}/?limit=50…`). No other 4xx.

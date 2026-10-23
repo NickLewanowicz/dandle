@@ -8,7 +8,7 @@ title: "Feature checklists"
 
 Per `docs/qa/RUNBOOK.md` rule 7: every feature ships with an entry here in the
 same change. Steps name scripts (`scripts/qa/*`), testTags (resource-ids; see
-`app/app/src/main/java/net/babybuddy/next/ui/TestTags.kt`), and the expected
+`app/app/src/main/java/app/dandle/ui/TestTags.kt`), and the expected
 server requests (`scripts/qa/server-log.sh`, `scripts/qa/api.sh`). JVM tests are
 run with `./gradlew :app:testDebugUnitTest` from `app/` (after
 `source scripts/dev-env.sh`). A checklist row is not "done" until QA has driven

@@ -37,7 +37,7 @@ Everything we would use is on a stable channel — no betas required for any fea
 $ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 $ ./gradlew assembleDebug          # no-op: 2.3 s · one-file change: ~6.1 s (measured)
 $ adb install -r app/build/outputs/apk/debug/app-debug.apk   # 0.3 s (streamed install)
-$ adb shell am start -n net.babybuddy.next/.MainActivity     # ~0.1 s
+$ adb shell am start -n app.dandle/.MainActivity     # ~0.1 s
 $ <MCP> ui_describe                # ~1 s; accessibility tree as JSON
 ```
 
@@ -47,7 +47,7 @@ $ <MCP> ui_describe                # ~1 s; accessibility tree as JSON
 
 1. **`testTag` is invisible to UiAutomator by default.** UiAutomator matches resource-ids; Compose only publishes tags as resource-ids when you set `Modifier.semantics { testTagsAsResourceId = true }` — one line at the app root, conventionally debug-builds-only ([Semantics doc](https://developer.android.com/develop/ui/compose/accessibility/semantics)). **We will do this from commit 1** with a naming scheme (`login/server_url`, `dashboard/action_feed`), giving the agent stable `resourceId` targets in addition to text/description matching.
 2. **`mergeDescendants` is a real pitfall, mostly benign for us.** `Button`/`ListItem` merge child semantics into one node, so inner `Text` may not be independently targetable in the merged tree; `useUnmergedTree` exists in Compose tests, and for on-device automation the practical fix is: put explicit `contentDescription`/`stateDescription` on the interactive node (as the scaffold already does). List rows that merged when they shouldn't are visible immediately in `ui_describe` output — this class of bug is *observable*, which is what matters for agent QA.
-3. **Determinism is good.** The tree is stable across runs; text/description/role matching is reliable. Standard emulator hygiene applies and is scriptable: `adb shell settings put global window_animation_scale 0` (and `transition_animation_scale`, `animator_duration_scale`) to remove animation flakes; `adb shell pm clear net.babybuddy.next` for fresh-install tests; `adb shell cmd connectivity airplane-mode enable` for offline-queue tests — all things the QA persona's brief already assumes.
+3. **Determinism is good.** The tree is stable across runs; text/description/role matching is reliable. Standard emulator hygiene applies and is scriptable: `adb shell settings put global window_animation_scale 0` (and `transition_animation_scale`, `animator_duration_scale`) to remove animation flakes; `adb shell pm clear app.dandle` for fresh-install tests; `adb shell cmd connectivity airplane-mode enable` for offline-queue tests — all things the QA persona's brief already assumes.
 
 **Unit-test story — mostly JVM, no emulator.** Domain logic (elapsed-time math, queue replay/conflict resolution, date parsing) is pure Kotlin and runs on the JVM in milliseconds. Room DAOs run on JVM under Robolectric (standard practice, seconds per suite). ViewModel tests use `kotlinx-coroutines-test` + Turbine on the JVM. Only Compose UI interaction tests and screenshots need the emulator (or Robolectric-with-Compose, which works but is slower). For this app I'd expect roughly 80% of tests JVM-only.
 
@@ -101,7 +101,7 @@ On balance Kotlin's compile-time strictness (exhaustive `when`, nullability) con
 **Package layout** (single `:app` module, manual DI — no Hilt: fewer moving parts for AI agents to misfire on; ~10 files would justify Hilt, ~60 don't):
 
 ```
-app/src/main/java/net/babybuddy/next/
+app/src/main/java/app/dandle/
 ├── BabyBuddyApp.kt              # Application; WorkManager init
 ├── MainActivity.kt              # single activity; testTagsAsResourceId (debug)
 ├── di/           AppContainer.kt                    # manual graph

@@ -68,7 +68,7 @@ differed from it, or where the doc was ambiguous. Order: functional differences 
   returns stale elements. Panel interactions must be driven from screenshots. Plan for
   test-idle-friendly implementations (e.g. `importantForAccessibility` static counter text or
   slower cadence) in the new app if UI automation matters.
-- The shared emulator also hosts `net.babybuddy.next` (the new template app) and
+- The shared emulator also hosts `app.dandle` (the new template app) and
   `com.openbaby.monitor`; the former was installed/launched mid-session by another process and
   twice stole the foreground (see 03-sleep/04-interrupted-by-other-app.png).
 - Seed data contains future-dated entries (e.g. note at 22:54Z while "now" was ~21:0xZ); the app

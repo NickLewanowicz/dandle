@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "net.babybuddy.next"
+    namespace = "app.dandle"
     // navigation 2.10 / activity 1.12 / lifecycle 2.11 ship minCompileSdk=37 (aar-metadata).
     compileSdk = 37
 
@@ -18,8 +18,7 @@ android {
     }
 
     defaultConfig {
-        // Product identity is "Dandle"; the namespace above stays the legacy
-        // package name (net.babybuddy.next) — the two may differ by design.
+        // Product identity is "Dandle"; namespace and applicationId match.
         applicationId = "app.dandle"
         minSdk = 29
         targetSdk = 35
@@ -75,7 +74,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
-    // BB/API request logging (BbLog-gated; see net.babybuddy.next.log.BbLog).
+    // BB/API request logging (BbLog-gated; see app.dandle.log.BbLog).
     implementation(libs.okhttp.logging)
 
     implementation(libs.androidx.room.runtime)

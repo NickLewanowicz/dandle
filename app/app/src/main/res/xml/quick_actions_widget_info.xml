@@ -7,7 +7,7 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:widgetFeatures="reconfigurable"
-    android:configure="net.babybuddy.next.widget.QuickActionsConfigActivity"
+    android:configure="app.dandle.widget.QuickActionsConfigActivity"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:previewLayout="@layout/preview_quick_actions"
     android:previewImage="@drawable/preview_quick_actions"

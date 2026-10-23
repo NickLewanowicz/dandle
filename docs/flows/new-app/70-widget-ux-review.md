@@ -4,7 +4,7 @@ title: "Widget UX review"
 
 # 70 — Widget UX review (both home-screen widgets)
 
-**Reviewer:** ux-designer (AI) · **Date:** 2026-10-17 · **Build:** `net.babybuddy.next.debug` on emulator-5554 (Pixel 5, API 33 launcher, 1080×2280 @ 2.625d)
+**Reviewer:** ux-designer (AI) · **Date:** 2026-10-17 · **Build:** `app.dandle.debug` on emulator-5554 (Pixel 5, API 33 launcher, 1080×2280 @ 2.625d)
 **Method:** visual inspection first — fresh screenshots of the live launcher, widget picker, and tap flows (all viewed this session); Glance code read afterwards to pin root causes. Pixel measurements taken from `docs/screenshots/ux-review/01-home-fresh.png`.
 
 **Evidence (this session):** `docs/screenshots/ux-review/01-home-fresh.png` (placed widgets, running timer), `02-fresh-qa-close.png`, `03-fresh-dash-close.png` (close-ups; both not archived), `04-tap-running-slot.png` (running-slot tap → app), `05-qa-longpress-menu.png` (long-press), `06/07-qa-resize-*.png` (resize attempts), `10/11/12-widget-picker-*.png` (picker + previews). Prior art re-viewed: `00-handoff/final-home-screen.png`, all of `new-app/widgets/` and `new-app/70-fixes/`.

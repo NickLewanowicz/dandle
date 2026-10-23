@@ -30,7 +30,7 @@ Error states and lifecycle behaviors observed outside the happy paths.
 - Trash button → "Delete entry" confirm dialog → DELETE → row removed, server count decremented.
 
 ## E. Environment notes (not app behavior)
-- Another app (`net.babybuddy.next`, the new template app) was installed and auto-launched on the
+- Another app (`app.dandle`, the new template app) was installed and auto-launched on the
   shared emulator mid-session (17:08), stealing foreground twice; this is documented in
   `03-sleep/04-interrupted-by-other-app.png` and had no effect on server state.
 - The live timer counter's ~500 ms animation prevents `uiautomator` from reaching idle; element

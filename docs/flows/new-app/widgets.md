@@ -4,7 +4,7 @@ title: "Widget QA reference"
 
 # New app — Widgets (spec §7, Stage 4)
 
-QA reference for the two Glance widgets. Implementation: `app/app/src/main/java/net/babybuddy/next/widget/`.
+QA reference for the two Glance widgets. Implementation: `app/app/src/main/java/app/dandle/widget/`.
 Checklists: `docs/qa/FEATURE-CHECKLISTS.md` entries 9–10. Tags: `BB/UI`, `BB/SYNC`, `BB/TIMER`, `BB/API`.
 
 ## QuickActions (2×2 → resizable; renders 4×1 icon-only when wide)

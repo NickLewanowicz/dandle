@@ -26,7 +26,7 @@ title: "Brief 00: Architecture blueprint"
 ## Module/package shape (single Gradle module `:app`)
 
 ```
-net.babybuddy.next/
+app.dandle/
   data/
     api/        Retrofit service, DTOs (field names EXACTLY per docs/research/babybuddy-api.md)
     auth/       LoginFlow: form login (csrf→session) → GET /api/profile → api_key

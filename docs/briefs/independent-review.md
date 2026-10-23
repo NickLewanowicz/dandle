@@ -35,7 +35,7 @@ Fresh-eyes audit of the plan + the login dead-end. Verdicts are evidence-backed;
 
 **Evidence (all read-only):**
 - nginx access log in the container (`/config/log/nginx/access.log`): **five complete successful dances** from `okhttp/5.4.0` (16:31–16:46 −0700), each `GET /login/ 200 → POST /login/ 302 → GET /api/profile 200 → GET /api/children/?limit=1 200`. **The "no request ever reaches the server" claim is false.**
-- Device DataStore (`run-as net.babybuddy.next.debug cat files/session.preferences_pb`): real `api_key` + `server_url=http://10.0.2.2:8000` + `username=admin`, `session_expired` false — the dance ran to the last step and persisted. Relaunching the app right now should land on the dashboard (`startDestination = isLoggedIn`) — a 10-second proof the server side always worked.
+- Device DataStore (`run-as app.dandle.debug cat files/session.preferences_pb`): real `api_key` + `server_url=http://10.0.2.2:8000` + `username=admin`, `session_expired` false — the dance ran to the last step and persisted. Relaunching the app right now should land on the dashboard (`startDestination = isLoggedIn`) — a 10-second proof the server side always worked.
 - uiautomator dump: only `login*` tags on screen.
 - "No logcat output at all" is **expected**: the app has zero `Log.*` calls and no OkHttp logging (RUNBOOK's `BB/*` is fiction). Crash buffer clean, no ANR, process stable 19 min, RenderThread ticking — nothing system-level is wrong.
 
