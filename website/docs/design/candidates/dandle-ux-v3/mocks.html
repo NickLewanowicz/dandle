@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dandle — v3.2: app-faithful chrome, themed cards</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background:#10131c; color:#e8eaf2; font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+    padding: 34px 28px 90px; }
+  h1 { font-size: 25px; margin-bottom: 6px; }
+  .sub { color:#9aa3b8; margin-bottom: 26px; max-width: 880px; line-height: 1.5; font-size: 14px; }
+  h2 { font-size: 18px; margin: 42px 0 6px; color:#cdd6ee; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .cell { width: 296px; }
+  .tag { font-size: 12.5px; color:#9aa3b8; margin: 10px 4px 0; line-height: 1.5; }
+  .tag b { color:#e8eaf2; }
+
+  /* ============ the app shell — chrome identical to the shipped app ============ */
+  .phone { width: 296px; height: 720px; border-radius: 38px; border: 9px solid #05070d;
+    overflow: hidden; position: relative; box-shadow: 0 24px 60px rgba(0,0,0,.55); background:#12141c; }
+  .stat { position:absolute; top:12px; left:18px; font-size:11px; opacity:.75; z-index:60; }
+  .notch { position:absolute; top:8px; left:50%; transform:translateX(-50%); width:86px; height:16px;
+    background:#05070d; border-radius:9px; z-index:60; }
+  /* header: Milo ▾ left, sync right — never moves, never changes */
+  .hdr { display:flex; align-items:center; padding: 42px 18px 4px; }
+  .hdr .n { font-weight: 800; font-size: 19px; white-space: nowrap; }
+  .hdr .sync { margin-left:auto; font-size: 10px; background:#1e2331; border-radius: 14px;
+    padding: 4px 10px; opacity:.85; white-space: nowrap; }
+  /* the six buttons: circles + label below, exactly like the shipped app */
+  .btns { display:grid; grid-template-columns:repeat(3, 1fr); gap: 16px 12px; padding: 10px 22px 12px; }
+  .b { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .circ { width:58px; height:58px; border-radius:50%; background:#3a4152;
+    display:flex; align-items:center; justify-content:center; font-size:24px; }
+  .blbl { font-size:11px; color:#aab2c5; white-space:nowrap; }
+  .b.run .circ { background:#3f51b5; }
+  .b.run { position:relative; }
+  .b.run .circ { box-shadow: 0 0 0 3px rgba(63,81,181,.35); }
+  .b.run .blbl { color:#8fa2ff; }
+  /* running card — themed background, anatomy identical to shipped card */
+  .tcard { margin: 2px 12px 12px; border-radius: 20px; overflow: hidden; position: relative;
+    box-shadow: 0 10px 26px rgba(0,0,0,.35); }
+  .night { background: linear-gradient(150deg,#071233 0%,#0d2a6b 75%,#173e9e 130%); color:#fff; }
+  .milk  { background: linear-gradient(150deg,#fff3e4 0%,#ffe3ee 130%); color:#7a4a2b; }
+  .bottlebg { background: linear-gradient(150deg,#e7f3ff 0%,#d5e9ff 130%); color:#28527a; }
+  .trow { display:flex; align-items:center; gap:8px; padding: 14px 16px 4px; position:relative; z-index:5; }
+  .ic { width: 38px; height: 38px; border-radius: 11px; display:flex; align-items:center;
+    justify-content:center; font-size: 19px; flex-shrink: 0; }
+  .night .ic { background: rgba(90,120,255,.4); }
+  .milk .ic { background: rgba(232,138,45,.3); }
+  .bottlebg .ic { background: rgba(90,140,200,.3); }
+  .tname { font-weight: 800; font-size: 13px; flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tm { font-size: 17px; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap;
+    font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .save { width: 38px; height: 38px; border-radius: 11px; display:flex; align-items:center;
+    justify-content:center; font-size: 19px; font-weight: 800; flex-shrink: 0;
+    background: rgba(90,120,255,.5); }
+  .milk .save { background: rgba(232,138,45,.4); }
+  .bottlebg .save { background: rgba(90,140,200,.4); }
+  .tfields { padding: 6px 16px 4px; position:relative; z-index:5; }
+  .fld { background: rgba(255,255,255,.13); border-radius: 12px; padding: 10px 12px;
+    font-size: 13px; min-height: 40px; }
+  .milk .fld, .bottlebg .fld { background: rgba(0,0,0,.06); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom: 6px; }
+  .chips span { border-radius: 16px; padding: 6px 11px; font-size: 11px;
+    background: rgba(255,255,255,.14); white-space: nowrap; }
+  .chips span.on { background: rgba(255,255,255,.92); font-weight: 700; }
+  .bottlebg .chips span.on { color:#28527a; }
+  .tstart { display:flex; justify-content:space-between; align-items:center;
+    padding: 8px 16px 14px; font-size: 12.5px; opacity:.85; position:relative; z-index:5; }
+  .tstart .adj { font-weight: 700; }
+  .night .tstart .adj { color:#7ab0ff; }
+  .milk .tstart .adj { color:#e88a2d; }
+  .bottlebg .tstart .adj { color:#3f6ea5; }
+  /* history pane — infinite scroll */
+  .hist { background:#fff; color:#161a2b; border-radius: 24px 24px 0 0; padding: 10px 14px 18px; }
+  .hist .grab { width: 42px; height: 5px; border-radius: 3px; background: #d8dbe4; margin: 0 auto 8px; }
+  .hist .hrow { display:flex; justify-content:space-between; align-items:center; font-size: 12px; }
+  .hist .hrow .r { opacity:.55 }
+  .entry { display:flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #eef0f5; align-items: flex-start; }
+  .chip { width: 36px; height: 36px; border-radius: 11px; display:flex; align-items:center;
+    justify-content:center; font-size: 17px; flex-shrink: 0; }
+  .c-sleep { background:#e4e9ff; } .c-diaper { background:#fdeeda; } .c-pump { background:#ffe9f2; }
+  .c-feed { background:#e2f4ea; }
+  .e-main { flex: 1; min-width: 0; }
+  .e-name { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .e-note { font-size: 11.5px; color: #6b7186; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .e-right { text-align: right; }
+  .e-dur { font-weight: 800; font-size: 13px; }
+  .e-range { font-size: 10.5px; color: #8b91a8; }
+  .spinner { text-align:center; font-size: 11px; color:#8b91a8; padding: 8px 0 2px; }
+  /* scene decoration */
+  .moon { position:absolute; width:26px; height:26px; border-radius:50%;
+    box-shadow: inset -7px 3px 0 1px #ffd98a; top:10px; right:14px; opacity:.85; z-index:1; }
+  .star { position:absolute; width:2px; height:2px; border-radius:50%; background:#cfe0ff;
+    animation: tw 2.6s infinite ease-in-out; z-index:1; }
+  @keyframes tw { 0%,100%{opacity:.15} 50%{opacity:.9} }
+  /* edit sheet (E3) overlay */
+  .overlay { position:absolute; inset:0; background:rgba(5,7,13,.55); z-index:80; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; color:#161a2b;
+    border-radius: 24px 24px 0 0; padding: 12px 16px 20px; z-index:90; }
+  .sheet .grab { width: 42px; height: 5px; border-radius: 3px; background: #d8dbe4; margin: 0 auto 10px; }
+  .sheet h4 { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+  .sheet .fld { background:#f1f3f9; }
+  .sheet .savebar { background:#5c6bc0; color:#fff; text-align:center; border-radius: 12px;
+    padding: 10px 0; font-weight: 700; font-size: 13px; margin-top: 10px; }
+  .sheet .del { text-align:center; font-size: 12px; color:#c0392b; font-weight:700; padding-top: 10px; }
+  .badge-lg { display:inline-block; background:#e4e9ff; color:#3f51b5; border-radius: 16px;
+    padding: 4px 12px; font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>Dandle — v3.2: app-faithful chrome, themed cards</h1>
+<p class="sub">The chrome is back to the shipped app, pixel-for-pixel in structure: <b>Milo ▾ and the sync chip at the
+top, the six round buttons in their exact grid, nothing else above them</b>. The running cards keep the shipped
+card's anatomy (icon · name · counter · ✓ · Note · Started · Adjust) with the themed scene as the card's background —
+counter never wraps, nothing squishes. History is the infinite-scroll pane. The last frame shows the E3 edit sheet
+over the buttons (transient, allowed).</p>
+
+<h2>1 · Sleep running — chrome + themed card</h2>
+<div class="row">
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b run"><div class="circ">🌙</div><div class="blbl">Sleep · &lt;1m</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b"><div class="circ">🥛</div><div class="blbl">Pumping</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard night">
+        <div class="star" style="top:14px;left:56%"></div>
+        <div class="star" style="top:40px;left:76%;animation-delay:.8s"></div>
+        <div class="trow">
+          <div class="ic">🌙</div><div style="flex:1;min-width:0"><div class="tname">Sleep</div><div class="tm">00:00:06</div></div><div class="save">✓</div>
+        </div>
+        <div class="tfields"><div class="fld">Note</div></div>
+        <div class="tstart"><span>Started 8:28 · just now</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="hist">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-diaper">🧷</div><div class="e-main"><div class="e-name">Diaper · Wet · Green</div><div class="e-note">big one 😅</div></div><div class="e-right"><div class="e-dur">—</div><div class="e-range">7:58 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="entry"><div class="chip c-pump">🥛</div><div class="e-main"><div class="e-name">Pumping · both · 90 mL</div></div><div class="e-right"><div class="e-dur">20m</div><div class="e-range">6:40 – 7:00 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="spinner">↻ pulling older entries…</div>
+      </div>
+    </div>
+    <div class="tag"><b>1a · Sleep running</b> — chrome identical to the shipped app; the themed card carries the same anatomy. Note is the input field; ✓ saves; &lt;10 s silently discards.</div>
+  </div>
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b run"><div class="circ">🌙</div><div class="blbl">Sleep · 1h 12m</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b"><div class="circ">🥛</div><div class="blbl">Pumping</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard night">
+        <div class="star" style="top:14px;left:56%"></div>
+        <div class="trow">
+          <div class="ic">🌙</div><div style="flex:1;min-width:0"><div class="tname">Sleep</div><div class="tm">1h 12m</div></div><div class="save">✓</div>
+        </div>
+        <div class="tfields"><div class="fld">night stretch, one feed at 1 am</div></div>
+        <div class="tstart"><span>Started 8:28 pm</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="hist">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-feed">🍼</div><div class="e-main"><div class="e-name">Feeding · bottle · 110 mL</div><div class="e-note">right after nap</div></div><div class="e-right"><div class="e-dur">12m</div><div class="e-range">1:38 – 1:50 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="entry"><div class="chip c-diaper">🧷</div><div class="e-main"><div class="e-name">Diaper · Wet · Green</div></div><div class="e-right"><div class="e-dur">—</div><div class="e-range">1:12 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="spinner">↻ pulling older entries…</div>
+      </div>
+    </div>
+    <div class="tag"><b>1b · Same card, one hour in</b> — counter reads “1h 12m” on one line; nothing wraps at any elapsed value (00:00:00 → 99h 59m all fit).</div>
+  </div>
+</div>
+
+<h2>2 · Pumping + Feeding — themed cards with their real fields</h2>
+<div class="row">
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b"><div class="circ">🌙</div><div class="blbl">Sleep</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b run"><div class="circ">🥛</div><div class="blbl">Pumping · 12m</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard milk">
+        <div class="trow">
+          <div class="ic">🥛</div><div style="flex:1;min-width:0"><div class="tname">Pumping</div><div class="tm">00:12:00</div></div><div class="save">✓</div>
+        </div>
+        <div class="tfields">
+          <div class="fld">Amount — 90</div>
+          <div class="fld" style="margin-top:8px">Note — left side</div>
+        </div>
+        <div class="tstart"><span>Started 8:17 · 12m ago</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="hist" style="min-height:120px">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-pump">🥛</div><div class="e-main"><div class="e-name">Pumping · both · 90 mL</div></div><div class="e-right"><div class="e-dur">20m</div><div class="e-range">6:40 – 7:00 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="spinner">↻ pulling older entries…</div>
+      </div>
+    </div>
+    <div class="tag"><b>2a · Pumping card</b> — amount (unit-agnostic) + note on the card; ✓ saves. Chrome unchanged.</div>
+  </div>
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding · 4m</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b"><div class="circ">🌙</div><div class="blbl">Sleep</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b"><div class="circ">🥛</div><div class="blbl">Pumping</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard bottlebg">
+        <div class="trow">
+          <div class="ic">🍼</div><div style="flex:1;min-width:0"><div class="tname">Feeding</div><div class="tm">00:04:00</div></div><div class="save">✓</div>
+        </div>
+        <div class="tfields">
+          <div class="chips"><span class="on">Breast milk</span><span>Formula</span><span>Fortified breast milk</span><span>Solid food</span></div>
+          <div class="chips"><span>Bottle</span><span class="on">Left</span><span>Right</span><span>Both</span><span>Parent fed</span><span>Self fed</span></div>
+          <div class="fld">Amount — 110</div>
+        </div>
+        <div class="tstart"><span>Started 8:25 · 4m ago</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="hist" style="min-height:90px">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-feed">🍼</div><div class="e-main"><div class="e-name">Feeding · bottle · 110 mL</div><div class="e-note">right after nap</div></div><div class="e-right"><div class="e-dur">12m</div><div class="e-range">1:38 – 1:50 pm</div><div class="e-sync">✓</div></div></div>
+      </div>
+    </div>
+    <div class="tag"><b>2b · Feeding card</b> — Type and Method chips exactly as the Baby Buddy API defines them (all six methods, Self fed included). Amount unit-agnostic.</div>
+  </div>
+</div>
+
+<h2>3 · Two timers at once — compact cards, chrome untouched</h2>
+<div class="row">
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b run"><div class="circ">🌙</div><div class="blbl">Sleep · 1h</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b run"><div class="circ">🥛</div><div class="blbl">Pumping · 12m</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard night">
+        <div class="trow"><div class="ic">🌙</div><div class="tname">Sleep</div><div class="tm">1h 12m</div><div class="save">✓</div></div>
+        <div class="tfields"><div class="fld">night stretch, one feed at 1 am</div></div>
+        <div class="tstart"><span>Started 7:15 pm</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="tcard milk">
+        <div class="trow"><div class="ic">🥛</div><div class="tname">Pumping</div><div class="tm">00:12:00</div><div class="save">✓</div></div>
+        <div class="tfields">
+          <div class="fld">Amount — 90</div>
+          <div class="fld" style="margin-top:8px">Note — left side</div>
+        </div>
+        <div class="tstart"><span>Started 8:17 · 12m ago</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="hist">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-diaper">🧷</div><div class="e-main"><div class="e-name">Diaper · Wet · Green</div><div class="e-note">big one 😅</div></div><div class="e-right"><div class="e-dur">—</div><div class="e-range">7:58 pm</div><div class="e-sync">✓</div></div></div>
+        <div class="spinner">↻ pulling older entries…</div>
+      </div>
+    </div>
+    <div class="tag"><b>3 · Two running timers</b> — each gets its own full themed card, stacked; both keep their fields; the six buttons and header never move. The page scrolls — the buttons scroll away only if content pushes them, never replaced.</div>
+  </div>
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b run"><div class="circ">🌙</div><div class="blbl">Sleep · 1h</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b"><div class="circ">🥛</div><div class="blbl">Pumping</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="tcard night">
+        <div class="trow"><div class="ic">🌙</div><div class="tname">Sleep</div><div class="tm">1h 12m</div><div class="save">✓</div></div>
+        <div class="tfields"><div class="fld">night stretch, one feed at 1 am</div></div>
+        <div class="tstart"><span>Started 7:15 pm</span><span class="adj">Adjust</span></div>
+      </div>
+      <div class="formcard" style="background:#fff;color:#161a2b;border-radius:20px;margin:0 12px 10px;padding:12px 14px">
+        <div style="font-weight:800;font-size:14px;display:flex;justify-content:space-between"><span>New diaper</span><span style="opacity:.4">✕</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><div style="flex:1;border-radius:12px;background:#5c6bc0;color:#fff;padding:10px 0;text-align:center;font-weight:700;font-size:13px">Wet</div>
+        <div style="flex:1;border-radius:12px;background:#f1f3f9;padding:10px 0;text-align:center;font-weight:700;font-size:13px">Solid</div></div>
+        <div style="margin-top:10px;background:#5c6bc0;color:#fff;text-align:center;border-radius:12px;padding:10px 0;font-weight:700;font-size:13px">Save diaper</div>
+      </div>
+      <div class="hist">
+        <div class="grab"></div>
+        <div class="hrow"><span>History</span><span class="r">Today · All ▾</span></div>
+        <div class="entry"><div class="chip c-sleep">🌙</div><div class="e-main"><div class="e-name">Sleep · night stretch</div><div class="e-note">one feed at 1 am</div></div><div class="e-right"><div class="e-dur">6h 31m</div><div class="e-range">8:10 pm – 2:41 am</div><div class="e-sync">✓</div></div></div>
+        <div class="spinner">↻ pulling older entries…</div>
+      </div>
+    </div>
+    <div class="tag"><b>3b · Sleep running + diaper form card</b> — the in-progress diaper is a white form card; the running scene card stays above it. History pane beneath. The framework's “card = live entity, may contain inputs.”</div>
+  </div>
+</div>
+
+<h2>4 · Editing — E3 edit sheet over the chrome (decided)</h2>
+<div class="row">
+  <div class="cell">
+    <div class="phone">
+      <div class="notch"></div><div class="stat">8:29</div>
+      <div class="hdr"><span class="n">Milo ▾</span><span class="sync">⇅ All synced</span><span style="margin-left:8px;opacity:.7;font-weight:800">⋮</span></div>
+      <div class="btns">
+        <div class="b"><div class="circ">🍼</div><div class="blbl">Feeding</div></div>
+        <div class="b"><div class="circ">🧷</div><div class="blbl">Diaper</div></div>
+        <div class="b"><div class="circ">🌙</div><div class="blbl">Sleep</div></div>
+        <div class="b"><div class="circ">📝</div><div class="blbl">Notes</div></div>
+        <div class="b"><div class="circ">🥛</div><div class="blbl">Pumping</div></div>
+        <div class="b"><div class="circ">👶</div><div class="blbl">Tummy time</div></div>
+      </div>
+      <div class="overlay"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <h4>Edit feeding · 1:38 pm</h4>
+        <div style="font-size:10px; opacity:.6; margin: 8px 0 4px">TYPE</div>
+        <div class="chips"><span class="on" style="background:#e4e9ff;color:#3f51b5">Breast milk</span><span style="background:#f1f3f9">Formula</span><span style="background:#f1f3f9">Fortified breast milk</span><span style="background:#f1f3f9">Solid food</span></div>
+        <div style="font-size:10px; opacity:.6; margin: 8px 0 4px">METHOD</div>
+        <div class="chips"><span>Bottle</span><span class="on" style="background:#e4e9ff;color:#3f51b5">Left breast</span><span style="background:#f1f3f9">Right breast</span><span style="background:#f1f3f9">Both breasts</span><span style="background:#f1f3f9">Parent fed</span><span style="background:#f1f3f9">Self fed</span></div>
+        <div class="fld">110</div>
+        <div class="fld" style="margin-top:8px">right after nap</div>
+        <div class="savebar">Save changes</div>
+        <div class="del">Delete entry</div>
+      </div>
+    </div>
+    <div class="tag"><b>E3 · Edit bottom sheet</b> — tap a history row → the edit sheet slides over the chrome (transient input, allowed by the framework); closing returns to the identical layout. Long-press a row → Delete/more. Infinite scroll with prefetch continues beneath.</div>
+  </div>
+  
+</div>
+
+
+<h2>5 · Design framework v2.2 — the rules these frames follow (cascade to every future screen)</h2>
+<div class="frame">
+  <div><b class="k2">Entity hierarchy flows top-down.</b> The child is the top-level entity — a timer always belongs to a child, never exists globally — so the child selector sits above the actions. The UI communicates entity priority through layout, without ever making the user "select a child first." Static identity chrome (child name, sync state) may sit above the buttons because it never shifts; <b>dynamic/live elements (timer cards, forms, history) may not</b> — they would move the buttons depending on app state and break muscle memory. This decision cascades to every future screen: entities render above their dependents.</div>
+  <div><b class="k2">Buttons = pinned instruments, all six, always.</b> A 2×3 grid directly under the header in a fixed position. Running state outlines a button; buttons never move or resize.</div>
+  <div><b class="k2">Card = a live entity, and can contain inputs.</b> Running timers render as scene cards sized to their fields (sleep: note · pumping: amount + note · feeding: type + method + amount + note). An in-progress form (diaper) is also a card. Cards live below the buttons, never above. When the entity's run ends, the card is replaced by a History row — cards never represent completed history.</div>
+  <div><b class="k2">Stopping happens on the card.</b> ✓ saves (attaching the note). Under 10 s the save silently discards — unchanged semantics. No separate guard dialog.</div>
+  <div><b class="k2">History = the record pane.</b> An infinite-scroll pane anchored to the bottom of the dashboard: chunked queries, proactive prefetch, no pager buttons. Row anatomy is fixed: chip → name → notes → duration → range → sync.</div>
+  <div><b class="k2">Sheet = transient input only.</b> A sheet may cover the buttons only to capture input (create/edit) and always clears back to the identical layout. History is not a sheet-input surface — editing history opens an edit form (E1/E3 pattern), never a stacked history sheet.</div>
+  <div><b class="k2">Scenes are subdued backgrounds, never content.</b> Scene art sits behind solid card surfaces; accessibility contrast holds in light and dark. Each activity owns exactly one motif (sleep = night sky, pumping = milk, feeding = bottles).</div>
+  <div><b class="k2">Motion = ambient, out of the thumb path.</b> Drift/twinkle/float loops only; honors reduce-motion; nothing bounces under interaction.</div>
+</div>
+
+</body>
+</html>
