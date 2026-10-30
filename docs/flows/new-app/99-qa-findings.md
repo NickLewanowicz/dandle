@@ -196,3 +196,5 @@ cold-boot before gate runs; root-cause (panel state or uiautomator drag heuristi
 after long uptime) still open. Also recurring: the group-05 server-down and
 widget-running steps flake on warm runs (see RUNBOOK rule 8) — the widget-running
 shot was again honestly removed by the gate on the round-8 run.
+
+**P2-17 gate harness: A1 diaper-save canary flakes on the v2.3 panel (2026-10-30, 3 of 5 runs)** — the diaper panel's Save tap doesn't register: "save tap did not close the CHANGE panel" ×3, canary fails. Verified NOT an app bug: manual drive of the exact sequence (wet → color → amount → reveal → Save) saves correctly every time, server-confirmed; local+server state always consistent. Suspected: reveal/IME/tap coordination inside the taller slider panel (the hide_kb → reveal-dump sequence can re-show the IME — partially mitigated by the pre-tap hide_kb added in save_panel). The overlap-resolve canary also flaked twice in the same window and passed on cold-boot reruns. Cold boot before gate runs remains the workaround (see RUNBOOK rule 8-adjacent note).

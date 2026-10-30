@@ -46,6 +46,25 @@ fun feedingIconRes(feedingMethod: String?): Int = when (feedingMethod) {
     else -> R.drawable.ic_bb_feeding
 }
 
+/**
+ * Emoji icons (owner directive, v5 mocks): rendered as text through the device's
+ * own emoji font — no bundled artwork, no licensing exposure (Android renders via
+ * the Apache-2.0 Noto Color Emoji; appearance varies slightly by OEM). The full
+ * line-art set stays for widgets and notifications, which require drawable icons.
+ */
+val EventType.emoji: String
+    get() = when (this) {
+    EventType.FEEDING -> "🍼"
+    EventType.CHANGE -> "🧷"
+    EventType.SLEEP -> "🌙"
+    EventType.NOTE -> "📝"
+    EventType.PUMPING -> "🥛"
+    EventType.TUMMY_TIME -> "👶"
+}
+
+/** Feeding entries show the bottle regardless of method; the method reads in the row text. */
+fun feedingEmoji(feedingMethod: String?): String = "🍼"
+
 /** Display label used across strip, panels, dialogs. */
 val EventType.label: String
     get() = when (this) {

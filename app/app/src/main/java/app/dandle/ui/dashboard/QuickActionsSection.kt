@@ -60,6 +60,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.dandle.R
 import app.dandle.domain.ElapsedTimeFormatter
 import app.dandle.domain.FeedingOptions
@@ -139,12 +140,8 @@ private fun QuickActionButton(
                     .testTag(TestTags.quickAction(type.name)),
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(type.iconRes()),
-                        contentDescription = type.label,
-                        modifier = Modifier.size(28.dp),
-                        tint = if (active) typeColors.onContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // Emoji icons (v5 mocks): device-font rendered, multicolor — no tint.
+                    Text(type.emoji, fontSize = 26.sp)
                 }
             }
             if (running) {
@@ -254,17 +251,9 @@ fun RunningTimerCard(
                         .clip(RoundedCornerShape(12.dp))
                         .background(cardPalette(scene, typeColors).chip),
                 ) {
-                    Icon(
-                        painterResource(
-                            if (type == EventType.FEEDING) {
-                                feedingIconRes(panel.draft.feedingMethod)
-                            } else {
-                                type.iconRes()
-                            },
-                        ),
-                        contentDescription = type.label,
-                        modifier = Modifier.size(24.dp),
-                        tint = cardPalette(scene, typeColors).content,
+                    Text(
+                        if (type == EventType.FEEDING) feedingEmoji(panel.draft.feedingMethod) else type.emoji,
+                        fontSize = 19.sp,
                     )
                 }
                 Column(modifier = Modifier.padding(start = 12.dp)) {
@@ -618,12 +607,7 @@ fun CreateEntrySheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = RoundedCornerShape(10.dp), color = typeColors.container) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            painterResource(type.iconRes()),
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = typeColors.onContainer,
-                        )
+                        Text(type.emoji, fontSize = 17.sp)
                     }
                 }
                 Text(

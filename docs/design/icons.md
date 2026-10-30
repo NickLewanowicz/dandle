@@ -353,3 +353,22 @@ EDT, delta per icon to land ≈26-31px ≈ 1.2dp): preserves the AI compositions
 uniform blur/threshold destroyed. Pump measurement dashes erased pre-fatten (they
 merged under growth) and redrawn as crisp rounded bars. Median strokes: diaper 31,
 pumping 26, tummy 26.
+
+### 2.4 Round 9 — in-app icon surfaces switch to emoji (owner directive)
+
+The v5 UX mocks used Unicode emoji for the six quick actions and history
+chips, and the owner approved the look. In-app icon surfaces (quick-action
+grid, running-card icon chip, timeline/history chips, edit headers) now
+render **emoji text** — 🍼 feeding, 🧷 diaper, 🌙 sleep, 📝 notes, 🥛
+pumping, 👶 tummy time.
+
+- **Licensing:** emoji characters are free (Unicode); the artwork belongs
+  to each platform's font. The app embeds nothing — Android renders text
+  emoji via the system font (Noto Color Emoji, Apache-2.0). Appearance
+  varies slightly by OEM (e.g. Samsung devices draw Samsung's art). Never
+  bundle extracted Apple/Google emoji PNGs.
+- The line-art set (this file, rounds 1–8) remains in use for **widgets**
+  (Glance Image) and the **timer notification** (required drawable small
+  icon), which cannot take font-rendered emoji.
+- The feeding side-distinction (left/right/both solid-vs-dashed) is carried
+  by the row TEXT ("Both breasts"), not the icon — approved in mock v5.

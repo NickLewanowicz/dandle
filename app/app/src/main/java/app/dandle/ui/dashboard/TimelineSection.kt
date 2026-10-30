@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.animation.animateContentSize
 import app.dandle.domain.ElapsedTimeFormatter
 import app.dandle.domain.TimelineDayGroups
@@ -154,18 +155,16 @@ fun EmptyTimeline(modifier: Modifier = Modifier) {
             .testTag(TestTags.DASHBOARD_EMPTY_TIMELINE),
     ) {
         Row {
-            Icon(
-                painterResource(EventType.SLEEP.iconRes()),
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(
+                EventType.SLEEP.emoji,
+                fontSize = 44.sp,
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
             Spacer(Modifier.width(16.dp))
-            Icon(
-                painterResource(EventType.FEEDING.iconRes()),
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(
+                EventType.FEEDING.emoji,
+                fontSize = 44.sp,
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
         }
         Text(
@@ -216,17 +215,15 @@ private fun TimelineRow(
                     modifier = Modifier.size(40.dp),
                 ) {
                     androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            painterResource(
-                                if (event.type == EventType.FEEDING) {
-                                    feedingIconRes(event.feedingMethod)
-                                } else {
-                                    event.type.iconRes()
-                                },
-                            ),
-                            contentDescription = event.type.label,
-                            modifier = Modifier.size(22.dp),
-                            tint = typeColors.onContainer,
+                        // Emoji icons (v5 mocks): rendered by the device font, multicolor —
+                        // no tint. The method detail (left/right/both) reads in the row text.
+                        Text(
+                            if (event.type == EventType.FEEDING) {
+                                feedingEmoji(event.feedingMethod)
+                            } else {
+                                event.type.emoji
+                            },
+                            fontSize = 19.sp,
                         )
                     }
                 }
