@@ -383,10 +383,26 @@ save_panel() {
       stag="dashboard/timer/$type/save"; allow=1; kind="card"
     fi
     sb="$(reveal_tag "$stag" "$allow" "$kind")" || { warn "no save path for $type ($stag)"; return 1; }
-    # The reveal's dumps RE-SHOW the IME for a still-focused text field (observed
-    # on device: "a tap under the keyboard window is silently eaten"). Close it
-    # again immediately before the tap.
-    hide_kb || true
+    # NO hide_kb here — resolve and tap in the SAME IME state. Empirically
+    # (2026-10-30, instrumented dumps) uiautomator dumps do NOT re-show the IME,
+    # so the old post-reveal hide_kb was at best a no-op — and at worst it MOVED
+    # the save: with the IME up the modal sheet is compressed (adjustResize);
+    # dismissing the keyboard expands the sheet and the save slides down ~800px,
+    # so the tap landed on whatever moved into the stale coordinates. Worse
+    # still, an ESC that arrives after the IME self-hid dismisses the whole
+    # modal sheet (observed: draft discarded, no entry saved). The earlier
+    # comment claiming dumps re-show the IME was wrong on this build.
+    #
+    # The save is only tappable when the form is valid: a DISABLED save ignores
+    # `input tap` at its exact center (observed — the A1 diaper save sat
+    # disabled and "the tap did nothing" 3 attempts in a row). Verify enabled
+    # from the same-state tree before spending the tap.
+    xml="$(dump_with_retry 2>/dev/null)" || xml=""
+    if [[ -n "$xml" ]] && printf '%s' "$xml" | grep -q "resource-id=\"$stag\"[^>]*enabled=\"false\""; then
+      warn "save ($stag) is DISABLED (form invalid) — not tapping (attempt $i)"
+      sleep 1
+      continue
+    fi
     ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     sleep 3
     xml="$(dump_with_retry 2>/dev/null)" || return 0
@@ -610,11 +626,14 @@ pick_time() {
 # the IME for a still-focused text field (observed on device), the window
 # re-shrinks mid-flight, and a tap computed from the second dump misses.
 reveal_tag() {
-  # IMPORTANT: read the IME state AFTER the dump, not before — the dump itself
-  # re-shows the keyboard for a focused text field (its accessibility pass
-  # re-focuses), so a check taken before the dump reports a stale state and
-  # the "found" bounds end up BEHIND the keyboard, where the tap lands on
-  # Gboard. Same for the swipe: it must stay inside the visible area.
+  # IME handling: read the IME state AFTER the dump, and resolve + tap in the
+  # SAME IME state. (2026-10-30, instrumented: uiautomator dumps do NOT re-show
+  # the keyboard — an earlier comment here claimed the dump's accessibility pass
+  # re-focuses and re-shows it, and that misdiagnosis produced a post-reveal
+  # hide_kb in save_panel that moved the save ~800px between resolve and tap
+  # whenever the IME was up.) The IME check still matters for the visibility
+  # limit: with the IME up the sheet compresses (adjustResize) and content sits
+  # higher, so the "below the fold" line moves up with it.
   # $2 = allow_down (default 1): cards (list items) may drag BOTH directions;
   # sheets only UP (a down-drag dismisses them).
   local tag="$1" allow_down="${2:-1}" kind="${3:-card}" i b b2 y2 xml limit
@@ -1142,6 +1161,16 @@ g03_quickactions() {
     # 130px off). Text nodes in the sheet's window are stable once it is at
     # rest, and while the sheet is up they are unambiguous.
     shot 03-quickactions-03-diaper-sheet   # Save disabled: Wet/Solid both off
+    # The sheet opens HALF-EXPANDED: the validity hint AND the save sit below
+    # the fold and are ABSENT from the accessibility tree (Compose composes
+    # folded sheet content lazily — verified 2026-10-30 with instrumented
+    # dumps: hint absent on fresh open, present after an up-drag). The wet loop
+    # below infers validity from the hint's ABSENCE, so on a half-expanded
+    # sheet it reads "valid" while Wet is still OFF, the save stays DISABLED
+    # and ignores every tap — the deterministic A1 failure. Expand the sheet
+    # first (same drag reveal_tag uses) so the hint is actually in the tree.
+    ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 88 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 55 / 100 ))" 300
+    sleep 1
     # Wet must END UP ON: the create draft persists across sessions (a previous
     # run's leftover draft can open this sheet with Wet ALREADY checked, and a
     # blind tap would switch it OFF, leaving Save disabled forever). The hint
@@ -1149,7 +1178,12 @@ g03_quickactions() {
     # tap Wet only while it shows, then require it to disappear.
     local wi hint_xml wet_ok=0
     for wi in 1 2 3; do
-      hint_xml="$(dump_with_retry 2>/dev/null)" || hint_xml=""
+      # A FAILED dump must NOT count as "hint gone": grep on an empty string
+      # reports validity while Wet is still OFF, the save then sits DISABLED
+      # (a disabled save ignores `input tap` at its exact center — the A1
+      # deterministic failure of 2026-10-30), and three save attempts are
+      # silently eaten. Retry the dump instead.
+      hint_xml="$(dump_with_retry 2>/dev/null)" || { warn "wet check: dump failed (retrying)"; continue; }
       if ! printf '%s' "$hint_xml" | grep -q 'Choose at least one of Wet or Solid'; then wet_ok=1; break; fi
       vtag "dashboard/panel/wet" 0 || warn "wet toggle tap failed"
       sleep 1
@@ -1750,10 +1784,10 @@ g06_widgets() {
   if open_widget_picker; then
     tap_row_text "Widgets" || true
     sleep 2
-    # scroll the picker until the Baby Buddy Next section shows, then tap it
+    # scroll the picker until the Dandle section shows, then tap it
     local found=0 i
     for i in 1 2 3 4 5 6; do
-      if tap_row_text "Baby Buddy Next"; then found=1; break; fi
+      if tap_row_text "Dandle"; then found=1; break; fi
       ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 72 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 30 / 100 ))" 300
       sleep 2
     done
@@ -1761,7 +1795,7 @@ g06_widgets() {
       sleep 2
       shot 06-widgets-02-picker-previews
     else
-      warn "Baby Buddy Next section not found in the widget picker"
+      warn "Dandle section not found in the widget picker"
     fi
     ash input keyevent 4
     sleep 1
@@ -1807,7 +1841,7 @@ g06_widgets() {
 
   step "06: config screens via long-press -> Configure"
   local spec pat name lp x y
-  for spec in "Bottle|06-widgets-04-quickactions-config" "Last feed|06-widgets-05-caredashboard-config"; do
+  for spec in "Quick actions|06-widgets-04-quickactions-config" "Care dashboard|06-widgets-05-caredashboard-config"; do
     pat="${spec%%|*}"; name="${spec#*|}"
     if lp="$(widget_lp_bounds "$pat")"; then
       read -r x y <<< "$lp"
