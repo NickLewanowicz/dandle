@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,6 +16,11 @@ import app.dandle.App
 import app.dandle.MainActivity
 import app.dandle.data.prefs.SessionStore
 import app.dandle.ui.login.LoginViewModel
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Rule
@@ -35,6 +41,12 @@ import org.robolectric.annotation.Config
  * The fix scopes the LoginViewModel to the Activity's ViewModelStore via viewModel(...). That is
  * structurally observable and race-free: the ViewModel must be REGISTERED in the store (inline
  * construction registers nothing) and must be the SAME instance across session emissions.
+ *
+ * Updated for progressive disclosure: the click path now drives BOTH steps — Continue probes
+ * the URL against a MockWebServer (step 1), then username/password + Sign in complete a real
+ * form login (step 2). The end assertion is the one the original bug broke: navigation to the
+ * dashboard. The completing login fires exactly the session emissions that used to replace the
+ * ViewModel, so the final assertSame checks it survived them.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -42,6 +54,8 @@ class LoginViewModelRetentionTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private lateinit var server: MockWebServer
 
     private fun sessionStore(): SessionStore =
         (composeRule.activity.application as App).container.sessionStore
@@ -55,12 +69,58 @@ class LoginViewModelRetentionTest {
             .firstOrNull()
     }
 
+    /** Full form-login dance (csrf → POST 302+session → profile → children) + sync noise. */
+    private fun startLoginServer() {
+        server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                return when {
+                    path == "/login/" && request.method == "GET" -> MockResponse()
+                        .setResponseCode(200)
+                        .setHeader("Set-Cookie", "csrftoken=CSRF123; Path=/")
+                        .setBody(
+                            """<html><form><input type="hidden" name="csrfmiddlewaretoken" value="TOKEN789"><input name="next"></form></html>"""
+                        )
+                    path == "/login/" && request.method == "POST" -> MockResponse()
+                        .setResponseCode(302)
+                        .setHeader("Set-Cookie", "csrftoken=CSRF123; Path=/")
+                        .setHeader("Set-Cookie", "sessionid=SESS456; Path=/")
+                        .setBody("")
+                    path == "/api/profile" -> MockResponse().setResponseCode(200).setBody(
+                        """{"user":{"id":1,"username":"admin","first_name":"","last_name":"",
+                           "email":"","is_staff":true},"language":"en-US","timezone":"UTC",
+                           "api_key":"KEY789"}"""
+                    )
+                    path == "/api/children/" -> MockResponse().setResponseCode(200).setBody(
+                        """{"count":1,"next":null,"previous":null,"results":[
+                           {"id":1,"first_name":"Milo","last_name":"Rivera","birth_date":"2025-01-01","slug":"milo"}]}"""
+                    )
+                    // Dashboard sync noise after the login lands: empty pages keep it quiet.
+                    else -> MockResponse().setResponseCode(200).setBody(
+                        """{"count":0,"next":null,"previous":null,"results":[]}"""
+                    )
+                }
+            }
+        }
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        if (::server.isInitialized) server.shutdown()
+    }
+
+    private fun awaitTag(tag: String, timeoutMillis: Long = 15_000) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            composeRule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test
     fun `login viewmodel is store-backed and survives session emissions`() {
-        composeRule.waitUntil(timeoutMillis = 15_000) {
-            composeRule.onAllNodes(hasTestTag(TestTags.LOGIN_SERVER_URL))
-                .fetchSemanticsNodes().isNotEmpty()
-        }
+        startLoginServer()
+        awaitTag(TestTags.LOGIN)
 
         // THE fix: the ViewModel is registered in a ViewModelStore, never constructed inline.
         val bound = currentLoginViewModel()
@@ -78,16 +138,31 @@ class LoginViewModelRetentionTest {
 
         assertSame("session emission replaced the LoginViewModel", bound, currentLoginViewModel())
 
-        // And the click path still drives the rendered state: http:// URL → cleartext dialog.
+        // And the click path still drives the rendered state — through BOTH progressive steps,
+        // ending in the navigation the original dead-end bug swallowed.
         composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL)
-            .performTextInput("http://stored.example.com")
-        composeRule.onNodeWithTag(TestTags.LOGIN_USERNAME).performTextInput("user")
-        composeRule.onNodeWithTag(TestTags.LOGIN_PASSWORD).performTextInput("secret")
+            .performTextClearance() // guard: session prefill may have landed after the init read
+        composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL)
+            .performTextInput(server.url("/").toString())
+        composeRule.onNodeWithTag(TestTags.LOGIN_CONTINUE).performClick()
+
+        // http:// (the mock) raises the cleartext warning on step 1 — acknowledge it.
+        awaitTag(TestTags.LOGIN_CLEARTEXT_DIALOG)
+        composeRule.onNodeWithText("Unencrypted connection").assertExists()
+        composeRule.onNodeWithTag(TestTags.LOGIN_CLEARTEXT_CONTINUE).performClick()
+
+        // Step 2 renders once the probe answers (any HTTP code counts as reached).
+        awaitTag(TestTags.LOGIN_SERVER_VERIFIED)
+        composeRule.onNodeWithTag(TestTags.LOGIN_USERNAME).performTextInput("admin")
+        composeRule.onNodeWithTag(TestTags.LOGIN_PASSWORD).performTextInput("admin")
         composeRule.onNodeWithTag(TestTags.LOGIN_SUBMIT).performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithText("Unencrypted connection")
-                .fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithText("Continue").assertExists()
+
+        // The completing login emits SignedIn to the CURRENTLY RENDERED collector — the exact
+        // emissions that used to orphan the ViewModel — and must navigate to the dashboard.
+        // (The dashboard tag is on nested containers, so existence, not uniqueness, is asserted.)
+        awaitTag(TestTags.DASHBOARD)
+
+        // The Activity-scoped ViewModel survived the login's session emissions and the hop.
+        assertSame("login/hop replaced the LoginViewModel", bound, currentLoginViewModel())
     }
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import app.dandle.data.auth.LoginError
 import app.dandle.data.auth.LoginFlow
+import app.dandle.data.auth.UrlVerifyResult
 import app.dandle.data.auth.LoginResult
 import app.dandle.data.prefs.SessionStore
 import app.dandle.domain.NormalizedServerUrl
@@ -27,6 +28,9 @@ enum class LoginBanner {
     HTTP_ERROR,
     SESSION_EXPIRED, // neutral info banner, not an error (UX spec §1 states table)
 }
+
+/** Progressive disclosure (owner directive): URL first — verified — then credentials. */
+enum class LoginStep { URL, CREDENTIALS }
 
 data class LoginUiState(
     val serverUrl: String = "",
@@ -42,7 +46,15 @@ data class LoginUiState(
     /** T8: "Advanced: paste an API key" — skips the username/password form entirely. */
     val apiKeyMode: Boolean = false,
     val apiKey: String = "",
+    /** Progressive disclosure (owner directive): step 1 verifies the URL; step 2 asks for credentials. */
+    val step: LoginStep = LoginStep.URL,
+    val verifying: Boolean = false,
+    /** The URL that actually passed verification (pinned; the chip shows this). */
+    val verifiedUrl: String = "",
 ) {
+    val canContinue: Boolean
+        get() = !verifying && serverUrl.isNotBlank()
+
     /** Live normalization hint — shown only while it differs from the typed text (UX spec §1). */
     val normalizedServer: NormalizedServerUrl?
         get() = if (serverUrl.isBlank()) null else normalizeServerUrl(serverUrl)
@@ -54,7 +66,7 @@ data class LoginUiState(
 
     val canSubmit: Boolean
         get() = when {
-            submitting -> false
+            submitting || step != LoginStep.CREDENTIALS -> false
             apiKeyMode -> serverUrl.isNotBlank() && apiKey.isNotBlank()
             else -> serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank()
         }
@@ -133,9 +145,50 @@ class LoginViewModel(
         it.copy(apiKey = value, banner = null, sessionPrefill = false)
     }
 
+    /** Progressive step 1 → 2: probe the URL; any HTTP answer (even 401) passes. */
+    fun onContinueFromUrl() {
+        val state = _uiState.value
+        if (state.verifying || state.serverUrl.isBlank()) return
+        if (state.isCleartext && !cleartextAcknowledged) {
+            _uiState.update { it.copy(cleartextDialogVisible = true) }
+            return
+        }
+        _uiState.update { it.copy(verifying = true, banner = null) }
+        viewModelScope.launch {
+            when (val result = loginFlow.verifyUrl(state.serverUrl)) {
+                is UrlVerifyResult.Reached ->
+                    _uiState.update {
+                        it.copy(
+                            step = LoginStep.CREDENTIALS,
+                            verifying = false,
+                            verifiedUrl = state.normalizedServer?.url ?: state.serverUrl,
+                        )
+                    }
+                is UrlVerifyResult.HttpError ->
+                    // The host answered — odd (no Baby Buddy API at that path), but reachable:
+                    // let the user proceed; the full login will surface any real error.
+                    _uiState.update {
+                        it.copy(
+                            step = LoginStep.CREDENTIALS,
+                            verifying = false,
+                            httpStatus = result.status,
+                            verifiedUrl = state.normalizedServer?.url ?: state.serverUrl,
+                        )
+                    }
+                UrlVerifyResult.Unreachable -> {
+                    _uiState.update { it.copy(verifying = false, banner = LoginBanner.UNREACHABLE) }
+                }
+            }
+        }
+    }
+
+    fun onBackToUrl() = _uiState.update {
+        it.copy(step = LoginStep.URL, banner = null)
+    }
+
     fun submit() {
         val state = _uiState.value
-        if (!state.canSubmit) return
+        if (state.step != LoginStep.CREDENTIALS || !state.canSubmit) return
         if (state.isCleartext && !cleartextAcknowledged) {
             _uiState.update { it.copy(cleartextDialogVisible = true) }
             return
@@ -146,7 +199,10 @@ class LoginViewModel(
     fun onCleartextContinue() {
         cleartextAcknowledged = true
         _uiState.update { it.copy(cleartextDialogVisible = false) }
-        if (_uiState.value.apiKeyMode) doTokenLogin() else doLogin()
+        when (_uiState.value.step) {
+            LoginStep.URL -> onContinueFromUrl()
+            LoginStep.CREDENTIALS -> if (_uiState.value.apiKeyMode) doTokenLogin() else doLogin()
+        }
     }
 
     fun onCleartextCancel() {

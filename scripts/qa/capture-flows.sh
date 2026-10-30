@@ -383,6 +383,10 @@ save_panel() {
       stag="dashboard/timer/$type/save"; allow=1; kind="card"
     fi
     sb="$(reveal_tag "$stag" "$allow" "$kind")" || { warn "no save path for $type ($stag)"; return 1; }
+    # The reveal's dumps RE-SHOW the IME for a still-focused text field (observed
+    # on device: "a tap under the keyboard window is silently eaten"). Close it
+    # again immediately before the tap.
+    hide_kb || true
     ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     sleep 3
     xml="$(dump_with_retry 2>/dev/null)" || return 0
@@ -912,24 +916,35 @@ do_login_drive() {
   done
   shot 01-login-01-initial
 
-  step "01: cleartext dialog + error banner (deliberate wrong password first)"
+  step "01: progressive login — URL first, then cleartext dialog + error banner"
+  # v2.3 progressive disclosure: the login is TWO steps. Step 1 is the URL +
+  # Continue (which probes reachability — the cleartext warning fires HERE for
+  # http URLs). Only after verification do the credential fields appear.
     type_into "login/server_url" "http://10.0.2.2:8000" || warn "typing failed"
-    type_into "login/username" "admin" || warn "typing failed"
-    type_into "login/password" "definitely-wrong" || warn "typing failed"
-  tap_tag "login/submit" || { warn "login/submit missing"; return 1; }
+  tap_tag "login/continue" || { warn "login/continue missing"; return 1; }
   # The cleartext dialog's own testTag never reaches the uiautomator dump (a
-  # Compose dialog window exposes only its text nodes — and while it is up the
-  # login fields are absent) — detect it via the unique "Continue" text node.
-  # Screenshot-audit fix: SHOOT WHILE THE DIALOG IS UP (Continue not yet
-  # tapped). The old wait_continue_and_tap-then-shot order captured whatever
-  # landed after the acknowledgement — the wrong-password banner — not the
-  # dialog the step claims.
+  # Compose dialog window exposes only its text nodes) — detect it via the
+  # unique "Continue" text node and SHOOT WHILE THE DIALOG IS UP. With the
+  # two-step flow the dialog appears on the URL step, before credentials exist.
   if wait_continue_visible 60; then
     shot 01-login-02-cleartext-dialog   # dialog still on screen
-    wait_continue_and_tap 30 || true    # NOW acknowledge; the login attempt proceeds
+    wait_continue_and_tap 30 || true    # NOW acknowledge; verification proceeds
   else
     warn "cleartext dialog did not appear (may be suppressed for a pre-acknowledged URL)"
   fi
+
+  # Step 2 appears only after the URL verifies — wait for the credential fields.
+  for wi in $(seq 1 20); do
+    if xml="$(dump_with_retry 2>/dev/null)"; then
+      if bounds_of "$xml" "login/username" >/dev/null; then break; fi
+    fi
+    (( wi == 20 )) && { warn "credential fields never appeared after URL verification"; return 1; }
+    sleep 2
+  done
+  step "01: wrong-password round (deliberate, for the error banner)"
+    type_into "login/username" "admin" || warn "typing failed"
+    type_into "login/password" "definitely-wrong" || warn "typing failed"
+  tap_tag "login/submit" || { warn "login/submit missing"; return 1; }
 
   if wait_for_tag "login/error_banner" 60 2 >/dev/null; then
     shot 01-login-03-error-banner

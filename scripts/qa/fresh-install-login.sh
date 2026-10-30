@@ -88,8 +88,42 @@ fi
 say "==> wait for login screen (tag: login/server_url)"
 wait_for_tag "login/server_url" 60 2 >/dev/null || die "login screen never appeared (60s)"
 
-say "==> typing credentials (fresh dump before every tap)"
+say "==> typing server URL (step 1 of the progressive login)"
 type_field "login/server_url" "$URL"
+
+say "==> tap login/continue (verifies reachability; cleartext dialog fires here for http)"
+tap_tag "login/continue" || die "login/continue not on screen"
+
+# The cleartext warning dialog appears for http URLs — acknowledge it. The
+# dialog's confirm carries the tag `login/cleartext_continue` (v2.3); fall back
+# to the "Continue" text node for older builds.
+deadline=$(( SECONDS + 30 ))
+acked=0
+while (( SECONDS < deadline )); do
+  # dump → find the dialog's Continue node → tap its center (self-contained;
+  # this script doesn't share capture-flows' helpers)
+  adb -s "$SERIAL" shell uiautomator dump /sdcard/fi.xml >/dev/null 2>&1 || true
+  adb -s "$SERIAL" pull /sdcard/fi.xml /tmp/fi.xml >/dev/null 2>&1 || true
+  C=$(python3 - <<'PY'
+import re
+try:
+    xml = open('/tmp/fi.xml', encoding='utf-8', errors='ignore').read()
+    m = re.search(r'text="Continue"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+    if m:
+        print((int(m.group(1)) + int(m.group(3))) // 2, (int(m.group(2)) + int(m.group(4))) // 2)
+except Exception:
+    pass
+PY
+)
+  if [ -n "$C" ]; then adb -s "$SERIAL" shell input tap $C; acked=1; break; fi
+  sleep 1
+done
+if (( ! acked )); then
+  echo "WARN: cleartext dialog never appeared (may be https/already acknowledged)"
+fi
+
+say "==> typing credentials (step 2 — appears after the URL verifies)"
+wait_for_tag "login/username" 30 2 >/dev/null || die "credential fields never appeared (30s)"
 type_field "login/username" "$APP_USER"
 type_field "login/password" "$APP_PASS"
 

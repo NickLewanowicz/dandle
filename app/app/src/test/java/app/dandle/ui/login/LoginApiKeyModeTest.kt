@@ -19,7 +19,6 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Path.Companion.toPath
-import okio.Path.Companion.toPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,9 +86,33 @@ class LoginApiKeyModeTest {
         server.shutdown()
     }
 
+    /**
+     * Progressive login step 1 → 2: probe the URL (any HTTP answer passes — the probe's
+     * unauthenticated children call 401s against this dispatcher), acknowledge the http://
+     * cleartext warning, and wait for the credentials step to open.
+     */
+    private fun awaitCredentialsStep() {
+        viewModel.onContinueFromUrl()
+        viewModel.onCleartextContinue() // http:// (the mock server) → cleartext warning on step 1
+        val deadline = System.currentTimeMillis() + 10_000
+        while (viewModel.uiState.value.step != LoginStep.CREDENTIALS &&
+            System.currentTimeMillis() < deadline
+        ) {
+            testDispatcher.scheduler.advanceUntilIdle()
+            org.robolectric.Robolectric.flushForegroundThreadScheduler()
+            Thread.sleep(25)
+        }
+        assertEquals(
+            "the URL probe must reach the mock server and open the credentials step",
+            LoginStep.CREDENTIALS,
+            viewModel.uiState.value.step,
+        )
+    }
+
     @Test
     fun `paste-key mode gates submit on server plus key and signs in with the pasted key`() = runBlocking {
         viewModel.onServerUrlChange(server.url("/").toString())
+        awaitCredentialsStep()
         viewModel.onApiKeyModeToggle()
 
         // Password fields are gone from the gating: no username/password needed here.
@@ -102,9 +125,8 @@ class LoginApiKeyModeTest {
         val collector = launch(Dispatchers.Unconfined) {
             viewModel.events.collect { if (it is LoginEvent.SignedIn) signedIn = true }
         }
+        // Cleartext was acknowledged at step 1, so submit goes straight to the token login.
         viewModel.submit()
-        // http:// (the mock server) triggers the cleartext confirmation — acknowledge it.
-        viewModel.onCleartextContinue()
         // Real-time deadline (no suspension in the loop body — withTimeout could never fire).
         val deadline = System.currentTimeMillis() + 10_000
         while (!signedIn && System.currentTimeMillis() < deadline) {
@@ -123,10 +145,10 @@ class LoginApiKeyModeTest {
     @Test
     fun `rejected key surfaces the bad-credentials banner`() = runBlocking {
         viewModel.onServerUrlChange(server.url("/").toString())
+        awaitCredentialsStep()
         viewModel.onApiKeyModeToggle()
         viewModel.onApiKeyChange("WRONGKEY")
         viewModel.submit()
-        viewModel.onCleartextContinue()
         val bannerDeadline = System.currentTimeMillis() + 10_000
         while (viewModel.uiState.value.banner == null && System.currentTimeMillis() < bannerDeadline) {
             testDispatcher.scheduler.advanceUntilIdle()

@@ -13,8 +13,12 @@ object TestTags {
     const val LOGIN_SUBMIT = "login/submit"
     const val LOGIN_ERROR_BANNER = "login/error_banner"
     const val LOGIN_CLEARTEXT_DIALOG = "login/cleartext_dialog"
+    /** The cleartext dialog's confirm button (text alone is ambiguous: step 1's Continue). */
+    const val LOGIN_CLEARTEXT_CONTINUE = "login/cleartext_continue"
     const val LOGIN_ADVANCED_TOGGLE = "login/advanced_toggle"
     const val LOGIN_API_KEY = "login/api_key"
+    const val LOGIN_CONTINUE = "login/continue"
+    const val LOGIN_SERVER_VERIFIED = "login/server_verified"
 
     // Dashboard (UX spec §2)
     const val DASHBOARD = "dashboard"

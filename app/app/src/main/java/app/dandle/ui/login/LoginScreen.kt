@@ -3,21 +3,28 @@ package app.dandle.ui.login
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -88,26 +95,78 @@ fun LoginScreen(
                 }
 
                 val normalized = state.normalizedServer
-                OutlinedTextField(
-                    value = state.serverUrl,
-                    onValueChange = viewModel::onServerUrlChange,
-                    label = { Text("Server URL") },
-                    singleLine = true,
-                    supportingText = {
-                        when {
-                            state.showNormalizationHint && normalized != null ->
-                                Text("Will use ${normalized.url}")
-                            state.serverUrl.isBlank() ->
-                                Text("The address your family's Baby Buddy lives at.")
+                if (state.step == LoginStep.URL) {
+                    OutlinedTextField(
+                        value = state.serverUrl,
+                        onValueChange = viewModel::onServerUrlChange,
+                        label = { Text("Server URL") },
+                        singleLine = true,
+                        supportingText = {
+                            when {
+                                state.showNormalizationHint && normalized != null ->
+                                    Text("Will use ${normalized.url}")
+                                state.serverUrl.isBlank() ->
+                                    Text("The address your family's Baby Buddy lives at.")
+                            }
+                        },
+                        isError = state.banner == LoginBanner.UNREACHABLE,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_SERVER_URL),
+                    )
+                    Button(
+                        onClick = viewModel::onContinueFromUrl,
+                        enabled = state.canContinue,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_CONTINUE),
+                    ) {
+                        if (state.verifying) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("Checking the server…")
+                        } else {
+                            Text("Continue")
                         }
-                    },
-                    isError = state.banner == LoginBanner.UNREACHABLE,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(TestTags.LOGIN_SERVER_URL),
-                )
-                if (!state.apiKeyMode) {
+                    }
+                }
+                if (state.step == LoginStep.CREDENTIALS) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(TestTags.LOGIN_SERVER_VERIFIED)
+                            .clickable { viewModel.onBackToUrl() },
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(12.dp),
+                        ) {
+                            Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Server verified", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    state.verifiedUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "Change",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
+                }
+                if (state.step == LoginStep.CREDENTIALS && !state.apiKeyMode) {
                     OutlinedTextField(
                         value = state.username,
                         onValueChange = viewModel::onUsernameChange,
@@ -137,7 +196,7 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .testTag(TestTags.LOGIN_PASSWORD),
                     )
-                } else {
+                } else if (state.step == LoginStep.CREDENTIALS) {
                     // T8 (Priya): self-hosters mint API keys — let them paste one; the server
                     // validates it against /api/children/ exactly like the password path.
                     OutlinedTextField(
@@ -174,7 +233,7 @@ fun LoginScreen(
                     null -> Unit
                 }
 
-                Button(
+                if (state.step == LoginStep.CREDENTIALS) Button(
                     onClick = viewModel::submit,
                     enabled = state.canSubmit,
                     modifier = Modifier
@@ -232,7 +291,12 @@ fun LoginScreen(
                     // servers run plain http inside their own home network.
                     text = { Text("This server uses http:// — data is not encrypted on the way. Continue?") },
                     confirmButton = {
-                        Button(onClick = viewModel::onCleartextContinue) { Text("Continue") }
+                        // Tagged: with progressive disclosure the step-1 Continue button shares
+                        // this text, so automation must be able to select the dialog's own action.
+                        Button(
+                            onClick = viewModel::onCleartextContinue,
+                            modifier = Modifier.testTag(TestTags.LOGIN_CLEARTEXT_CONTINUE),
+                        ) { Text("Continue") }
                     },
                     dismissButton = {
                         Button(onClick = viewModel::onCleartextCancel) { Text("Cancel") }

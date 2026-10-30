@@ -30,6 +30,14 @@ sealed interface LoginError {
     data class HttpError(val status: Int) : LoginError
 }
 
+/** Progressive login step 1: is this URL a reachable Baby Buddy server? */
+sealed interface UrlVerifyResult {
+    /** The server answered (any HTTP code — auth comes in step 2). */
+    data class Reached(val server: NormalizedServerUrl, val cleartext: Boolean) : UrlVerifyResult
+    data object Unreachable : UrlVerifyResult
+    data class HttpError(val status: Int) : UrlVerifyResult
+}
+
 sealed interface LoginResult {
     data class Success(val server: NormalizedServerUrl, val apiKey: String) : LoginResult
     data class Failure(val error: LoginError) : LoginResult
@@ -87,6 +95,36 @@ class LoginFlow(
                 LoginResult.Failure(LoginError.Unreachable)
             }
         }
+
+    /**
+     * Progressive login step 1 (owner directive): probe the URL before asking for
+     * credentials. Any HTTP response — including the 401 an unauthenticated
+     * /api/children/ probe gets — means a reachable server; only connection-level
+     * failures (DNS, timeout, refused) are "unreachable". Cleartext URLs are
+     * reported so the UI can warn before credentials are entered.
+     */
+    suspend fun verifyUrl(rawUrl: String): UrlVerifyResult = withContext(Dispatchers.IO) {
+        try {
+            val server = normalizeServerUrl(rawUrl)
+            val probe = client.newCall(
+                Request.Builder()
+                    .url("${server.url}/api/children/?limit=1")
+                    .get()
+                    .build()
+            ).execute()
+            probe.use { probeResponse ->
+                when {
+                    probeResponse.code == 404 ->
+                        UrlVerifyResult.HttpError(404) // reachable host, but no Baby Buddy API here
+                    else -> UrlVerifyResult.Reached(server, server.isCleartext)
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            UrlVerifyResult.Unreachable
+        }
+    }
 
     private suspend fun tokenChecked(server: NormalizedServerUrl, apiKey: String): LoginResult {
         if (apiKey.isEmpty()) return LoginResult.Failure(LoginError.BadCredentials)
