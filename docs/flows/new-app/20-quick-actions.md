@@ -7,6 +7,15 @@ title: "Flow verification: Quick actions"
 **Purpose:** drive all six quick actions end-to-end on the emulator and verify each save server-side (endpoint + fields), plus the timer stop-guard, the type→method cascade, per-child learned defaults, and the duplicate guard.
 
 
+## v0.5 — design framework v2.3 (supersedes the dialog/sheet details below)
+
+Source: `docs/design/candidates/dandle-ux-v3/mocks.html`, spec §8.1. What changed:
+
+- **Themed scene cards.** Each running timer renders on its own motif — Sleep = night gradient with crescent moon + twinkling stars, Pumping = warm milk gradient with floating drops, Tummy time = warm sun gradient, Feeding = bottle-blue gradient. Decorations sit behind the content and go static under the system reduce-motion setting. All text/field pairs ≥4.5:1 (TimerSceneTest).
+- **Stop guard is an on-card band.** Re-tap a running type after >10 s → the card itself shows "Stop timer?" (Save full-width; Keep running / Discard subdued on a second row) — no modal. Same tags as before (`dashboard/stop_dialog`, `…/save|keep|discard`), ≤10 s still discards silently.
+- **Feeding cascade.** Type chips only → type picked reveals FILTERED method chips (`methodsFor`) → both picked collapse to a "Type · Method ✎ change" summary; only Amount + Note remain. Amount has no mL label anywhere. The cascade also drives the Quick Edit sheet.
+- **Diaper sheet redesign.** No TIME row (entries stamp at save time; backdate via edit — see `docs/issues-pending/gitea-issue-backdating.md`), Wet/Solid toggles stay, Color is a single-select slider strip (full server enum: black/brown/gray/green/orange/red/white/yellow — same `color/<wire>` tags per dot), Amount + Note fields, Save still gated on Wet or Solid.
+
 ## v0.4 — owner UI rework (supersedes strip/✕ statements below)
 
 Decisions: `docs/flows/new-app/90-owner-ui-rework.md` (U1–U5). What changed:

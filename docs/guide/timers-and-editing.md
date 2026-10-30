@@ -8,16 +8,16 @@ Most logging happens *after* the fact, from memory, a little wrong. Both halves 
 
 ## Starting and stopping a timer
 
-Tap **Sleep** (or Feeding, Pumping, Tummy time) once to start. The timer becomes a card under the buttons, counting up. Tap the same button again to stop, and one of two things happens:
+Tap **Sleep** (or Feeding, Pumping, Tummy time) once to start. The timer becomes a card under the buttons — each with its own quiet scene: sleep gets a night sky with a moon and stars, pumping a warm milk glow, tummy time a morning sun, feeding a soft bottle blue — counting up as a clock. Tap the same button again to stop, and one of two things happens:
 
-- **Over ten seconds:** a calm dialog asks — **"Stop timer? You've been tracking Sleep for 1:07."** — with **Save** as the obvious answer, plus Discard, and Keep for when you tapped by accident and the nap isn't over.
+- **Over ten seconds:** the card itself asks — **"Stop timer? You've been tracking Sleep for 1:07."** — with **Save** as the obvious answer, plus Discard, and Keep for when you tapped by accident and the nap isn't over.
 - **Under ten seconds:** the tap is treated as what it almost always is — a double-tap — and discarded quietly, no entry, no fuss. A pocket-tap shouldn't be able to log a fake nap.
 
-![Starting a sleep timer and stopping it: the counter ticks, the re-tap raises the stop dialog, Discard removes it.](../media/demo-sleep-timer.gif)
+![Starting a sleep timer and stopping it: the counter ticks, the re-tap raises the stop form on the card, Discard removes it.](../media/demo-sleep-timer.gif)
 
 Timers survive closing the app, restarting your phone, and being offline — and they save the times things actually happened, not the times you got around to it.
 
-![The stop dialog, with Save as the obvious answer.](../screenshots/new-app/flows/03-quickactions-07-sleep-stopguard.png)
+![The on-card stop form, with Save as the obvious answer.](../screenshots/new-app/flows/redesign-v23/02-sleep-stop-band-light.png)
 
 ## Fixing a time
 

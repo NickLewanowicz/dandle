@@ -376,13 +376,13 @@ save_panel() {
     # Reveal the save once, then tap the RESOLVED coordinates (see reveal_tag).
     # The card is a list item (U2): its icon-only save may sit below the fold or
     # below the keyboard. Sheets get up-drags only (a down-drag dismisses them).
-    local sb stag allow
+    local sb stag allow kind
     if [[ "$type" == "CHANGE" || "$type" == "NOTE" ]]; then
-      stag="dashboard/panel/save"; allow=0
+      stag="dashboard/panel/save"; allow=0; kind="sheet"
     else
-      stag="dashboard/timer/$type/save"; allow=1
+      stag="dashboard/timer/$type/save"; allow=1; kind="card"
     fi
-    sb="$(reveal_tag "$stag" "$allow")" || { warn "no save path for $type ($stag)"; return 1; }
+    sb="$(reveal_tag "$stag" "$allow" "$kind")" || { warn "no save path for $type ($stag)"; return 1; }
     ash input tap $(( $(echo "$sb" | awk '{print int(($1+$3)/2)}') )) $(( $(echo "$sb" | awk '{print int(($2+$4)/2)}') ))
     sleep 3
     xml="$(dump_with_retry 2>/dev/null)" || return 0
@@ -613,7 +613,11 @@ reveal_tag() {
   # Gboard. Same for the swipe: it must stay inside the visible area.
   # $2 = allow_down (default 1): cards (list items) may drag BOTH directions;
   # sheets only UP (a down-drag dismisses them).
-  local tag="$1" allow_down="${2:-1}" i b b2 y2 xml limit
+  local tag="$1" allow_down="${2:-1}" kind="${3:-card}" i b b2 y2 xml limit
+  # Sheet kind: the panel occupies the BOTTOM of the screen — the generic
+  # 45%→28% swipe starts ABOVE the sheet and drags the dashboard (which
+  # consumes it), so Save never scrolls into view (2026-10-30, v2.3 slider
+  # panel). Sheet drags run inside the sheet's own bottom band instead.
   for i in 1 2 3 4 5 6 7 8; do
     # First pass: let a freshly-opened sheet/card FINISH its slide-in — bounds
     # captured mid-animation belong to a layout that no longer exists.
@@ -642,7 +646,9 @@ reveal_tag() {
     # - cards (timeline list items): DOWN drags only — they scroll toward the top
     #   and bring the card header/save back after an IME scroll.
     # - sheets: UP drags only (a down-drag dismisses a bottom sheet).
-    if (( allow_down == 1 )); then
+    if [[ "$kind" == "sheet" ]]; then
+      ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 88 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 55 / 100 ))" 300
+    elif (( allow_down == 1 )); then
       ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 38 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 58 / 100 ))" 300
     else
       ash input swipe "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 45 / 100 ))" "$(( SCREEN_W / 2 ))" "$(( SCREEN_H * 28 / 100 ))" 300
@@ -1095,6 +1101,12 @@ g03_quickactions() {
   step "03: FEEDING panel + type/method cascade"
   if open_timer_card FEEDING; then
     shot 03-quickactions-01-feeding-panel
+    # v0.5 cascade: with a learned default the card opens COLLAPSED ("Type · Method ✎
+    # change"); tap the summary to re-open the type/method rows before driving them.
+    if wait_for_tag "dashboard/panel/feeding_summary" 4 2 >/dev/null; then
+      tap_tag "dashboard/panel/feeding_summary" || true
+      sleep 1
+    fi
     vtag "dashboard/panel/feeding_type/formula" 1 && sleep 1
     shot 03-quickactions-02-feeding-cascade   # methods drop to bottle/parent fed/self fed
     vtag "dashboard/panel/feeding_type/breast milk" 1 || true
@@ -1128,13 +1140,11 @@ g03_quickactions() {
       sleep 1
     done
     (( wet_ok )) || warn "wet toggle did not turn on (Save stays disabled)"
-    vtag "dashboard/panel/extra_options" 0 && sleep 1.5
-    shot 03-quickactions-04-diaper-extra-options   # color chips + amount
-    vtag "dashboard/panel/color/black" 0 || warn "black chip tap failed"
+    # v0.5: no extra-options disclosure — Color (single-select slider) + Amount + Note
+    # are always visible. Slider dots keep the per-wire tags (`color/<wire>`).
+    shot 03-quickactions-04-diaper-color-amount   # color slider + amount
+    vtag "dashboard/panel/color/black" 0 || warn "black slider dot tap failed"
     vtype "dashboard/panel/amount" "73" && hide_kb
-    # Collapse so Save is reachable (the row reads "Hide extra options" while
-    # expanded — an exact-match tap on "Extra options" would silently miss).
-    vtag "dashboard/panel/extra_options" 0 || true
     save_panel "CHANGE" || true
     wait_gone_tag "dashboard/panel/CHANGE" 15 || warn "diaper panel did not close after save"
 

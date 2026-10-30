@@ -8,7 +8,7 @@ Everything starts from six big buttons at the top of the screen: **Feeding, Diap
 
 ## Tap once, done
 
-**Diaper** and **Notes** save instantly. A diaper is three taps: Diaper, Wet (or Solid), Save. Save stays grey until you've picked at least one thing, so an empty panel can't save a blank entry. The extras — color, amount — hide under **Extra options**, and everything beyond the taps is optional. Notes work the same way: type, save.
+**Diaper** and **Notes** save instantly. A diaper is three taps: Diaper, Wet (or Solid), Save. Save stays grey until you've picked at least one thing, so an empty panel can't save a blank entry. Color is a single swipe-and-pick strip (one color — the server keeps one), and amount and note are optional. Everything is stamped the moment you save; got the time wrong? Tap the row afterwards and fix it. Notes work the same way: type, save.
 
 ![Logging a feed: tap Feeding, pick a type, save — the entry lands at the top of Today.](../media/demo-feeding-log.gif)
 

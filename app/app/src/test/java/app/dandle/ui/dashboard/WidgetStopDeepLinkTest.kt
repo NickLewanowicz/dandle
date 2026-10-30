@@ -32,8 +32,9 @@ import org.robolectric.annotation.Config
 
 /**
  * T5 pin: a widget "tap to stop" (EXTRA_STOP_TIMER → [WidgetDeepLink.stopRequest]) runs the
- * EXACT in-app stop semantics on the dashboard VM — >10s running raises the stop-guard dialog
- * request, ≤10s discards silently. Single-VM class on purpose: the deep-link channels are
+ * EXACT in-app stop semantics on the dashboard VM — >10s running raises the stop-guard request
+ * (rendered as the ON-CARD band, framework v2.3 rule 3) and brings the timer's card forward,
+ * ≤10s discards silently. Single-VM class on purpose: the deep-link channels are
  * process-global singletons, so the scenario runs as one test on one VM for determinism.
  */
 @RunWith(AndroidJUnit4::class)
@@ -110,12 +111,20 @@ class WidgetStopDeepLinkTest {
             while (latest.value.activeChild == null) { advance(); delay(50) }
         }
 
-        // -- Scenario 1: long-running timer -> the guard dialog request (what the dialog renders).
+        // -- Scenario 1: long-running timer -> the guard request (what the on-card band renders).
         // Adopted from the server (refresh below) with start = now-60s: genuinely >10s old.
         val childId = container.quickActionActions.activeChildId()!!
         viewModel.refresh() // adopts the server's Sleep-BBapp timer (start = now-60s)
         withTimeout(10_000) {
             while (latest.value.runningTimers.isEmpty()) { advance(); delay(50) }
+        }
+        // Framework v2.3 rule 3 regression pin: the guard renders as an ON-CARD band, so the
+        // guard request must bring the timer's OWN card forward even when a DIFFERENT card
+        // holds the panel (the auto-open collector only runs with no panel open — the band
+        // used to be lost in that race, QA 2026-10-29).
+        viewModel.onQuickActionTap(EventType.FEEDING)
+        withTimeout(10_000) {
+            while (latest.value.openPanel?.type != EventType.FEEDING) { advance(); delay(50) }
         }
         WidgetDeepLink.requestStop(EventType.SLEEP)
         try {
@@ -130,12 +139,22 @@ class WidgetStopDeepLinkTest {
             )
         }
         assertEquals(EventType.SLEEP, viewModel.stopGuardRequests.value?.kind)
+        withTimeout(10_000) {
+            while (latest.value.openPanel?.type != EventType.SLEEP) { advance(); delay(50) }
+        }
+        assertEquals(
+            "the guard request must open the timer's card (the band renders on it)",
+            EventType.SLEEP,
+            latest.value.openPanel?.type,
+        )
         viewModel.consumeStopGuardRequest()
         WidgetDeepLink.consumeStop(EventType.SLEEP)
 
-        // Clean up scenario 1's timer via the repository (the dialog's Discard semantics).
+        // Clean up scenario 1's timers via the repository (the band's Discard semantics).
         val timer = container.timerRepository.findRunning(EventType.SLEEP, childId)
         if (timer != null) container.timerRepository.discard(timer)
+        val feeding = container.timerRepository.findRunning(EventType.FEEDING, childId)
+        if (feeding != null) container.timerRepository.discard(feeding)
         withTimeout(10_000) {
             while (latest.value.runningTimers.isNotEmpty()) { advance(); delay(50) }
         }

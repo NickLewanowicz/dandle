@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -45,7 +44,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import app.dandle.data.AppContainer
 import app.dandle.domain.ElapsedTimeFormatter
-import app.dandle.domain.StopGuard
 import app.dandle.domain.model.EventType
 import app.dandle.domain.model.RunningTimer
 import app.dandle.ui.TestTags
@@ -93,14 +91,16 @@ fun DashboardScreen(
     }
     val nowMillis = remember(tick) { container.serverClock.nowMillis() }
 
-    var stopDialog by remember { mutableStateOf<RunningTimer?>(null) }
+    // Framework v2.3 rule 3: the >10s stop guard renders as an in-card band on the running
+    // card (no modal). This holds the timer the band is for; null = no stop request open.
+    var stopGuardTimer by remember { mutableStateOf<RunningTimer?>(null) }
 
     // P2-4/U3: guard requests from a re-tap of a running type's button (the <=10s branch never
-    // emits — the VM discards silently there).
+    // emits — the VM discards silently there). Widget stop deep links land here too.
     LaunchedEffect(Unit) {
         viewModel.stopGuardRequests.collect { timer ->
             if (timer != null) {
-                stopDialog = timer
+                stopGuardTimer = timer
                 viewModel.consumeStopGuardRequest()
             }
         }
@@ -197,11 +197,22 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     leadingItem = runningPanel?.let { panel ->
                         {
+                            val guardTimer = stopGuardTimer
                             RunningTimerCard(
                                 panel = panel,
                                 nowMillis = nowMillis,
                                 saveEnabled = viewModel.isPanelSaveEnabled(panel),
                                 callbacks = viewModel, // DashboardViewModel implements QuickActionCallbacks
+                                showStopForm = guardTimer != null && guardTimer.localId == panel.timer?.localId,
+                                onStopSave = {
+                                    guardTimer?.let(viewModel::saveRunningTimer)
+                                    stopGuardTimer = null
+                                },
+                                onStopKeep = { stopGuardTimer = null },
+                                onStopDiscard = {
+                                    guardTimer?.let(viewModel::discardTimer)
+                                    stopGuardTimer = null
+                                },
                             )
                         }
                     },
@@ -210,11 +221,11 @@ fun DashboardScreen(
         }
     }
 
-    // U4: diaper / note creation is a sheet — the same UI family as editing a finished entry.
+    // U4 (v-dandle: no time row): diaper / note creation is a sheet — the same UI family as
+    // editing a finished entry. Entries stamp at save time; backdate through the edit flow.
     state.openPanel?.takeIf { !it.type.isTimed }?.let { panel ->
         CreateEntrySheet(
             panel = panel,
-            entryMillis = panel.entryTimeMillis ?: nowMillis,
             saveEnabled = viewModel.isPanelSaveEnabled(panel),
             callbacks = viewModel,
         )
@@ -241,50 +252,6 @@ fun DashboardScreen(
     }
     if (showAboutDialog) {
         app.dandle.ui.about.AboutDialog(onDismiss = { showAboutDialog = false })
-    }
-    stopDialog?.let { timer ->
-        val elapsed = (nowMillis - timer.startedAtMillis).coerceAtLeast(0)
-        AlertDialog(
-            onDismissRequest = { stopDialog = null },
-            title = { Text(StopGuard.DIALOG_TITLE) },
-            confirmButton = {},
-            dismissButton = {},
-            text = {
-                Column {
-                    Text(StopGuard.dialogBody(timer.kind.label, elapsed))
-                    // Save fills its own row; Discard is moved to a subdued SECOND line
-                    // far from Save — a thumb-slip on an adjacent destructive button must
-                    // not erase a tracked nap (Jordan, persona round 2).
-                    Button(
-                        onClick = {
-                            stopDialog = null
-                            viewModel.saveRunningTimer(timer)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .testTag(TestTags.STOP_DIALOG_SAVE),
-                    ) { Text("Save") }
-                    Row(modifier = Modifier.padding(top = 4.dp)) {
-                        TextButton(
-                            onClick = { stopDialog = null },
-                            modifier = Modifier.testTag(TestTags.STOP_DIALOG_KEEP),
-                        ) { Text("Keep running") }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(
-                            onClick = {
-                                stopDialog = null
-                                viewModel.discardTimer(timer)
-                            },
-                            modifier = Modifier.testTag(TestTags.STOP_DIALOG_DISCARD),
-                        ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
-                    }
-                }
-            },
-            modifier = Modifier
-                .dialogTestTags()
-                .testTag(TestTags.STOP_DIALOG),
-        )
     }
     state.duplicatePrompt?.let { prompt ->
         AlertDialog(

@@ -38,16 +38,20 @@ object TestTags {
     fun panel(type: String) = "dashboard/panel/$type"
 
     const val PANEL_SAVE = "dashboard/panel/save"
-    const val PANEL_TIME = "dashboard/panel/time"
     const val PANEL_CLOSE = "dashboard/panel/close"
     const val PANEL_NOTE = "dashboard/panel/note"
     const val PANEL_NOTE_TEXT = "dashboard/panel/note_text"
     const val PANEL_AMOUNT = "dashboard/panel/amount"
     const val PANEL_WET = "dashboard/panel/wet"
     const val PANEL_SOLID = "dashboard/panel/solid"
-    const val PANEL_EXTRA_OPTIONS = "dashboard/panel/extra_options"
     const val PANEL_MILESTONE = "dashboard/panel/milestone"
     const val PANEL_TEXT = "dashboard/panel/text"
+
+    /** Feeding cascade: the collapsed "Type · Method" summary row (tap = re-open). */
+    const val PANEL_FEEDING_SUMMARY = "dashboard/panel/feeding_summary"
+
+    /** The diaper color slider strip (dots carry the per-wire `color/<wire>` tags). */
+    const val PANEL_COLOR_SLIDER = "dashboard/panel/color_slider"
 
     // T2: "started X min ago" adjust row on timed panels
     const val PANEL_STARTED_AGO = "dashboard/panel/started_ago"

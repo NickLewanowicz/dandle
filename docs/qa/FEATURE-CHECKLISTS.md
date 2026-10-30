@@ -59,13 +59,13 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Steps**
 1. Login (checklist 1).
 2. `scripts/qa/ui-tap-tag.sh dashboard/quick_action/DIAPER` — panel opens, save disabled.
-3. Toggle: `ui-tap-tag.sh dashboard/panel/wet` (save enables). Optional: `dashboard/panel/solid`, extra options `dashboard/panel/extra_options` -> color chips `dashboard/panel/color/<wire>`, `dashboard/panel/amount`.
+3. Toggle: `ui-tap-tag.sh dashboard/panel/wet` (save enables). Optional: `dashboard/panel/solid`, then the color SLIDER `dashboard/panel/color_slider` (per-dot tags `dashboard/panel/color/<wire>`, single-select), `dashboard/panel/amount`, `dashboard/panel/note`. (v0.5: no TIME row — see checklist 11.
 4. Save: `ui-tap-tag.sh dashboard/panel/save`.
 5. Verify: `scripts/qa/api.sh GET /api/changes/` — newest entry has correct wet/solid/color/amount.
 
-**Tags:** `dashboard/quick_action/DIAPER`, `dashboard/panel/wet`, `dashboard/panel/solid`, `dashboard/panel/extra_options`, `dashboard/panel/color/<wire>`, `dashboard/panel/amount`, `dashboard/panel/save`.
+**Tags:** `dashboard/quick_action/DIAPER`, `dashboard/panel/wet`, `dashboard/panel/solid`, `dashboard/panel/color_slider`, `dashboard/panel/color/<wire>`, `dashboard/panel/amount`, `dashboard/panel/note`, `dashboard/panel/save`.
 
-**Expected server requests:** `POST /api/changes/` `{child, time, wet, solid, color?, amount?}` (endpoint is `/api/changes/`, not `/api/diaperchanges/`).
+**Expected server requests:** `POST /api/changes/` `{child, time, wet, solid, color?, amount?, notes?}` (endpoint is `/api/changes/`, not `/api/diaperchanges/`; time = save time as of v0.5).
 
 **Expected UI states:** save disabled until Wet or Solid on; timeline row appears immediately (local-first), no badge when online.
 
@@ -79,15 +79,15 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 1. Login (checklist 1).
 2. Start: `ui-tap-tag.sh dashboard/quick_action/SLEEP`; the running card appears BELOW the grid (tag `dashboard/panel/SLEEP`) with a ticking `H:MM:SS` counter and an icon-only save (`dashboard/timer/SLEEP/save`). v0.4: no strip, no ✕.
 3. Kill the app (`adb shell am kill app.dandle.debug`), relaunch via launcher — timer restored and still ticking (spec: survives process death).
-4. Stop after >10s: `ui-tap-tag.sh dashboard/timer/SLEEP` -> stop dialog `dashboard/stop_dialog` with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
+4. Stop after >10s: `ui-tap-tag.sh dashboard/quick_action/SLEEP` -> the ON-CARD stop band `dashboard/stop_dialog` renders on the card (v0.5: no modal) with `dashboard/stop_dialog/save` (emphasized), `keep`, `discard`.
 5. Save: `ui-tap-tag.sh dashboard/stop_dialog/save`; verify `scripts/qa/api.sh GET /api/sleep/`.
-6. \<10s path: repeat quickly — stop must discard silently (no dialog).
+6. \<10s path: repeat quickly — stop must discard silently (no band appears).
 
 **Tags:** `dashboard/quick_action/SLEEP` (re-tap = tap-to-stop), `dashboard/panel/SLEEP` (the card), `dashboard/timer/SLEEP/save`, `dashboard/stop_dialog/{save,keep,discard}`.
 
 **Expected server requests:** start: `POST /api/timers/` (named `Sleep-BBapp:<n>`); save: `POST /api/sleep/` `{child, start, end, notes?}` + `DELETE /api/timers/<id>/` (nap flag is server-computed; app must not send it).
 
-**Expected UI states:** card only while running, always below the (never-moving) buttons; elapsed H:MM:SS; re-tap >10s -> "Stop timer?" dialog with Save emphasized, ≤10s silent discard; timeline entry SYNCED and scrolled into view.
+**Expected UI states:** themed SCENE card (night motif for sleep — moon + stars) only while running, always below the (never-moving) buttons; elapsed H:MM:SS; re-tap >10s -> on-card "Stop timer?" band with Save emphasized, ≤10s silent discard; timeline entry SYNCED and scrolled into view.
 
 **JVM tests:** `StopGuardTest` (>10s vs \<10s), `TimerRepositoryTest` (restore after process death).
 
@@ -214,6 +214,25 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 
 ---
+
+## 11. Themed scene cards + feeding cascade + diaper slider (spec §8.1, framework v2.3)
+
+**Goal:** running timers render as themed scene cards; feeding choices cascade and collapse; diaper color is a single-select slider.
+
+**Steps**
+1. Login (checklist 1). Start each timer type and screenshot the motif: Sleep = night gradient + moon + stars (`dashboard/panel/SLEEP`), Pumping = milk gradient + floating drops, Tummy time = sun gradient, Feeding = bottle-blue gradient (`docs/screenshots/new-app/flows/redesign-v23/` has the reference set, light + dark).
+2. Feeding cascade: with a learned default the card opens COLLAPSED — `dashboard/panel/feeding_summary` ("Type · Method ✎ change"); tap it -> type row + `Method — filtered by type`; pick `dashboard/panel/feeding_type/formula` -> methods reduce to bottle/parent fed/self fed; pick a method -> collapses again, only `dashboard/panel/amount` + `dashboard/panel/note` remain. Amount has NO mL label.
+3. Diaper: `dashboard/quick_action/CHANGE` -> sheet has NO time row; `dashboard/panel/color_slider` dots are single-select (ring + scale on the selected one); save still gated on Wet/Solid.
+4. Stop guard: >10s re-tap renders the band ON the card; with another card open, the guard still brings the right card forward (pinned by `WidgetStopDeepLinkTest`).
+5. Reduce motion: `adb shell settings put global animator_duration_scale 0` -> stars/drops render static; restore with `1`.
+
+**Tags:** `dashboard/panel/<TYPE>`, `dashboard/panel/feeding_summary`, `dashboard/panel/feeding_type/<wire>`, `dashboard/panel/feeding_method/<wire>`, `dashboard/panel/color_slider`, `dashboard/panel/color/<wire>`, `dashboard/stop_dialog` (the band).
+
+**Expected server requests:** unchanged from checklists 2-4 (cascade and slider are UI-only; wires are the exact server enums).
+
+**Expected UI states:** scenes are identical in light and dark app themes; no synced indicator anywhere on cards or synced rows; motion (twinkle/drift) honors the system reduce-motion setting.
+
+**JVM tests:** `TimerSceneTest` (motif mapping + WCAG AA ≥4.5:1 for every text/surface pair), `FeedingCascadeTest` (collapse state machine), `WidgetStopDeepLinkTest` (guard opens the timer's card).
 
 ## TEMPLATE (copy for every new feature)
 

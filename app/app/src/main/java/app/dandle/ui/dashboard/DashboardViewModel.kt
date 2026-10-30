@@ -46,11 +46,6 @@ data class OpenPanel(
     val type: EventType,
     val draft: PanelDraft,
     val timer: RunningTimer?,
-    /**
-     * U4: the create sheet's (diaper/note) absolute entry time — null = "now". Ephemeral by
-     * design (defaults to now anyway); the field DRAFTS persist independently.
-     */
-    val entryTimeMillis: Long? = null,
 )
 
 /** The calm duplicate line (spec §3.7) waiting on the user's Add / View-last decision. */
@@ -530,6 +525,13 @@ class DashboardViewModel(
         viewModelScope.launch {
             val elapsed = container.serverClock.nowMillis() - timer.startedAtMillis
             if (app.dandle.domain.StopGuard.shouldConfirm(elapsed)) {
+                // Framework v2.3 rule 3: the guard renders as an ON-CARD band — make sure that
+                // card is actually open before raising it. A re-tap arriving while another card
+                // (or a just-discarded one) holds the panel must surface the stop form, not
+                // lose it to the auto-open collector's openPanel != null guard.
+                if (openPanel.value?.type != timer.kind) {
+                    openPanelFor(timer.kind, timer.childId)
+                }
                 _stopGuardRequests.value = timer
             } else {
                 discardTimer(timer)
@@ -584,20 +586,11 @@ class DashboardViewModel(
         draft.copy(color = if (draft.color == wire) null else wire)
     }
 
-    fun onPanelExtraOptionsToggle() = updateDraft(EventType.CHANGE) { it.copy(extraOpen = !it.extraOpen) }
-
     fun onPanelNoteChange(text: String) = updateDraft(null) { it.copy(noteText = text) }
 
     fun onPanelMilestoneChange(text: String) = updateDraft(EventType.TUMMY_TIME) { it.copy(milestone = text) }
 
     fun onPanelTextChange(text: String) = updateDraft(EventType.NOTE) { it.copy(text = text) }
-
-    /** U4: the create sheet's TIME row — absolute entry time for diaper/note (null = now). */
-    override fun onCreateTimePicked(millis: Long) {
-        val panel = openPanel.value ?: return
-        if (panel.type.isTimed) return
-        openPanel.value = panel.copy(entryTimeMillis = millis)
-    }
 
     // -- T2: "started X min ago" adjust on timed panels (spec §5 panel time-adjust) ----------
 
@@ -644,12 +637,9 @@ class DashboardViewModel(
         val child = uiState.value.activeChild ?: return
         if (!isPanelSaveEnabled(panel)) return
         app.dandle.log.BbLog.d(TAG_UI, "panel save ${panel.type.name} child=${child.id}")
-        // U4: the create sheet's TIME row backdates the entry (duplicate guard anchors there too).
-        val now = if (!panel.type.isTimed) {
-            panel.entryTimeMillis ?: container.serverClock.nowMillis()
-        } else {
-            container.serverClock.nowMillis()
-        }
+        // Framework v2.3: quick sheets no longer carry a time row — an entry is stamped at
+        // save time; backdating happens through the edit flow (spec §3.2).
+        val now = container.serverClock.nowMillis()
         val draft = panel.draft.toEventDraft(panel.type, child.id, now)
         viewModelScope.launch {
             val last = eventRepo.latestByType(child.id, panel.type)
@@ -779,8 +769,6 @@ class DashboardViewModel(
     override fun onSolidToggle() = onPanelSolidToggle()
 
     override fun onColorChange(wire: String) = onPanelColorChange(wire)
-
-    override fun onExtraOptionsToggle() = onPanelExtraOptionsToggle()
 
     override fun onNoteChange(text: String) = onPanelNoteChange(text)
 

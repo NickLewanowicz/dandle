@@ -51,11 +51,12 @@ import app.dandle.domain.model.EventHeadline
 import app.dandle.domain.model.SyncState
 import app.dandle.ui.TestTags
 import app.dandle.ui.dialogTestTags
-import app.dandle.ui.dashboard.ChoiceChipRow
-import app.dandle.ui.dashboard.DiaperSwatches
+import app.dandle.ui.dashboard.DiaperColorSlider
+import app.dandle.ui.dashboard.FeedingCascadeRows
 import app.dandle.ui.dashboard.dayLabel
-import app.dandle.ui.dashboard.feedingAmountHint
+import app.dandle.ui.dashboard.feedingCascade
 import app.dandle.ui.dashboard.iconRes
+import app.dandle.ui.dashboard.typeColorPair
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -284,15 +285,15 @@ private fun TypeFields(
 ) {
     when (type) {
         EventType.FEEDING -> {
-            EditAmount(draft.amount, feedingAmountHint(draft.feedingMethod)) { value ->
-                onDraftChange { it.copy(amount = value) }
-            }
-            Text("Type", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-            ChoiceChipRow(
-                options = FeedingOptions.TYPES.map { it.wire to it.label },
-                selected = draft.feedingType,
-                tagPrefix = { TestTags.feedingTypeChip(it) },
-                onSelect = { wire ->
+            // Same cascade as the running card (framework v2.3 rule 5): the entry's stored
+            // type+method collapse to a summary; tapping it re-opens the filtered rows.
+            var expanded by remember { mutableStateOf(false) }
+            val cascade = feedingCascade(draft.feedingType, draft.feedingMethod, expanded)
+            FeedingCascadeRows(
+                typeWire = draft.feedingType,
+                methodWire = draft.feedingMethod,
+                expanded = expanded,
+                onTypeChange = { wire ->
                     onDraftChange {
                         it.copy(
                             feedingType = wire,
@@ -300,14 +301,22 @@ private fun TypeFields(
                         )
                     }
                 },
+                onMethodChange = { wire ->
+                    onDraftChange { it.copy(feedingMethod = wire) }
+                    expanded = false
+                },
+                onReopen = { expanded = true },
+                scene = null,
+                typeColors = EventType.FEEDING.typeColorPair(),
             )
-            Text("Method", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-            ChoiceChipRow(
-                options = FeedingOptions.methodsFor(draft.feedingType).map { it.wire to it.label },
-                selected = draft.feedingMethod,
-                tagPrefix = { TestTags.feedingMethodChip(it) },
-                onSelect = { wire -> onDraftChange { it.copy(feedingMethod = wire) } },
-            )
+            if (cascade.isCollapsed) {
+                EditAmount(draft.amount) { value ->
+                    onDraftChange { it.copy(amount = value) }
+                }
+                EditNote(draft.noteText.orEmpty()) { newText ->
+                    onDraftChange { it.copy(noteText = newText) }
+                }
+            }
         }
 
         EventType.CHANGE -> {
@@ -323,17 +332,17 @@ private fun TypeFields(
                 }
             }
             Text("Color", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-            ChoiceChipRow(
-                options = DiaperSwatches.ALL.map { it.wire to it.label },
+            DiaperColorSlider(
                 selected = draft.color,
-                tagPrefix = { TestTags.diaperColorChip(it) },
                 onSelect = { wire ->
                     onDraftChange { it.copy(color = if (it.color == wire) null else wire) }
                 },
-                leadingSwatch = { wire -> DiaperSwatches.colorOf(wire) },
             )
-            EditAmount(draft.amount, null) { value ->
+            EditAmount(draft.amount) { value ->
                 onDraftChange { it.copy(amount = value) }
+            }
+            EditNote(draft.noteText.orEmpty()) { newText ->
+                onDraftChange { it.copy(noteText = newText) }
             }
         }
 
@@ -356,7 +365,7 @@ private fun TypeFields(
 
         EventType.PUMPING -> {
             // Server-required amount (research doc §4): the sheet always carries a number.
-            EditAmount(draft.amount ?: 0.0, "mL") { value ->
+            EditAmount(draft.amount ?: 0.0) { value ->
                 onDraftChange { it.copy(amount = value) }
             }
             EditNote(draft.noteText.orEmpty()) { newText ->
@@ -384,9 +393,12 @@ private fun TypeFields(
     }
 }
 
-/** Numeric field; null result = "none" (feeding/diaper allow absent amounts, pumping doesn't). */
+/**
+ * Numeric field; null result = "none" (feeding/diaper allow absent amounts, pumping doesn't).
+ * Unit-agnostic label (framework v2.3 rule 10) — no mL suffix.
+ */
 @Composable
-private fun EditAmount(value: Double?, supportingText: String?, onChange: (Double?) -> Unit) {
+private fun EditAmount(value: Double?, onChange: (Double?) -> Unit) {
     var text by remember(value) { mutableStateOf(value?.let(::trimAmount).orEmpty()) }
     OutlinedTextField(
         value = text,
@@ -396,14 +408,12 @@ private fun EditAmount(value: Double?, supportingText: String?, onChange: (Doubl
             onChange(cleaned.trim().replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0))
         },
         label = { Text("Amount") },
-        supportingText = supportingText?.let { { Text(it) } },
-        suffix = { Text("mL") },
         singleLine = true,
         keyboardOptions = app.dandle.ui.dashboard.imeDoneOptions,
         keyboardActions = app.dandle.ui.dashboard.doneKeyboardActions(),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp)
+            .padding(top = 10.dp)
             .testTag(TestTags.PANEL_AMOUNT),
     )
 }

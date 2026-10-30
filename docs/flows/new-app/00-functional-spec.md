@@ -12,6 +12,8 @@ title: "Functional spec"
 >
 > v0.4 changes (owner UI rework, docs/flows/new-app/90-owner-ui-rework.md): quick-action buttons pinned under the header with NOTHING above them; running timers render as the original app's "expanded top element" card below the buttons with an icon-only save and no ✕ (re-tap = stop); diaper/note creation moves to a sheet with a time row; Quick Edit time rows are native date/time pickers (steppers removed); failed entries mark the row's icon (no header chip); notes render italic; header shows the child's name + chevron (no app title); semantic per-type colors everywhere a type appears; widget tiles whisper the last activity and light up in their type color when running.
 >
+> v0.5 changes (design framework v2.3, source of truth: docs/design/candidates/dandle-ux-v3/mocks.html): running timers render as THEMED SCENE cards — one motif per activity (night/milk/sun/bottle), §8.1; the >10s stop guard becomes an ON-CARD stop band (no modal dialog, §3); feeding choices cascade (type gates methods) and a complete choice collapses to a summary (§3.1); the diaper sheet drops the TIME row (entries stamp at save time; backdate via edit) and picks color on a single-select slider (§3.2); amounts are unit-agnostic (label "Amount", never mL); the happy path stays silent — only PENDING/FAILED entries get indicators; ambient scene motion honors the system reduce-motion setting.
+>
 > Status markers: **[P]** parity with existing app (must match), **[N]** new in this app.
 
 ## 1. Identity & connection
@@ -36,7 +38,7 @@ Menu → Sign out: clears stored key and local cache. Confirmation dialog (data 
 Layout, top to bottom (v0.4 — the grid NEVER moves; nothing dynamic renders above it):
 1. **Header bar**: the active child's FIRST NAME as the title, with a chevron when more than one child exists (tap → dropdown of full names; default = first child; MUST persist selection across restarts) **[P: original-app placement]**; the app has no name in the chrome. Inline sync chip (only when it has something to say: Offline / Syncing… / All synced ✓ — never a failed count, §6.2) + overflow menu (Sign out, Help, About). One row.
 2. **Quick actions grid**: exactly six buttons, this order: **Feeding, Diaper, Sleep, Notes, Pumping, Tummy time**. Icons are this app's own original artwork; a running or open type lights up in its semantic type color (§8) with a static running dot. **[P]**
-3. **Running-timer card** (only while a timer runs for this child; at most one card — one editor at a time, original-app semantics): rendered DIRECTLY BELOW the grid as the original app's "expanded top element of the list" — literally the timeline's first list item, so it scrolls with the timeline and a field being typed into is brought into view above the keyboard (the header and grid never move); the list reveals the card the moment a timer starts — type-colored icon tile, type label, live `H:MM:SS` counter, the type's fields at full width (Feeding: type/method/amount; Sleep: note; Pumping: amount+note; Tummy time: milestone+note), the compact "Started Xm ago · Adjust" line (§3), and an **icon-only check save** bottom-right. **No ✕ and no "Save"/"Running" words** — stopping is the type button's re-tap (§3 tap-to-stop). **[P look, N fields]**
+3. **Running-timer card** (only while a timer runs for this child; at most one card — one editor at a time, original-app semantics): rendered DIRECTLY BELOW the grid as the original app's "expanded top element of the list" — literally the timeline's first list item, so it scrolls with the timeline and a field being typed into is brought into view above the keyboard (the header and grid never move); the list reveals the card the moment a timer starts. **[v0.5] The card is a themed SCENE card** (§8.1): a subdued per-activity background — night gradient with moon + twinkling stars (Sleep), warm milk gradient with floating drops (Pumping), sun gradient (Tummy time), bottle-blue gradient (Feeding) — under the fixed anatomy: icon chip · type label · live `HH:MM:SS` counter · the type's fields at full width (Feeding: cascade + amount + note, §3.1; Sleep: note; Pumping: amount + note; Tummy time: milestone + note), the compact "Started Xm ago · Adjust" line (§3), and an **icon-only check save** in the header. **No ✕, no "Save"/"Running" words, no synced indicator** (the happy path is silent, §8.1 rule 7) — stopping is the type button's re-tap (§3 tap-to-stop). **[P look, N fields]**
 4. **Timeline**: most recent events (all six types), newest first, grouped by day ("Today", "Yesterday", date). Entry rows show a type-colored icon chip, headline (per type, §4.1), time-of-day (or a start–end range — see next bullet), duration (for timed types), sync-state marking (§6.2). Pull-to-refresh MUST re-sync. Pagination: load older on scroll (server limit/offset). After a quick-action save the timeline scrolls so the new row is in view — the insert IS the confirmation.
    - **Time formats (persona round 2, threshold widened per owner)**: sub-minute durations render `<1m` (never bare seconds); hours render without zero-pad (`1h 5m`, `4h`); ANY timed entry longer than **5 minutes** (or crossing local midnight) shows its RANGE as the trailing time (`21:38–22:00`) with the duration on the second line — no mental math for naps, feeds, pumps or tummy time, not just overnight sleeps.
    - The quick-action circle of a RUNNING type shows live status as its label (`Sleep · 12m`); the running card's save (icon-only check) sits in the card HEADER, always on screen.
@@ -49,30 +51,32 @@ Empty state (fresh server): friendly illustration + "Log your first event with a
 
 Common rules:
 - Tap toggles: for the four timer types (Feeding, Sleep, Pumping, Tummy time), tapping the button starts a timer and shows its card below the grid (§2.3); **tapping the same button again is tap-to-stop** — it runs the stop guard below (>10s dialog, ≤10s silent discard). Never a duplicate timer. **[P: exact original tap semantics, v0.4]**
-- The card's only action is the icon-only save (check). There is no discard/✕ on the card: discard = re-tap → Discard in the dialog.
-- Timer >10s stop → confirmation dialog ("Stop timer?") where **Save** is a full-width filled button; below it, "Keep running" (left) and **Discard** (right, subdued) sit on a SECOND row — the destructive action must not sit adjacent to Save (thumb-slip = erased nap; persona round 2, Jordan). The body SPELLS durations ("2 min 52 sec", never bare "0:16"). \<10s → discard silently. **[P: original semantics, v0.4 layout]**
+- The card's only action is the icon-only save (check). There is no discard/✕ on the card: discard = re-tap → Discard on the card's stop band.
+- Timer >10s stop → **on-card stop band** (v0.5 — no modal): a band on the running card itself, "Stop timer?" + the spelled duration ("2 min 52 sec", never bare "0:16"), where **Save** is a full-width filled button; below it, "Keep running" (left) and **Discard** (right, subdued) sit on a SECOND row — the destructive action must not sit adjacent to Save (thumb-slip = erased nap; persona round 2, Jordan). \<10s → discard silently (the band never appears). **[P: original semantics, v0.5 on-card]**
 - Timers MUST survive app restart and process death (restore countdown on launch). **[P]**
 - Save = create entry with start = timer start, end = stop time. **[P]**
 - **"Started X min ago" adjust (timed panels) [N, v0.3]**: the four timer panels carry one compact line — "Started just now" / "Started 20m ago" — with an **Adjust** expander offering **−15m / −5m / +5m / +15m** nudges and a **Pick time** platform time picker. The adjust backdates the ENTRY START only (start = timer start − adjust, clamped to the stop time); end and duration rules are unchanged. Clamp 0..24h; a future start is unreachable by construction. The adjustment persists with the panel draft and applies to both the panel Save and the stop-dialog Save.
 
 ### 3.1 Feeding **[P]**
-- Start → running panel: live counter, **Amount** numeric field (mL), **Type → Method** cascading selector with exact server enum values: type ∈ `{breast milk, formula, fortified breast milk, solid food}`; method ∈ `{bottle, left breast, right breast, both breasts, parent fed, self fed}` — **solid food offers bottle, parent fed, self fed** (verified in the existing app: docs/flows/existing-app/04-feeding.md). Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use).
-- Save → `POST /api/feedings/` `{child, start, end, type, method, amount?}`. Amount optional for breast methods.
+- Start → running card: live counter, **two-state cascade** (v0.5, framework rule 5): initially only **Type** chips show (`breast milk, formula, fortified breast milk, solid food` — display "Fortified milk"); picking a type reveals **Method** chips FILTERED via `FeedingOptions.methodsFor` (breast milk → all six: bottle, left breast, right breast, both breasts, parent fed, self fed; formula/fortified/solid → bottle, parent fed, self fed — **solid food offers bottle**, verified in docs/flows/existing-app/04-feeding.md). When BOTH are picked, the rows COLLAPSE to a one-line summary ("Formula · Bottle ✎") — tapping the summary re-opens them — and only **Amount** + **Note** remain. Amount is unit-agnostic: the label is just "Amount", never mL (rule 10). The same cascade applies in the Quick Edit sheet. Defaults MUST remember the last-used type+method **per child** (falls back to breast milk + bottle on first use) — so with a learned default the card opens already collapsed.
+- Save → `POST /api/feedings/` `{child, start, end, type, method, amount?, notes?}`. Amount optional for breast methods.
 - Server timer (created on start, named `Feeding-BBapp:<n>`) DELETEd on save/discard. **[P]**
 
 ### 3.2 Diaper change **[P]**
-- Opens a **modal sheet** (v0.4 — creation is an edit-like action, same UI family as §5): a **TIME** row (native picker, defaults to now — "it happened 20 minutes ago" is an everyday correction; the duplicate guard anchors on the chosen time), toggles **Wet** and **Solid** (both allowed). **Save disabled until at least one is on** (a one-line hint says so).
-- "Extra options" disclosure: **Color** choice (black, brown, green, yellow, pink/red — server enum, exact strings per research doc) and **Amount** (numeric).
-- Save → `POST /api/changes/` `{child, time, wet, solid, color?, amount?}`. time = the sheet's TIME (default now).
+- Opens a **modal sheet** (v0.4 — creation is an edit-like action, same UI family as §5). **No TIME row** (v0.5, framework rule: time = the save time; backdating happens through the edit flow — follow-up issue docs/issues-pending/gitea-issue-backdating.md).
+- Toggles **Wet** and **Solid** (both allowed). **Save disabled until at least one is on** (a one-line hint says so).
+- **Color** is a **single-select slider** (v0.5): one swipeable strip of swatch dots covering the full server enum (`black, brown, gray, green, orange, red, white, yellow` — research doc §4; `color` is ONE string, never multiple). The selected dot gets a ring + scale; every dot stays tappable (accessibility parity with the old chips; same per-wire test tags).
+- **Amount** (numeric, optional) and **Note** (optional).
+- Save → `POST /api/changes/` `{child, time, wet, solid, color?, amount?, notes?}`. time = save time.
 
 ### 3.3 Sleep **[P]**
 - Start/stop timer; note field in running panel. Save → `POST /api/sleep/` `{child, start, end, notes?}`. Nap flag auto by server rules (don't send).
 
 ### 3.4 Notes **[P]**
-- Opens a **modal sheet** (v0.4): TIME row (native picker, default now) + note text; Save (disabled when empty) → `POST /api/notes/` `{child, note, time}`.
+- Opens a **modal sheet** (v0.4; **no TIME row** as of v0.5 — time = save time, backdate via edit): note text; Save (disabled when empty) → `POST /api/notes/` `{child, note, time}`.
 
 ### 3.5 Pumping **[P]**
-- Start/stop timer; amount (mL) + note fields. Save → `POST /api/pumping/` `{child, start, end, amount?, notes?}`.
+- Start/stop timer; Amount (unit-agnostic label, v0.5) + note fields. Save → `POST /api/pumping/` `{child, start, end, amount?, notes?}`.
 
 ### 3.6 Tummy time **[P]**
 - Start/stop timer; milestone text + note. Save → `POST /api/tummy-times/` `{child, start, end, milestone?, notes?}`.
@@ -161,6 +165,21 @@ Material 3 bottom sheet, type-appropriate fields. Design goals: fix a time in �
 - Type scale favors glanceability: durations and "time since" values are prominent.
 - Original icon set (our own vector art; no copied assets from the original app — its media is attribution-licensed).
 - **Semantic type colors [N, v0.4]** (Brief 03): each of the six types has a fixed hue family matching the original app's tints (feeding rose, diaper amber, sleep indigo, pumping magenta, tummy green, notes teal) expressed as light/dark container + on-container pairs (≥4.5:1 text contrast, pinned by test). They do NOT follow dynamic color — they are information. Used wherever a type appears: timeline icon chips, the running card's tile and save, the grid's running highlight, widget running accents.
+
+### 8.1 Design framework v2.3 **[N, v0.5]**
+
+The ten binding rules of the approved redesign (source of truth: `docs/design/candidates/dandle-ux-v3/mocks.html`). Where an older section contradicts them, THIS subsection wins.
+
+1. **Entity hierarchy flows top-down** — entities render above their dependents; static identity chrome (child name, sync) may sit above the action grid, dynamic elements may not.
+2. **The six actions are pinned instruments** — fixed position, never move, nothing dynamic above them.
+3. **Card = live entity that can contain inputs** — stopping happens on the card; \<10s silently discards.
+4. **Running timers render as themed scene cards** — one motif per activity (night/milk/sun/bottle); scenes are subdued backgrounds, never content; accessibility contrast holds light+dark (every text/surface pair ≥4.5:1, pinned by TimerSceneTest; scene palettes are self-contained so the card reads identically in both themes).
+5. **Feeding choices cascade** (type gates methods per `FeedingOptions.methodsFor`) **and collapse to a summary when complete** — only Amount + Note remain visible.
+6. **Timers count up as clocks** — `HH:MM:SS` with colons, never letters.
+7. **The happy path is silent** — only PENDING ("Will sync" pill) and FAILED (icon warning badge) entries get indicators; SYNCED rows and running cards render no sync marking at all.
+8. **History = the record pane** with infinite scroll (paged older-load; the card is its first item).
+9. **Motion is ambient, out of the thumb path, honors reduce-motion** — scene decoration (star twinkle, drop float) reads the system remove-animations setting and renders static when it is on; nothing animated ever sits under an active thumb target.
+10. **Amounts are unit-agnostic** — the label is "Amount", never mL; the wire payload units are the server's business (research doc §4), not the UI's.
 
 ## 9. Settings & help **[P/N]**
 - Overflow menu: Sign out **[P]**, Help (short slideshow re-using original app's UX-guidance intent, our own content) **[P]**, About (version, licenses, links to both upstream projects) **[P]**.

@@ -58,24 +58,29 @@ val EventType.label: String
     }
 
 /**
- * Diaper color swatches (spec §3.2): fixed content palette so "yellow looks yellow in dark mode
- * too — swatches are content, not theme roles" (UX spec §3). Wire values are exact server enums
- * (research doc §4: black/brown/green/yellow/red among others); "Pink/red" maps to `red`.
+ * Diaper color swatches (spec §3.2, framework v2.3): the FULL server enum — `color` is one
+ * string choice (research doc §4: black/brown/gray/green/orange/red/white/yellow) — rendered
+ * as the single-select slider's dots. Fixed content palette so "yellow looks yellow in dark
+ * mode too — swatches are content, not theme roles" (UX spec §3). Wire values are exact
+ * server enums; "Pink/red" maps to `red`.
  */
 object DiaperSwatches {
     data class Swatch(val wire: String, val label: String, val color: Color)
 
     val ALL = listOf(
-        Swatch("black", "Black", Color(0xFF1A1A1A)),
-        Swatch("brown", "Brown", Color(0xFF795548)),
+        Swatch("black", "Black", Color(0xFF333333)),
+        Swatch("brown", "Brown", Color(0xFF8D6E63)),
+        Swatch("gray", "Gray", Color(0xFF9E9E9E)),
         Swatch("green", "Green", Color(0xFF43A047)),
-        Swatch("yellow", "Yellow", Color(0xFFEBD233)),
-        Swatch("red", "Pink/red", Color(0xFFE91E63)),
+        Swatch("orange", "Orange", Color(0xFFFB8C00)),
+        Swatch("red", "Pink/red", Color(0xFFE53935)),
+        Swatch("white", "White", Color(0xFFFAFAFA)),
+        Swatch("yellow", "Yellow", Color(0xFFFDD835)),
     )
 
-    fun colorOf(wire: String?): Color = ALL.firstOrNull { it.wire == wire }?.color ?: Color(0xFF9E9E9E)
+    fun colorOf(wire: String?): Color = ALL.firstOrNull { it.wire == wire?.trim() }?.color ?: Color(0xFF9E9E9E)
 
-    fun labelOf(wire: String?): String = ALL.firstOrNull { it.wire == wire }?.label
+    fun labelOf(wire: String?): String = ALL.firstOrNull { it.wire == wire?.trim() }?.label
         ?: wire?.replaceFirstChar { it.uppercase() }
         ?: ""
 }
