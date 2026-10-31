@@ -45,6 +45,8 @@ Before ANY emulator work, read `docs/qa/RUNBOOK.md` and use `scripts/qa/*` (fres
 
 The Maintainer orchestrates persona subagents (see `.zcode/agents/` and `docs/PERSONAS.md`): **android-engineer** implements, **test-engineer** pins behavior with tests, **qa-engineer** verifies on the emulator with screenshots, **ux-designer** specs/reviews screens, **user-persona** ("Jordan") vetoes anything slow or scary. Feature lifecycle: brief → engineer strategy → implement + tests → QA on emulator → docs/screenshots → done.
 
+**Language (non-negotiable):** all owner-facing output — replies, thinking shown in the UI, commit messages, doc edits — is in **English**. Never Chinese, regardless of what language the conversation started in.
+
 ## Conventions
 
 - Kotlin; single-module app is fine at this size — split when build times or test boundaries demand it.
