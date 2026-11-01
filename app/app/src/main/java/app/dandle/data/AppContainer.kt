@@ -138,6 +138,20 @@ class AppContainer(
         LoginFlow(client = loginClient, json = json, sessionStore = sessionStore)
     }
 
+    // -- Backend gateways (brief 05 §1): the only places that know the wire protocol. ----
+
+    private val syncPusher: app.dandle.data.backend.SyncPusher by lazy {
+        app.dandle.data.backend.BabyBuddySyncPusher({ api }, json)
+    }
+
+    private val puller: app.dandle.data.backend.PullGateway by lazy {
+        app.dandle.data.backend.BabyBuddyPuller({ api })
+    }
+
+    private val timerMirror: app.dandle.data.backend.TimerMirror by lazy {
+        app.dandle.data.backend.BabyBuddyTimerMirror({ api })
+    }
+
     // -- Offline-first store -----------------------------------------------------
 
     @Volatile
@@ -180,11 +194,11 @@ class AppContainer(
         api
     }
 
-    val childRepository: ChildRepository by lazy { ChildRepository({ api }, db()) }
+    val childRepository: ChildRepository by lazy { ChildRepository(puller, db()) }
 
     val drainer: OutboxDrainer by lazy {
         OutboxDrainer(
-            apiProvider = { api },
+            pusher = syncPusher,
             json = json,
             eventDao = db().eventDao(),
             outboxDao = db().outboxDao(),
@@ -210,7 +224,7 @@ class AppContainer(
 
     val eventRepository: EventRepository by lazy {
         EventRepository(
-            apiProvider = { api },
+            puller = puller,
             db = db(),
             json = json,
             clock = clock,
@@ -223,7 +237,7 @@ class AppContainer(
 
     val timerRepository: TimerRepository by lazy {
         TimerRepository(
-            apiProvider = { api },
+            timerMirror = timerMirror,
             db = db(),
             eventRepository = eventRepository,
             clock = clock,

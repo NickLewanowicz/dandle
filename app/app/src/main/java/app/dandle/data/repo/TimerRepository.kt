@@ -2,12 +2,11 @@ package app.dandle.data.repo
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import app.dandle.data.api.ApiException
-import app.dandle.data.api.BabyBuddyApi
-import app.dandle.data.api.TimerWriteDto
+import app.dandle.data.backend.BackendError
+import app.dandle.data.backend.BackendException
+import app.dandle.data.backend.TimerMirror
 import app.dandle.data.db.BabyBuddyDatabase
 import app.dandle.data.db.TimerEntity
-import app.dandle.data.mapper.toEntity
 import app.dandle.data.mapper.toModel
 import app.dandle.domain.Clock
 import app.dandle.domain.Iso8601
@@ -18,12 +17,14 @@ import app.dandle.domain.model.RunningTimer
 
 /**
  * Timer semantics per spec §3: timers ALWAYS run locally (a Room row — survives process
- * death, works offline); when online, starting ALSO creates the server timer named
- * "{Type}-BBapp:<n>" so the web UI shows it (research doc §6), and stopping/saving deletes it.
- * Every server step is best-effort: offline start/stop simply syncs the completed entry later.
+ * death, works offline); when a [TimerMirror] is present (Baby Buddy), starting ALSO creates
+ * the server timer named "{Type}-BBapp:<n>" so the web UI shows it (research doc §6), and
+ * stopping/saving deletes it. Every mirror step is best-effort: offline start/stop simply
+ * syncs the completed entry later. Backends without a web UI pass `null` — timers then live
+ * purely on this device (brief 05 §1).
  */
 class TimerRepository(
-    private val apiProvider: () -> BabyBuddyApi,
+    private val timerMirror: TimerMirror?,
     private val db: BabyBuddyDatabase,
     private val eventRepository: EventRepository,
     private val clock: Clock,
@@ -69,14 +70,8 @@ class TimerRepository(
         app.dandle.log.BbLog.d(TAG, "start ${kind.name} child=$childId localId=$localId at=$startedAt")
         // Best-effort server timer (so it shows on the web); silent when offline.
         try {
-            val created = apiProvider().createTimer(
-                TimerWriteDto(
-                    child = childId,
-                    name = kind.serverTimerName,
-                    start = Iso8601.format(startedAt),
-                )
-            )
-            timerDao.setServerTimerId(localId, created.id)
+            val created = timerMirror?.create(childId, kind, Iso8601.format(startedAt))
+            created?.let { timerDao.setServerTimerId(localId, it) }
         } catch (_: Exception) {
             // Offline / unreachable: the timer keeps running locally; the eventual entry syncs.
         }
@@ -119,11 +114,11 @@ class TimerRepository(
     private suspend fun removeTimer(timer: RunningTimer) {
         timerDao.delete(timer.localId)
         timer.serverTimerId?.let { serverTimerId ->
+            if (timerMirror == null) return
             try {
-                val response = apiProvider().deleteTimer(serverTimerId)
-                check(response.isSuccessful || response.code() == 404)
-            } catch (e: ApiException) {
-                if (e.status !in 500..599) return // 4xx: timer already gone/owned elsewhere — nothing to clean
+                timerMirror.delete(serverTimerId)
+            } catch (e: BackendException) {
+                if (e.error !is BackendError.ServerError) return // 4xx: timer already gone/owned elsewhere
                 throw e
             } catch (_: java.io.IOException) {
                 // Offline: the server timer lingers; the entry already carries the times, and a
@@ -138,9 +133,9 @@ class TimerRepository(
      * timers we don't track get adopted so they can still be stopped/saved.
      */
     suspend fun refresh(childId: Long) {
+        val mirror = timerMirror ?: return
         try {
-            val page = apiProvider().listTimers(child = childId, limit = 100)
-            val serverAppTimers = page.results.filter { timer ->
+            val serverAppTimers = mirror.listForChild(childId).filter { timer ->
                 timer.name != null && EventType.entries.any { it.serverTimerName == timer.name }
             }
             val trackedServerIds = timerDao.snapshot().mapNotNull { it.serverTimerId }.toSet()
@@ -153,8 +148,8 @@ class TimerRepository(
                     TimerEntity(
                         id = 0,
                         kind = kind.name,
-                        childId = timer.child ?: childId,
-                        startedAtMillis = timer.start?.let { runCatching { Iso8601.parse(it) }.getOrDefault(clock.nowMillis()) }
+                        childId = timer.childId ?: childId,
+                        startedAtMillis = timer.startIso?.let { runCatching { Iso8601.parse(it) }.getOrDefault(clock.nowMillis()) }
                             ?: clock.nowMillis(),
                         serverTimerId = timer.id,
                         createdAtMillis = clock.nowMillis(),

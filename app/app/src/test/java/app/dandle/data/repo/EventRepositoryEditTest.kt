@@ -81,7 +81,7 @@ class EventRepositoryEditTest {
             .build()
             .create(BabyBuddyApi::class.java)
         drainer = OutboxDrainer(
-            apiProvider = { api },
+            pusher = app.dandle.data.backend.BabyBuddySyncPusher({ api }, json),
             json = json,
             eventDao = db.eventDao(),
             outboxDao = db.outboxDao(),
@@ -90,7 +90,7 @@ class EventRepositoryEditTest {
             onAuthExpired = {},
         )
         repository = EventRepository(
-            apiProvider = { api },
+            puller = app.dandle.data.backend.BabyBuddyPuller({ api }),
             db = db,
             json = json,
             clock = Clock.fixed(now),

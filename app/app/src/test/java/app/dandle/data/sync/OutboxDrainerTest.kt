@@ -80,7 +80,7 @@ class OutboxDrainerTest {
             .build()
             .create(BabyBuddyApi::class.java)
         repository = EventRepository(
-            apiProvider = { api },
+            puller = app.dandle.data.backend.BabyBuddyPuller({ api }),
             db = db,
             json = json,
             clock = Clock.fixed(now),
@@ -90,7 +90,7 @@ class OutboxDrainerTest {
     }
 
     private fun drainer() = OutboxDrainer(
-        apiProvider = { api },
+        pusher = app.dandle.data.backend.BabyBuddySyncPusher({ api }, json),
         json = json,
         eventDao = db.eventDao(),
         outboxDao = db.outboxDao(),

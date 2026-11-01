@@ -82,12 +82,12 @@ class TimerRepositoryTest {
 
         val serverClockLocal = serverClock
         eventRepo = EventRepository(
-            apiProvider = { api },
+            puller = app.dandle.data.backend.BabyBuddyPuller({ api }),
             db = db,
             json = json,
             clock = clock,
             drainer = app.dandle.data.sync.OutboxDrainer(
-                apiProvider = { api },
+                pusher = app.dandle.data.backend.BabyBuddySyncPusher({ api }, json),
                 json = json,
                 eventDao = db.eventDao(),
                 outboxDao = db.outboxDao(),
@@ -98,7 +98,7 @@ class TimerRepositoryTest {
             requestDrain = { },
         )
         timerRepo = TimerRepository(
-            apiProvider = { api },
+            timerMirror = app.dandle.data.backend.BabyBuddyTimerMirror({ api }),
             db = db,
             eventRepository = eventRepo,
             clock = clock,
@@ -284,7 +284,7 @@ class TimerRepositoryTest {
 
     /** A brand-new repository stack over the same Room instance (fresh "process"). */
     private fun restartedTimerRepo() = TimerRepository(
-        apiProvider = { api },
+        timerMirror = app.dandle.data.backend.BabyBuddyTimerMirror({ api }),
         db = db,
         eventRepository = eventRepo,
         clock = Clock { wallNow },

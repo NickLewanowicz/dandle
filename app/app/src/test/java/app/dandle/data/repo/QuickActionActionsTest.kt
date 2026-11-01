@@ -79,16 +79,19 @@ class QuickActionActionsTest {
         quickActions = QuickActionStore(
             context.filesDir.resolve("test-qa-${System.nanoTime()}.preferences_pb").absolutePath.toPath()
         )
-        childRepo = ChildRepository({ api }, db)
+        childRepo = ChildRepository(app.dandle.data.backend.BabyBuddyPuller({ api }), db)
         val serverClock = ServerClock(clock)
         eventRepo = EventRepository(
-            apiProvider = { api },
+            puller = app.dandle.data.backend.BabyBuddyPuller({ api }),
             db = db,
             json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false },
             clock = clock,
             drainer = OutboxDrainer(
-                apiProvider = { api },
-                json = Json { ignoreUnknownKeys = true },
+                pusher = app.dandle.data.backend.BabyBuddySyncPusher(
+                    { api },
+                    Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false },
+                ),
+                json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false },
                 eventDao = db.eventDao(),
                 outboxDao = db.outboxDao(),
                 clock = clock,
@@ -97,7 +100,7 @@ class QuickActionActionsTest {
             ),
             requestDrain = { },
         )
-        timerRepo = TimerRepository({ api }, db, eventRepo, clock, serverClock)
+        timerRepo = TimerRepository(app.dandle.data.backend.BabyBuddyTimerMirror({ api }), db, eventRepo, clock, serverClock)
         facade = QuickActionActions(timerRepo, eventRepo, quickActions, childRepo, sessionStore, serverClock)
     }
 

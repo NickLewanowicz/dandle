@@ -3,41 +3,35 @@ package app.dandle.data.sync
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import app.dandle.data.api.ApiException
-import app.dandle.data.api.BabyBuddyApi
-import app.dandle.data.api.ChangeWriteDto
-import app.dandle.data.api.FeedingWriteDto
-import app.dandle.data.api.NoteWriteDto
-import app.dandle.data.api.PumpingWriteDto
-import app.dandle.data.api.SleepWriteDto
-import app.dandle.data.api.TummyTimeWriteDto
+import app.dandle.data.backend.BackendError
+import app.dandle.data.backend.PushResult
+import app.dandle.data.backend.SyncPusher
 import app.dandle.data.db.EventDao
 import app.dandle.data.db.EventEntity
 import app.dandle.data.db.OutboxDao
 import app.dandle.data.db.OutboxOpEntity
 import app.dandle.domain.Clock
-import app.dandle.domain.ConflictPolicy
 import app.dandle.domain.model.SyncState
 import app.dandle.domain.model.EventType
-import retrofit2.HttpException
 
 /**
- * The outbox drain engine (spec §6, brief 00 pattern #1). Pure JVM (no android.*) so the whole
- * sync contract is unit-testable; SyncWorker is a thin WorkManager shell around [drain].
+ * The outbox drain engine (spec §6, brief 00 pattern #1, brief 05 §1). Pure JVM (no android.*)
+ * so the whole sync contract is unit-testable; SyncWorker is a thin WorkManager shell around
+ * [drain]. Transport lives behind [SyncPusher] — this class owns only QUEUE semantics.
  *
  * Guarantees:
  * - Ops drain oldest-first (outbox id order) — replay order matches user intent.
- * - One failure never blocks others: 400s and permission-403s mark the single entry FAILED
- *   (or the op terminally errored) and draining continues with the next op.
+ * - One failure never blocks others: content rejections (Validation/other-4xx) mark the single
+ *   entry FAILED and draining continues with the next op.
  * - Network loss stops the drain cleanly (remaining ops keep their order for next time) —
  *   WorkManager retries with exponential backoff under a CONNECTED constraint.
- * - 401 (or token-invalid 403) pauses the whole queue via the session-expired flag; nothing
- *   is deleted; draining resumes after re-login.
+ * - Auth expiry pauses the whole queue via the session-expired flag; nothing is deleted;
+ *   draining resumes after re-login.
  * - CREATE/EDIT/DELETE are idempotent-ish on replay: state is only advanced after the server
  *   acknowledges, and stale ops (target row already advanced) are dropped, not replayed.
  */
 class OutboxDrainer(
-    private val apiProvider: () -> BabyBuddyApi,
+    private val pusher: SyncPusher,
     private val json: Json,
     private val eventDao: EventDao,
     private val outboxDao: OutboxDao,
@@ -96,24 +90,14 @@ class OutboxDrainer(
                 continue
             }
             app.dandle.log.BbLog.d(TAG, "dispatch #${op.id} ${op.opType} ${op.entityType}")
-            val result = try {
-                when (op.opType) {
-                    OpTypes.CREATE -> processCreate(op, event!!)
-                    OpTypes.EDIT -> processEdit(op, event)
-                    OpTypes.DELETE -> processDelete(op)
-                    else -> {
-                        outboxDao.delete(op.id)
-                        OpResult.Done
-                    }
+            val result = when (op.opType) {
+                OpTypes.CREATE -> processCreate(op, event!!)
+                OpTypes.EDIT -> processEdit(op, event)
+                OpTypes.DELETE -> processDelete(op)
+                else -> {
+                    outboxDao.delete(op.id)
+                    OpResult.Done
                 }
-            } catch (e: ApiException) {
-                handleApiException(op, event, e)
-            } catch (e: HttpException) {
-                // Retrofit suspend calls surface non-2xx as HttpException; normalize and map.
-                handleApiException(op, event, ApiException.from(e))
-            } catch (e: java.io.IOException) {
-                outboxDao.recordAttempt(op.id, e.message)
-                return Outcome.NetworkDown // stop; order preserved for the next drain
             }
             when (result) {
                 OpResult.Done -> Unit
@@ -142,33 +126,25 @@ class OutboxDrainer(
             return OpResult.Done
         }
         val type = EventType.valueOf(op.entityType)
-        val body = OutboxPayloads.decodeBody(json, op.payload)
-        val serverId = when (type) {
-            EventType.FEEDING ->
-                apiProvider().createFeeding(json.decodeFromJsonElement(FeedingWriteDto.serializer(), body)).id
-            EventType.CHANGE ->
-                apiProvider().createChange(json.decodeFromJsonElement(ChangeWriteDto.serializer(), body)).id
-            EventType.SLEEP ->
-                apiProvider().createSleep(json.decodeFromJsonElement(SleepWriteDto.serializer(), body)).id
-            EventType.NOTE ->
-                apiProvider().createNote(json.decodeFromJsonElement(NoteWriteDto.serializer(), body)).id
-            EventType.PUMPING ->
-                apiProvider().createPumping(json.decodeFromJsonElement(PumpingWriteDto.serializer(), body)).id
-            EventType.TUMMY_TIME ->
-                apiProvider().createTummyTime(json.decodeFromJsonElement(TummyTimeWriteDto.serializer(), body)).id
+        val draft = OutboxPayloads.decodeDraft(json, type, op.payload)
+        return when (val pushed = pusher.pushCreate(type, draft)) {
+            is PushResult.Ok -> {
+                eventDao.upsert(
+                    event.copy(
+                        serverId = pushed.serverId,
+                        syncState = SyncState.SYNCED.name,
+                        failureReason = null,
+                        conflictUiPath = null,
+                        conflictServerId = null,
+                        updatedAtMillis = clock.nowMillis(),
+                    )
+                )
+                outboxDao.delete(op.id)
+                OpResult.Done
+            }
+            is PushResult.Deleted -> OpResult.Done // impossible for CREATE; kept for exhaustiveness
+            is PushResult.Err -> handleError(op, pushed.error)
         }
-        eventDao.upsert(
-            event.copy(
-                serverId = serverId,
-                syncState = SyncState.SYNCED.name,
-                failureReason = null,
-                conflictUiPath = null,
-                conflictServerId = null,
-                updatedAtMillis = clock.nowMillis(),
-            )
-        )
-        outboxDao.delete(op.id)
-        return OpResult.Done
     }
 
     private suspend fun processEdit(op: OutboxOpEntity, event: EventEntity?): OpResult {
@@ -179,96 +155,91 @@ class OutboxDrainer(
             return OpResult.Done
         }
         val type = EventType.valueOf(op.entityType)
-        val body = OutboxPayloads.decodeBody(json, op.payload)
-        when (type) {
-            EventType.FEEDING ->
-                apiProvider().patchFeeding(serverId, json.decodeFromJsonElement(FeedingWriteDto.serializer(), body))
-            EventType.CHANGE ->
-                apiProvider().patchChange(serverId, json.decodeFromJsonElement(ChangeWriteDto.serializer(), body))
-            EventType.SLEEP ->
-                apiProvider().patchSleep(serverId, json.decodeFromJsonElement(SleepWriteDto.serializer(), body))
-            EventType.NOTE ->
-                apiProvider().patchNote(serverId, json.decodeFromJsonElement(NoteWriteDto.serializer(), body))
-            EventType.PUMPING ->
-                apiProvider().patchPumping(serverId, json.decodeFromJsonElement(PumpingWriteDto.serializer(), body))
-            EventType.TUMMY_TIME ->
-                apiProvider().patchTummyTime(serverId, json.decodeFromJsonElement(TummyTimeWriteDto.serializer(), body))
+        val draft = OutboxPayloads.decodeDraft(json, type, op.payload)
+        return when (val pushed = pusher.pushEdit(type, serverId, draft)) {
+            is PushResult.Ok -> {
+                eventDao.upsert(
+                    event.copy(
+                        syncState = SyncState.SYNCED.name,
+                        failureReason = null,
+                        conflictUiPath = null,
+                        conflictServerId = null,
+                        updatedAtMillis = clock.nowMillis(),
+                    )
+                )
+                outboxDao.delete(op.id)
+                OpResult.Done
+            }
+            is PushResult.Deleted -> OpResult.Done // impossible for EDIT; kept for exhaustiveness
+            is PushResult.Err -> handleError(op, pushed.error)
         }
-        eventDao.upsert(
-            event.copy(
-                syncState = SyncState.SYNCED.name,
-                failureReason = null,
-                conflictUiPath = null,
-                conflictServerId = null,
-                updatedAtMillis = clock.nowMillis(),
-            )
-        )
-        outboxDao.delete(op.id)
-        return OpResult.Done
     }
 
     private suspend fun processDelete(op: OutboxOpEntity): OpResult {
         val serverId = OutboxPayloads.decodeServerId(json, op.payload)
         val type = EventType.valueOf(op.entityType)
-        val response = when (type) {
-            EventType.FEEDING -> apiProvider().deleteFeeding(serverId)
-            EventType.CHANGE -> apiProvider().deleteChange(serverId)
-            EventType.SLEEP -> apiProvider().deleteSleep(serverId)
-            EventType.NOTE -> apiProvider().deleteNote(serverId)
-            EventType.PUMPING -> apiProvider().deletePumping(serverId)
-            EventType.TUMMY_TIME -> apiProvider().deleteTummyTime(serverId)
-        }
-        when {
-            response.isSuccessful || response.code() == 404 -> {
+        return when (val pushed = pusher.pushDelete(type, serverId)) {
+            is PushResult.Deleted -> {
                 // Deleted (or already gone — another device beat us to it).
                 eventDao.delete(op.localUuid)
                 outboxDao.delete(op.id)
+                OpResult.Done
             }
-            else -> {
-                outboxDao.recordAttempt(op.id, "HTTP ${response.code()}")
+            is PushResult.Ok -> OpResult.Done // impossible for DELETE; kept for exhaustiveness
+            is PushResult.Err -> when (pushed.error) {
+                // Deletes never fail an entry (historical Response-based behavior): record the
+                // attempt and leave the op queued; only network loss stops the drain.
+                is BackendError.Http, is BackendError.ServerError -> {
+                    outboxDao.recordAttempt(op.id, "HTTP ${statusOf(pushed.error)}")
+                    OpResult.Done
+                }
+                is BackendError.Unreachable -> OpResult.NetworkDown
+                is BackendError.AuthExpired -> {
+                    onAuthExpired()
+                    OpResult.Paused
+                }
+                else -> OpResult.Done
             }
         }
-        return OpResult.Done
+    }
+
+    private fun statusOf(error: BackendError): Int = when (error) {
+        is BackendError.Http -> error.status
+        is BackendError.ServerError -> error.status
+        else -> 0
     }
 
     // -- Error mapping ----------------------------------------------------------
 
-    private suspend fun handleApiException(
-        op: OutboxOpEntity,
-        event: EventEntity?,
-        e: ApiException,
-    ): OpResult {
-        if (isAuthFailure(e)) {
-            onAuthExpired()
-            return OpResult.Paused
-        }
-        if (e.status == 400) {
-            // Server rejected the content — permanent for this payload. Badge the entry,
-            // drop the op (spec §6.2: FAILED is user-resolvable; never blocks other entries).
-            val validation = e.validation
-            app.dandle.log.BbLog.d(
-                TAG,
-                "op #${op.id} ${op.opType} rejected: ${validation?.displayReason ?: e.rawBody?.take(200)}",
-            )
-            eventDao.updateSyncState(
-                localUuid = op.localUuid,
-                syncState = SyncState.FAILED.name,
-                failureReason = validation?.displayReason ?: e.rawBody?.take(500) ?: "The server rejected this entry.",
-                conflictUiPath = validation?.conflictingEntry?.uiPath,
-                conflictServerId = validation?.conflictingEntry?.serverId,
-                updatedAt = clock.nowMillis(),
-            )
-            // Callback AFTER the row is marked (the UI reads the FAILED state in the callback).
-            onEntryFailed(op.localUuid)
-            outboxDao.delete(op.id)
-            return OpResult.Continue
-        }
-        if (e.status == 404 && op.opType != OpTypes.CREATE) {
-            // Edit/delete target is gone server-side. For DELETE that's success; for EDIT the
-            // entry no longer exists — surface it and drop the doomed op.
-            if (op.opType == OpTypes.DELETE) {
-                eventDao.delete(op.localUuid)
-            } else {
+    private suspend fun handleError(op: OutboxOpEntity, error: BackendError): OpResult {
+        return when (error) {
+            is BackendError.AuthExpired -> {
+                onAuthExpired()
+                OpResult.Paused
+            }
+            is BackendError.Validation -> {
+                // Server rejected the content — permanent for this payload. Badge the entry,
+                // drop the op (spec §6.2: FAILED is user-resolvable; never blocks other entries).
+                app.dandle.log.BbLog.d(
+                    TAG,
+                    "op #${op.id} ${op.opType} rejected: ${error.displayReason ?: error.rawBody?.take(200)}",
+                )
+                eventDao.updateSyncState(
+                    localUuid = op.localUuid,
+                    syncState = SyncState.FAILED.name,
+                    failureReason = error.displayReason ?: error.rawBody?.take(500)
+                        ?: "The server rejected this entry.",
+                    conflictUiPath = error.conflictUiPath,
+                    conflictServerId = error.conflictServerId,
+                    updatedAt = clock.nowMillis(),
+                )
+                // Callback AFTER the row is marked (the UI reads the FAILED state in the callback).
+                onEntryFailed(op.localUuid)
+                outboxDao.delete(op.id)
+                OpResult.Continue
+            }
+            is BackendError.NotFound -> {
+                // Edit target is gone server-side: surface it and drop the doomed op.
                 eventDao.updateSyncState(
                     localUuid = op.localUuid,
                     syncState = SyncState.FAILED.name,
@@ -277,38 +248,28 @@ class OutboxDrainer(
                     conflictServerId = null,
                     updatedAt = clock.nowMillis(),
                 )
+                outboxDao.delete(op.id)
+                OpResult.Continue
             }
-            outboxDao.delete(op.id)
-            return OpResult.Continue
+            is BackendError.ServerError -> {
+                outboxDao.recordAttempt(op.id, "HTTP ${error.status}")
+                OpResult.Continue // server hiccup; keep draining the rest, retry later
+            }
+            is BackendError.Http -> {
+                // Other 4xx (unexpected): terminally fail the entry like a 400.
+                onEntryFailed(op.localUuid)
+                eventDao.updateSyncState(
+                    localUuid = op.localUuid,
+                    syncState = SyncState.FAILED.name,
+                    failureReason = "The server rejected this entry (HTTP ${error.status}).",
+                    conflictUiPath = null,
+                    conflictServerId = null,
+                    updatedAt = clock.nowMillis(),
+                )
+                outboxDao.delete(op.id)
+                OpResult.Continue
+            }
+            is BackendError.Unreachable -> OpResult.NetworkDown
         }
-        if (e.status in 500..599) {
-            outboxDao.recordAttempt(op.id, "HTTP ${e.status}")
-            return OpResult.Continue // server hiccup; keep draining the rest, retry later
-        }
-        // Other 4xx (unexpected): terminally fail the entry like a 400.
-        onEntryFailed(op.localUuid)
-        eventDao.updateSyncState(
-            localUuid = op.localUuid,
-            syncState = SyncState.FAILED.name,
-            failureReason = "The server rejected this entry (HTTP ${e.status}).",
-            conflictUiPath = null,
-            conflictServerId = null,
-            updatedAt = clock.nowMillis(),
-        )
-        outboxDao.delete(op.id)
-        return OpResult.Continue
-    }
-
-    /**
-     * Auth failures pause the queue. DRF returns 403 (not 401) for missing/invalid tokens
-     * (research doc §2) — but 403 also means "permission denied" (e.g. caregiver delete),
-     * which must NOT pause anything. Distinguish by the server's own message.
-     */
-    private fun isAuthFailure(e: ApiException): Boolean {
-        if (e.status == 401) return true
-        if (e.status != 403) return false
-        val body = e.rawBody.orEmpty()
-        return listOf("Invalid token", "access has expired", "credentials were not provided")
-            .any { body.contains(it, ignoreCase = true) }
     }
 }

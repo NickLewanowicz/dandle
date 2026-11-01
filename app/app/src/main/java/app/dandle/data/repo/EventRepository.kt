@@ -2,13 +2,13 @@ package app.dandle.data.repo
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import app.dandle.data.api.ApiException
-import app.dandle.data.api.BabyBuddyApi
+import app.dandle.data.backend.BackendError
+import app.dandle.data.backend.BackendException
+import app.dandle.data.backend.PullGateway
 import app.dandle.data.db.BabyBuddyDatabase
 import app.dandle.data.db.EventEntity
 import app.dandle.data.db.OutboxDao
 import app.dandle.data.db.OutboxOpEntity
-import app.dandle.data.mapper.toEntity
 import app.dandle.data.mapper.toModel
 import app.dandle.data.sync.OutboxDrainer
 import app.dandle.data.sync.OutboxPayloads
@@ -17,16 +17,16 @@ import app.dandle.domain.model.SyncState
 import app.dandle.domain.model.Event
 import app.dandle.domain.model.EventDraft
 import app.dandle.domain.model.EventType
-import retrofit2.HttpException
 import java.util.UUID
 
 /**
  * Local-first event store (spec §6.1): every write applies to Room IMMEDIATELY and enqueues
  * an outbox op; a one-shot drain attempt follows (cheap if offline — the op just stays queued).
- * The UI only ever reads Room Flows.
+ * The UI only ever reads Room Flows. Server pull goes through [PullGateway] — this class has
+ * no idea which backend is active (brief 05 §1).
  */
 class EventRepository(
-    private val apiProvider: () -> BabyBuddyApi,
+    private val puller: PullGateway,
     private val db: BabyBuddyDatabase,
     private val json: kotlinx.serialization.json.Json,
     private val clock: Clock,
@@ -234,15 +234,7 @@ class EventRepository(
      */
     suspend fun refresh(limitPerType: Int = 50): RefreshResult {
         return try {
-            val api = apiProvider()
-            val fetched = buildList {
-                addAll(api.listFeedings(limit = limitPerType, ordering = "-end").results.map { it.toEntity() })
-                addAll(api.listChanges(limit = limitPerType, ordering = "-time").results.map { it.toEntity() })
-                addAll(api.listSleep(limit = limitPerType, ordering = "-end").results.map { it.toEntity() })
-                addAll(api.listNotes(limit = limitPerType, ordering = "-time").results.map { it.toEntity() })
-                addAll(api.listPumping(limit = limitPerType, ordering = "-end").results.map { it.toEntity() })
-                addAll(api.listTummyTimes(limit = limitPerType, ordering = "-start").results.map { it.toEntity() })
-            }
+            val fetched = puller.pullRecentEvents(limitPerType)
             val merged = fetched.mapNotNull { incoming ->
                 val existing = eventDao.byServerId(incoming.type, incoming.serverId!!)
                 when {
@@ -259,14 +251,12 @@ class EventRepository(
             eventDao.upsertAll(merged)
             nudgeTimeline() // server pull changed local rows — re-render even if invalidation is lost
             RefreshResult.Success
-        } catch (e: ApiException) {
-            if (e.status == 401 || e.status == 403) {
-                RefreshResult.Failure(RefreshResult.Reason.AUTH_EXPIRED)
-            } else {
-                RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
+        } catch (e: BackendException) {
+            when (e.error) {
+                is BackendError.Unreachable -> RefreshResult.Failure(RefreshResult.Reason.UNREACHABLE)
+                is BackendError.AuthExpired -> RefreshResult.Failure(RefreshResult.Reason.AUTH_EXPIRED)
+                else -> RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
             }
-        } catch (e: HttpException) {
-            RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
         } catch (e: java.io.IOException) {
             RefreshResult.Failure(RefreshResult.Reason.UNREACHABLE)
         }

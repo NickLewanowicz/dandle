@@ -2,20 +2,20 @@ package app.dandle.data.repo
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import app.dandle.data.api.ApiException
+import app.dandle.data.backend.BackendError
+import app.dandle.data.backend.BackendException
+import app.dandle.data.backend.PullGateway
 import app.dandle.data.db.BabyBuddyDatabase
-import app.dandle.data.mapper.toEntity
 import app.dandle.data.mapper.toModel
 import app.dandle.domain.model.Child
-import retrofit2.HttpException
 
 /**
  * Children cache: the Room table is the UI's source of truth; [refresh] pulls the server list
- * behind it (brief 01 §6). All errors are surfaced as a typed result — offline is a normal
- * path, the cached list simply stays.
+ * behind it via [PullGateway] (brief 01 §6, brief 05 §1). All errors are surfaced as a typed
+ * result — offline is a normal path, the cached list simply stays.
  */
 class ChildRepository(
-    private val apiProvider: () -> app.dandle.data.api.BabyBuddyApi,
+    private val puller: PullGateway,
     private val db: BabyBuddyDatabase,
 ) {
 
@@ -30,17 +30,14 @@ class ChildRepository(
 
     suspend fun refresh(): RefreshResult {
         return try {
-            val page = apiProvider().listChildren(limit = 100)
-            db.childDao().upsertAll(page.results.map { it.toEntity() })
+            db.childDao().upsertAll(puller.listChildren())
             RefreshResult.Success
-        } catch (e: ApiException) {
-            if (e.status == 401 || e.status == 403) {
-                RefreshResult.Failure(RefreshResult.Reason.AUTH_EXPIRED)
-            } else {
-                RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
+        } catch (e: BackendException) {
+            when (e.error) {
+                is BackendError.Unreachable -> RefreshResult.Failure(RefreshResult.Reason.UNREACHABLE)
+                is BackendError.AuthExpired -> RefreshResult.Failure(RefreshResult.Reason.AUTH_EXPIRED)
+                else -> RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
             }
-        } catch (e: HttpException) {
-            RefreshResult.Failure(RefreshResult.Reason.HTTP_ERROR)
         } catch (e: java.io.IOException) {
             RefreshResult.Failure(RefreshResult.Reason.UNREACHABLE)
         }
