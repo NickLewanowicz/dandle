@@ -28,11 +28,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +88,8 @@ import okio.Path.Companion.toPath
  * chosen sub-flow — device-only child setup, the pinned Baby Buddy two-step server flow, or
  * Dandle Cloud (username/password + encryption passphrase). Progressive disclosure throughout:
  * one decision per screen, back always returns to the picker with drafts kept. Cloud
- * create-account is gated behind a data-safety confirm before any network call (P0).
+ * create-account (brief 06): generated passphrase with a paste-to-verify proof-of-backup
+ * (GENERATE → VERIFY) replaces the old confirm field + "I've saved it" dialog.
  */
 @Composable
 fun LoginScreen(
@@ -167,28 +170,6 @@ fun LoginScreen(
                         Button(onClick = viewModel::onCleartextCancel) { Text("Cancel") }
                     },
                     modifier = Modifier.testTag(TestTags.LOGIN_CLEARTEXT_DIALOG),
-                )
-            }
-
-            if (state.cloudCreateConfirmVisible) {
-                // P0 (Jordan): create-account has no recovery path, so the gate is not
-                // dismissible by back press or outside tap — the user must choose a button.
-                AlertDialog(
-                    onDismissRequest = { /* gated: an explicit choice is required */ },
-                    title = { Text("Save your passphrase somewhere safe.") },
-                    text = {
-                        Text("If you lose it, your data can't be recovered — not even by us. There is no password reset.")
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = viewModel::onCloudCreateConfirmed,
-                            modifier = Modifier.testTag(TestTags.LOGIN_CLOUD_CREATE_CONFIRM_OK),
-                        ) { Text("I've saved it — create account") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = viewModel::onCloudCreateCancelled) { Text("Go back") }
-                    },
-                    modifier = Modifier.testTag(TestTags.LOGIN_CLOUD_CREATE_CONFIRM),
                 )
             }
         }
@@ -638,15 +619,31 @@ private fun ServerFlow(state: LoginUiState, viewModel: LoginViewModel) {
     }
 }
 
-// -- Sub-flow: Dandle Cloud (brief 04 §B) ----------------------------------------
+// -- Sub-flow: Dandle Cloud (brief 04 §B, brief 06) --------------------------------
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Cloud entry (brief 06): the service-honesty notice sits under the lead line; the tabs split
+ * into their own field sets — sign-in stays exactly as shipped (one step), create-account
+ * runs the GENERATE → VERIFY passphrase machine. Each tab renders one passphrase field, so
+ * the shared `login/cloud_passphrase` tag is never ambiguous to automation.
+ */
 @Composable
 private fun CloudEntry(state: LoginUiState, viewModel: LoginViewModel) {
     Text(
         "Your data is encrypted before it leaves this phone.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    // Brief 06 §1, service honesty: muted informational line — the free service may change
+    // or end, and the user's data survives that either way (their passphrase is the key).
+    Text(
+        "Dandle Cloud is a free service and could change or end. Your data stays yours — " +
+            "it's encrypted with your passphrase and readable even without us.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_SERVICE_NOTICE),
     )
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         SegmentedButton(
@@ -662,12 +659,23 @@ private fun CloudEntry(state: LoginUiState, viewModel: LoginViewModel) {
             modifier = Modifier.testTag(TestTags.LOGIN_CLOUD_TAB_CREATE),
         ) { Text("Create account") }
     }
+    if (state.cloudTab == CloudTab.SIGN_IN) {
+        CloudSignInFields(state, viewModel)
+    } else {
+        CloudCreateFields(state, viewModel)
+    }
+    LoginBanners(state)
+}
+
+/** Sign-in tab: one step, unchanged since brief 04 (username + password + passphrase). */
+@Composable
+private fun CloudSignInFields(state: LoginUiState, viewModel: LoginViewModel) {
     OutlinedTextField(
         value = state.cloudUsername,
         onValueChange = viewModel::onCloudUsernameChange,
         label = { Text("Username") },
         singleLine = true,
-        isError = state.banner == LoginBanner.BAD_CREDENTIALS || state.banner == LoginBanner.USERNAME_TAKEN,
+        isError = state.banner == LoginBanner.BAD_CREDENTIALS,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
         modifier = Modifier
             .fillMaxWidth()
@@ -712,76 +720,278 @@ private fun CloudEntry(state: LoginUiState, viewModel: LoginViewModel) {
         },
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Password,
-            imeAction = if (state.cloudTab == CloudTab.CREATE_ACCOUNT) ImeAction.Next else ImeAction.Done,
+            imeAction = ImeAction.Done,
         ),
-        keyboardActions = KeyboardActions(onDone = { if (state.cloudTab == CloudTab.SIGN_IN) viewModel.submit() }),
+        keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
         modifier = Modifier
             .fillMaxWidth()
             .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE),
     )
-    if (state.cloudTab == CloudTab.CREATE_ACCOUNT) {
-        OutlinedTextField(
-            value = state.cloudPassphraseConfirm,
-            onValueChange = viewModel::onCloudPassphraseConfirmChange,
-            label = { Text("Confirm passphrase") },
-            singleLine = true,
-            isError = state.passphraseMismatch,
-            supportingText = if (state.passphraseMismatch) {
-                { Text("Passphrases don't match.") }
-            } else null,
-            visualTransformation =
-                if (state.cloudPassphraseVisible) VisualTransformation.None
-                else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_CONFIRM),
-        )
-        // Information, not an error: muted warning at the moment it matters (brief 04 §B).
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_WARNING),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "If you lose this passphrase, your data can't be recovered — not even by us.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-
-    LoginBanners(state)
-
     SubmitButton(
         tag = TestTags.LOGIN_CLOUD_SUBMIT,
         enabled = state.canSubmitCloud,
-        label = when {
-            state.submitting && state.cloudTab == CloudTab.CREATE_ACCOUNT -> "Creating account…"
-            state.submitting -> "Signing in…"
-            state.cloudTab == CloudTab.CREATE_ACCOUNT -> "Create account"
-            else -> "Sign in"
-        },
-        disabledReason = when {
-            state.passphraseMismatch -> "Passphrases don't match"
-            state.cloudUsername.isBlank() || state.cloudPassword.isBlank() || state.cloudPassphrase.isBlank() ->
-                "Enter a username, password, and passphrase"
-            else -> ""
-        },
+        label = if (state.submitting) "Signing in…" else "Sign in",
+        disabledReason = "Enter a username, password, and passphrase",
         onClick = viewModel::submit,
     )
+}
+
+/**
+ * Create-account tab (brief 06 §2-§4): account section (username, optional contact email,
+ * password + confirm side-by-side), then the visually separated encryption-passphrase
+ * section running the GENERATE → VERIFY state machine.
+ */
+@Composable
+private fun CloudCreateFields(state: LoginUiState, viewModel: LoginViewModel) {
+    OutlinedTextField(
+        value = state.cloudUsername,
+        onValueChange = viewModel::onCloudUsernameChange,
+        label = { Text("Username") },
+        singleLine = true,
+        isError = state.banner == LoginBanner.USERNAME_TAKEN,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_USERNAME),
+    )
+    OutlinedTextField(
+        value = state.contactEmail,
+        onValueChange = viewModel::onContactEmailChange,
+        label = { Text("Email (optional)") },
+        // Live validation (brief 06 §2): a non-blank value needs an "@" — enough to catch
+        // the obvious slip, never a regex that rejects a working address.
+        supportingText = {
+            Text(
+                if (state.contactEmailValid) "Only used to warn you before big service changes. Never marketing."
+                else "That doesn't look like an email.",
+            )
+        },
+        isError = !state.contactEmailValid,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CONTACT_EMAIL),
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = state.cloudPassword,
+            onValueChange = viewModel::onCloudPasswordChange,
+            label = { Text("Password") },
+            singleLine = true,
+            visualTransformation =
+                if (state.passwordVisible) VisualTransformation.None
+                else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = viewModel::onPasswordVisibilityToggle) {
+                    Text(if (state.passwordVisible) "Hide" else "Show", style = MaterialTheme.typography.labelMedium)
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(TestTags.LOGIN_CLOUD_PASSWORD),
+        )
+        OutlinedTextField(
+            value = state.cloudPasswordConfirm,
+            onValueChange = viewModel::onCloudPasswordConfirmChange,
+            // "Confirm", not "Confirm password": the label wraps in the half-width field and
+            // inflates the box taller than its neighbor (owner-reported misalignment).
+            label = { Text("Confirm") },
+            singleLine = true,
+            isError = state.cloudPasswordMismatch,
+            supportingText = if (state.cloudPasswordMismatch) {
+                { Text("Passwords don't match.") }
+            } else {
+                null
+            },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+            modifier = Modifier
+                .weight(1f)
+                .testTag(TestTags.LOGIN_CLOUD_PASSWORD_CONFIRM),
+        )
+    }
+    // Visually separated section (brief 06 §3): the key that unlocks the data is a different
+    // thing from the account password, so it gets its own labeled block.
+    HorizontalDivider()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_GENERATE),
+    ) {
+        Text(
+            "Encryption passphrase",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        when (state.cloudPassphraseStep) {
+            PassphraseStep.GENERATE -> PassphraseGenerateStep(state, viewModel)
+            PassphraseStep.VERIFY -> PassphraseVerifyStep(state, viewModel)
+        }
+        PassphraseWarningRow()
+    }
+    when (state.cloudPassphraseStep) {
+        PassphraseStep.GENERATE -> SubmitButton(
+            tag = TestTags.LOGIN_CLOUD_PASSPHRASE_CONTINUE,
+            enabled = state.canContinuePassphrase,
+            label = "Continue",
+            disabledReason = when {
+                state.cloudCreatePassphrase.isBlank() -> "Enter a passphrase to continue"
+                else -> "Use at least 8 characters"
+            },
+            onClick = viewModel::onCloudPassphraseContinue,
+        )
+        PassphraseStep.VERIFY -> {
+            SubmitButton(
+                tag = TestTags.LOGIN_CLOUD_SUBMIT,
+                enabled = state.canSubmitCloud,
+                label = if (state.submitting) "Creating account…" else "Create account",
+                disabledReason = when {
+                    state.cloudPassphraseVerify != state.cloudCreatePassphrase -> "Paste the passphrase to confirm"
+                    !state.contactEmailValid -> "Fix the email address to continue"
+                    state.cloudPasswordConfirm != state.cloudPassword -> "Make the passwords match"
+                    else -> "Enter a username and password"
+                },
+                onClick = viewModel::submit,
+            )
+            TextButton(
+                onClick = viewModel::onCloudPassphraseBack,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_BACK),
+            ) { Text("Back") }
+        }
+    }
+}
+
+/**
+ * GENERATE (brief 06 §4, step 1 of 2): the passphrase arrives pre-generated and READABLE —
+ * it must be seen to be saved. Regenerate replaces it; "Create my own" hands the field to
+ * the user (editable, obfuscated, standard Show/Hide).
+ */
+@Composable
+private fun PassphraseGenerateStep(state: LoginUiState, viewModel: LoginViewModel) {
+    Text(
+        "This unlocks your data. Save it somewhere safe — a password manager is ideal.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedTextField(
+        value = state.cloudCreatePassphrase,
+        onValueChange = viewModel::onCloudCreatePassphraseChange,
+        label = { Text("Encryption passphrase") },
+        singleLine = true,
+        // Generated mode is deliberately readable (nothing to mistype yet — the verify step
+        // catches transcription); custom mode behaves like any password field.
+        visualTransformation =
+            if (state.cloudCreatePassphraseCustom && !state.cloudPassphraseVisible) PasswordVisualTransformation()
+            else VisualTransformation.None,
+        trailingIcon = {
+            if (state.cloudCreatePassphraseCustom) {
+                IconButton(onClick = viewModel::onCloudPassphraseVisibilityToggle) {
+                    Text(if (state.cloudPassphraseVisible) "Hide" else "Show", style = MaterialTheme.typography.labelMedium)
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = viewModel::onCloudPassphraseRegenerate,
+                        modifier = Modifier.testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_REGEN),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Generate a new passphrase",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(
+                        onClick = viewModel::onCloudPassphraseCreateOwn,
+                        modifier = Modifier.testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_CUSTOM),
+                    ) { Text("Create my own") }
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { viewModel.onCloudPassphraseContinue() }),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE),
+    )
+}
+
+/**
+ * VERIFY (brief 06 §4, step 2 of 2): the MetaMask-style proof-of-backup, softened to
+ * paste-from-saved-place. The header keeps the app context visible — seed-phrase-style
+ * confirmation screens are a known phishing mimic pattern.
+ */
+@Composable
+private fun PassphraseVerifyStep(state: LoginUiState, viewModel: LoginViewModel) {
+    Text(
+        "Create your account · step 2 of 2",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.semantics { heading() },
+    )
+    OutlinedTextField(
+        value = state.cloudPassphraseVerify,
+        onValueChange = viewModel::onCloudPassphraseVerifyChange,
+        label = { Text("Encryption passphrase") },
+        supportingText = {
+            Text(
+                if (state.cloudVerifyMismatch) "That doesn't match — paste it again."
+                else "Paste your passphrase to confirm you've saved it.",
+            )
+        },
+        singleLine = true,
+        isError = state.cloudVerifyMismatch,
+        visualTransformation =
+            if (state.cloudPassphraseVisible) VisualTransformation.None
+            else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = viewModel::onCloudPassphraseVisibilityToggle) {
+                Text(if (state.cloudPassphraseVisible) "Hide" else "Show", style = MaterialTheme.typography.labelMedium)
+            }
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_VERIFY),
+    )
+}
+
+/** Information, not an error: muted loss warning, visible in BOTH passphrase steps. */
+@Composable
+private fun PassphraseWarningRow() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_PASSPHRASE_WARNING),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "If you lose this passphrase, your data can't be recovered — not even by us.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 // -- Shared pieces -----------------------------------------------------------

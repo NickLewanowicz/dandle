@@ -241,11 +241,11 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Steps**
 1. `scripts/qa/fresh-install-login.sh` — picker → server card → URL → cleartext → dashboard (regression).
 2. `scripts/qa/ui-tap-tag.sh login/mode_device` — device child setup; `login/child_submit` disabled reasons; future birth date field error.
-3. `scripts/qa/ui-tap-tag.sh login/mode_cloud` — cloud form; mismatch gates submit; passphrase warning visible; CREATE submit raises the confirm dialog ("Save your passphrase somewhere safe.", `login/cloud_create_confirm_ok` proceeds, Go back keeps drafts); wrong-passphrase banner distinct from bad credentials (see checklist 14).
+3. `scripts/qa/ui-tap-tag.sh login/mode_cloud` — sign-in tab: one step (username/password/passphrase), wrong-passphrase banner distinct from bad credentials (see checklist 14). Create tab (brief 06): service notice visible; passphrase arrives generated + readable; `login/cloud_passphrase_regen` replaces it; `login/cloud_passphrase_custom` clears to editable (min 8 chars gates Continue); Continue lands on "step 2 of 2"; wrong paste re-errors ("That doesn't match — paste it again."); matching paste enables `login/cloud_submit`; Back keeps the passphrase; invalid optional email gates submit.
 4. Verify back behavior: any sub-flow's `login/back` returns to the picker with typed drafts intact.
 5. Verify session-expired re-auth lands directly on the URL step (no picker).
 
-**Tags:** `login/mode_device`, `login/mode_server`, `login/mode_cloud`, `login/back`, `login/child_name`, `login/child_birth_date`, `login/child_date_pick`, `login/child_submit`, `login/cloud_tab/sign_in`, `login/cloud_tab/create`, `login/cloud_username`, `login/cloud_password`, `login/cloud_passphrase`, `login/cloud_passphrase_confirm`, `login/cloud_passphrase_warning`, `login/cloud_submit`, `login/cloud_create_confirm`, `login/cloud_create_confirm_ok`, `login/logo`, `login/background_art`.
+**Tags:** `login/mode_device`, `login/mode_server`, `login/mode_cloud`, `login/back`, `login/child_name`, `login/child_birth_date`, `login/child_date_pick`, `login/child_submit`, `login/cloud_tab/sign_in`, `login/cloud_tab/create`, `login/cloud_username`, `login/contact_email`, `login/cloud_password`, `login/cloud_password_confirm`, `login/cloud_passphrase_generate`, `login/cloud_passphrase`, `login/cloud_passphrase_regen`, `login/cloud_passphrase_custom`, `login/cloud_passphrase_continue`, `login/cloud_passphrase_verify`, `login/cloud_passphrase_back`, `login/cloud_passphrase_warning`, `login/cloud_submit`, `login/cloud_service_notice`, `login/logo`, `login/background_art`.
 
 **Expected server requests:** server mode unchanged (csrf → 302 → profile → children). Device mode: none. Cloud mode: PocketBase `auth-with-password` / user record create only at auth time.
 
@@ -276,19 +276,19 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 **Goal:** events sync to dandle.pockethost.io with the server storing only ciphertext; a passphrase works across devices; a wrong passphrase fails distinctly.
 
 **Steps**
-1. Create account (unique username) → child setup → save a feeding.
-2. Zero-knowledge check: superuser GET of the user's `sync_records` shows `payload` = base64 ciphertext (no plaintext domain content); `type`/`client_updated` plaintext by design (partial encryption, brief 05 §5.1).
+1. Create account (unique username; brief 06 flow: generated passphrase → paste-to-verify on "step 2 of 2") → child setup → save a feeding.
+2. Zero-knowledge check: superuser GET of the user's `sync_records` shows `payload` = base64 ciphertext (no plaintext domain content); `type`/`client_updated` plaintext by design (partial encryption, brief 05 §5.1). The `users` record carries `contact_email` only when the user typed one (brief 06 §2).
 3. Sign out → sign in (same username + password + passphrase) → timeline pulls down decrypted.
 4. Wrong passphrase → "That passphrase doesn't unlock this account's data." (distinct banner, passphrase field error).
 5. Server-side rules pinned by the 2026-11-01 smoke: cross-user isolation (0 records for another user), hard DELETE rejected (tombstone-only), tombstone PATCH ok.
 
 **Tags:** `login/mode_cloud`, `login/cloud_*`, `dashboard/timeline`.
 
-**Expected server requests:** `POST /api/collections/users/auth-with-password`, `POST/PATCH/GET /api/collections/sync_records/records` (TLS).
+**Expected server requests:** `POST /api/collections/users/records` (create; carries `contact_email` only when provided), `POST /api/collections/users/auth-with-password`, `POST/PATCH/GET /api/collections/sync_records/records` (TLS).
 
-**Expected UI states:** mismatch live error; muted loss warning; wrong-passphrase banner; offline banner "Couldn't reach Dandle Cloud…".
+**Expected UI states:** generated passphrase readable with Regenerate / "Create my own"; wrong-paste live error on step 2 of 2; muted loss warning; optional-email live validation; wrong-passphrase banner; offline banner "Couldn't reach Dandle Cloud…".
 
-**JVM tests:** `CryptoTest` (HKDF RFC 5869 vector, Argon2id, envelope round-trip, wrong-passphrase, AAD swap rejection, fresh nonce), `LocalBackendTest` LWW tombstone merge (shared merge path).
+**JVM tests:** `PassphraseGeneratorTest` (wordlist hygiene, entropy ≥ 60 bits), `LoginModePickerTest` (GENERATE→VERIFY machine, sign-in one-step, contact-email gating), `CloudBackendSignUpMappingTest` (contact_email wire shape + USERNAME_TAKEN mapping), `CryptoTest` (HKDF RFC 5869 vector, Argon2id, envelope round-trip, wrong-passphrase, AAD swap rejection, fresh nonce), `LocalBackendTest` LWW tombstone merge (shared merge path).
 
 ## TEMPLATE (copy for every new feature)
 

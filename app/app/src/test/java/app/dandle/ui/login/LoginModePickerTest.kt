@@ -20,6 +20,7 @@ import okio.Path.Companion.toPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -27,13 +28,24 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Mode picker + sub-flow state machine (brief 04 §B): card tap advances, back returns to the
- * picker with drafts kept, device setup persists the LOCAL session through the injected child
- * hook, and the cloud form's validation gates submit (mismatch, missing fields).
+ * Mode picker + sub-flow state machine (brief 04 §B, brief 06): card tap advances, back
+ * returns to the picker with drafts kept, device setup persists the LOCAL session through
+ * the injected child hook, and the cloud create flow runs GENERATE → VERIFY (generated
+ * passphrase, paste-to-confirm proof-of-backup, optional contact email) while the sign-in
+ * tab stays one step.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class LoginModePickerTest {
+
+    /** One recorded auth call: which entry point ran, with exactly which arguments. */
+    private data class AuthCall(
+        val kind: String,
+        val username: String,
+        val password: String,
+        val passphrase: String,
+        val contactEmail: String,
+    )
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var sessionFile: okio.Path
@@ -49,8 +61,8 @@ class LoginModePickerTest {
     /** Children the cloud child hook received (startTracking in the cloud child-setup flow). */
     private val cloudCreatedChildren = mutableListOf<app.dandle.domain.model.Child>()
 
-    /** Records which auth entry points ran ("signUp"/"signIn") — the gate must order them. */
-    private val authCalls = mutableListOf<String>()
+    /** Records every auth call with its arguments — gating tests assert order AND args. */
+    private val authCalls = mutableListOf<AuthCall>()
 
     /** Configurable fake results; default failure (gating tests need no happy path). */
     private var signUpResult: CloudLoginResult = CloudLoginResult.Failure(CloudError.UNREACHABLE)
@@ -58,13 +70,18 @@ class LoginModePickerTest {
 
     /** Records the auth call; returns the configured result. */
     private val fakeCloudAuth = object : CloudAuth {
-        override suspend fun signUp(username: String, password: String, passphrase: String): CloudLoginResult {
-            authCalls += "signUp"
+        override suspend fun signUp(
+            username: String,
+            password: String,
+            passphrase: String,
+            contactEmail: String,
+        ): CloudLoginResult {
+            authCalls += AuthCall("signUp", username, password, passphrase, contactEmail)
             return signUpResult
         }
 
         override suspend fun signIn(username: String, password: String, passphrase: String): CloudLoginResult {
-            authCalls += "signIn"
+            authCalls += AuthCall("signIn", username, password, passphrase, contactEmail = "")
             return signInResult
         }
     }
@@ -241,84 +258,179 @@ class LoginModePickerTest {
         )
     }
 
+    // -- Cloud create flow: GENERATE → VERIFY (brief 06 §4) ----------------------------
+
+    /**
+     * Drives the create tab from tab switch to the VERIFY step: asserts the pre-generated
+     * passphrase, fills the account section, presses Continue, and returns the passphrase.
+     */
+    private fun driveCreateToVerify(vm: LoginViewModel = viewModel, email: String = ""): String {
+        vm.onModeSelected(LoginMode.CLOUD)
+        vm.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
+        val generated = vm.uiState.value.cloudCreatePassphrase
+        assertTrue("tab switch pre-fills a generated passphrase", generated.isNotBlank())
+        assertEquals("the flow starts on the generate step", PassphraseStep.GENERATE, vm.uiState.value.cloudPassphraseStep)
+        assertTrue("a fresh generated passphrase passes the Continue gate", vm.uiState.value.canContinuePassphrase)
+        vm.onCloudUsernameChange("nick")
+        vm.onCloudPasswordChange("pw")
+        vm.onCloudPasswordConfirmChange("pw")
+        if (email.isNotEmpty()) vm.onContactEmailChange(email)
+        vm.onCloudPassphraseContinue()
+        assertEquals(PassphraseStep.VERIFY, vm.uiState.value.cloudPassphraseStep)
+        return generated
+    }
+
     @Test
-    fun `cloud form gates submit on mismatch and missing fields`() {
-        viewModel.onModeSelected(LoginMode.CLOUD)
-        viewModel.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
+    fun `continue on the generate step lands on verify and the paste gates submission`() {
+        val generated = driveCreateToVerify()
+
+        assertFalse("a blank paste cannot submit", viewModel.uiState.value.canSubmitCloud)
+        viewModel.onCloudPassphraseVerifyChange("not-the-passphrase")
+        assertTrue("a wrong paste is a live field error", viewModel.uiState.value.cloudVerifyMismatch)
+        assertFalse("a wrong paste gates the account creation", viewModel.uiState.value.canSubmitCloud)
+
+        viewModel.onCloudPassphraseVerifyChange(generated)
+        assertFalse(viewModel.uiState.value.cloudVerifyMismatch)
+        assertTrue("the matching paste unlocks Create account", viewModel.uiState.value.canSubmitCloud)
+    }
+
+    @Test
+    fun `submit on the generate step is a no op`() {
+        driveCreateToVerify()
+        viewModel.onCloudPassphraseBack() // even with every field filled, GENERATE cannot submit
         viewModel.onCloudUsernameChange("nick")
         viewModel.onCloudPasswordChange("pw")
-        viewModel.onCloudPassphraseChange("secret")
+        viewModel.onCloudPasswordConfirmChange("pw")
+        assertEquals(PassphraseStep.GENERATE, viewModel.uiState.value.cloudPassphraseStep)
+        assertFalse("the two-step flow must gate the network behind VERIFY", viewModel.uiState.value.canSubmitCloud)
 
-        assertFalse("confirm missing", viewModel.uiState.value.canSubmitCloud)
-        viewModel.onCloudPassphraseConfirmChange("different")
-        assertTrue("mismatch is a live field error", viewModel.uiState.value.passphraseMismatch)
-        assertFalse("mismatch gates submit", viewModel.uiState.value.canSubmitCloud)
+        viewModel.submit()
+        advance()
 
-        viewModel.onCloudPassphraseConfirmChange("secret")
-        assertFalse(viewModel.uiState.value.passphraseMismatch)
+        assertTrue("no auth call may run from the generate step", authCalls.isEmpty())
+        assertEquals("a no-op submit never moves the flow", PassphraseStep.GENERATE, viewModel.uiState.value.cloudPassphraseStep)
+    }
+
+    @Test
+    fun `the correct paste calls signUp with the passphrase and contact email`() = runBlocking {
+        val generated = driveCreateToVerify(email = "jordan@example.com")
+        viewModel.onCloudPassphraseVerifyChange(generated)
+        viewModel.submit()
+        advance()
+
+        val call = authCalls.single()
+        assertEquals("signUp", call.kind)
+        assertEquals("nick", call.username)
+        assertEquals("pw", call.password)
+        assertEquals("the GENERATED passphrase is the account key, not the paste alone", generated, call.passphrase)
+        assertEquals("jordan@example.com", call.contactEmail)
+    }
+
+    @Test
+    fun `a blank contact email is valid and omits nothing on submit`() = runBlocking {
+        val generated = driveCreateToVerify() // email left blank
+        viewModel.onCloudPassphraseVerifyChange(generated)
+        assertTrue(viewModel.uiState.value.canSubmitCloud)
+        viewModel.submit()
+        advance()
+
+        val call = authCalls.single()
+        assertEquals("signUp", call.kind)
+        assertEquals("optional email stays blank when not typed", "", call.contactEmail)
+    }
+
+    @Test
+    fun `an invalid contact email blocks submit until fixed`() {
+        driveCreateToVerify(email = "not-an-email")
+        viewModel.onCloudPassphraseVerifyChange(viewModel.uiState.value.cloudCreatePassphrase)
+
+        assertFalse("an email without @ fails live validation", viewModel.uiState.value.contactEmailValid)
+        assertFalse("invalid email gates the account creation", viewModel.uiState.value.canSubmitCloud)
+
+        viewModel.onContactEmailChange("jordan@example.com")
+        assertTrue(viewModel.uiState.value.contactEmailValid)
         assertTrue(viewModel.uiState.value.canSubmitCloud)
     }
 
     @Test
-    fun `create-account submit shows the data-safety gate before any network call`() = runBlocking {
+    fun `create my own switches to an editable passphrase and enforces the minimum length`() {
         viewModel.onModeSelected(LoginMode.CLOUD)
         viewModel.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
-        fillValidCreateForm()
+        val generated = viewModel.uiState.value.cloudCreatePassphrase
 
-        viewModel.submit()
-        advance()
+        viewModel.onCloudPassphraseCreateOwn()
 
-        assertTrue("the gate dialog is the FIRST response to submit", viewModel.uiState.value.cloudCreateConfirmVisible)
-        assertFalse("submitting waits for the confirm", viewModel.uiState.value.submitting)
-        assertTrue("no auth call may run before the confirm", authCalls.isEmpty())
+        assertTrue("custom mode is one-way for the session", viewModel.uiState.value.cloudCreatePassphraseCustom)
+        assertEquals("the generated value is cleared for typing", "", viewModel.uiState.value.cloudCreatePassphrase)
+        assertFalse("blank custom value cannot continue", viewModel.uiState.value.canContinuePassphrase)
+        assertFalse("regenerate is inert in custom mode", run {
+            viewModel.onCloudPassphraseRegenerate()
+            viewModel.uiState.value.cloudCreatePassphrase.isNotBlank()
+        })
 
-        // Confirm: only now does signUp run.
-        viewModel.onCloudCreateConfirmed()
-        advance()
-
-        assertEquals(listOf("signUp"), authCalls)
-        assertFalse(viewModel.uiState.value.cloudCreateConfirmVisible)
+        viewModel.onCloudCreatePassphraseChange("short")
+        assertFalse("a short custom passphrase cannot continue", viewModel.uiState.value.canContinuePassphrase)
+        viewModel.onCloudCreatePassphraseChange("a-longer-custom-passphrase")
+        assertTrue("a long-enough custom passphrase continues", viewModel.uiState.value.canContinuePassphrase)
+        assertNotEquals("custom value is the user's own", generated, viewModel.uiState.value.cloudCreatePassphrase)
     }
 
     @Test
-    fun `cancelling the create gate keeps the drafts and offers the gate again`() = runBlocking {
+    fun `regenerate replaces the generated passphrase in place`() {
         viewModel.onModeSelected(LoginMode.CLOUD)
         viewModel.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
-        fillValidCreateForm()
-        viewModel.submit()
-        advance()
-        assertTrue(viewModel.uiState.value.cloudCreateConfirmVisible)
+        val first = viewModel.uiState.value.cloudCreatePassphrase
 
-        viewModel.onCloudCreateCancelled()
-        advance()
+        viewModel.onCloudPassphraseRegenerate()
 
-        assertFalse(viewModel.uiState.value.cloudCreateConfirmVisible)
-        assertEquals("username draft survives the cancel", "nick", viewModel.uiState.value.cloudUsername)
-        assertEquals("passphrase draft survives the cancel", "secret", viewModel.uiState.value.cloudPassphrase)
-        assertEquals("confirm draft survives the cancel", "secret", viewModel.uiState.value.cloudPassphraseConfirm)
-        assertTrue("the form is still submittable after Go back", viewModel.uiState.value.canSubmitCloud)
-        assertTrue("cancel must not have touched the network", authCalls.isEmpty())
-
-        // Re-submitting re-gates: the warning is shown every time, not once per session.
-        viewModel.submit()
-        advance()
-        assertTrue(viewModel.uiState.value.cloudCreateConfirmVisible)
-        assertTrue(authCalls.isEmpty())
+        assertFalse("still generated mode", viewModel.uiState.value.cloudCreatePassphraseCustom)
+        assertTrue("still submittable (non-blank)", viewModel.uiState.value.canContinuePassphrase)
+        assertNotEquals("a fresh passphrase is generated", first, viewModel.uiState.value.cloudCreatePassphrase)
     }
 
     @Test
-    fun `sign-in is not gated by the create confirm`() = runBlocking {
+    fun `back from verify keeps the passphrase and returns to generate`() {
+        val generated = driveCreateToVerify()
+        viewModel.onCloudPassphraseVerifyChange("oops-typo")
+
+        viewModel.onCloudPassphraseBack()
+
+        assertEquals(PassphraseStep.GENERATE, viewModel.uiState.value.cloudPassphraseStep)
+        assertEquals("the passphrase value survives the rewind", generated, viewModel.uiState.value.cloudCreatePassphrase)
+        assertTrue("Continue is available again", viewModel.uiState.value.canContinuePassphrase)
+        assertFalse("no auth call may have run", authCalls.isNotEmpty())
+    }
+
+    // -- Cloud sign-in tab: unchanged one-step flow -------------------------------------
+
+    @Test
+    fun `sign-in tab stays one step and calls signIn immediately`() = runBlocking {
         viewModel.onModeSelected(LoginMode.CLOUD) // default tab is SIGN_IN
-        viewModel.onCloudUsernameChange("nick")
-        viewModel.onCloudPasswordChange("pw")
-        viewModel.onCloudPassphraseChange("secret")
+        fillValidSignInForm()
         assertTrue(viewModel.uiState.value.canSubmitCloud)
 
         viewModel.submit()
         advance()
 
-        assertFalse("sign-in never shows the create gate", viewModel.uiState.value.cloudCreateConfirmVisible)
-        assertEquals(listOf("signIn"), authCalls)
+        val call = authCalls.single()
+        assertEquals("signIn", call.kind)
+        assertEquals("nick", call.username)
+        assertEquals("secret", call.passphrase)
+        assertEquals("sign-in never enters the passphrase state machine", PassphraseStep.GENERATE, viewModel.uiState.value.cloudPassphraseStep)
+    }
+
+    @Test
+    fun `password confirmation mismatch gates the create flow`() {
+        driveCreateToVerify()
+        viewModel.onCloudPasswordConfirmChange("different")
+        viewModel.onCloudPassphraseVerifyChange(viewModel.uiState.value.cloudCreatePassphrase)
+
+        assertTrue("confirm-vs-password is a live field error", viewModel.uiState.value.cloudPasswordMismatch)
+        assertFalse("mismatched passwords gate the account creation", viewModel.uiState.value.canSubmitCloud)
+
+        viewModel.onCloudPasswordConfirmChange("pw")
+        assertFalse(viewModel.uiState.value.cloudPasswordMismatch)
+        assertTrue(viewModel.uiState.value.canSubmitCloud)
     }
 
     @Test
@@ -375,13 +487,6 @@ class LoginModePickerTest {
         assertEquals(LoginStep.DEVICE_CHILD, viewModel.uiState.value.step)
     }
 
-    private fun fillValidCreateForm(vm: LoginViewModel = viewModel) {
-        vm.onCloudUsernameChange("nick")
-        vm.onCloudPasswordChange("pw")
-        vm.onCloudPassphraseChange("secret")
-        vm.onCloudPassphraseConfirmChange("secret")
-    }
-
     private fun fillValidSignInForm(vm: LoginViewModel = viewModel) {
         vm.onCloudUsernameChange("nick")
         vm.onCloudPasswordChange("pw")
@@ -402,15 +507,13 @@ class LoginModePickerTest {
         val collector = launch(Dispatchers.Unconfined) {
             vm.events.collect { if (it is LoginEvent.SignedIn) signedIn = true }
         }
-        vm.onModeSelected(LoginMode.CLOUD)
-        vm.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
-        fillValidCreateForm(vm)
+        driveCreateToVerify(vm)
+        vm.onCloudPassphraseVerifyChange(vm.uiState.value.cloudCreatePassphrase)
         vm.submit()
-        advance()
-        vm.onCloudCreateConfirmed()
         advance()
         collector.cancel()
 
+        assertEquals("signUp ran exactly once, after the paste", listOf("signUp"), authCalls.map { it.kind })
         assertEquals("child setup is the next screen, not the dashboard", LoginStep.DEVICE_CHILD, vm.uiState.value.step)
         assertTrue("startTracking must know this setup belongs to the cloud flow", vm.uiState.value.pendingCloudChildSetup)
         assertFalse("no SignedIn while setup is pending", signedIn)
@@ -425,13 +528,11 @@ class LoginModePickerTest {
     fun `cloud child setup startTracking pushes the child and keeps the backend CLOUD`() = runBlocking {
         signUpResult = cloudSuccess()
         val vm = buildCloudRoutingVm(hasChildren = { false })
-        vm.onModeSelected(LoginMode.CLOUD)
-        vm.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
-        fillValidCreateForm(vm)
+        driveCreateToVerify(vm)
+        vm.onCloudPassphraseVerifyChange(vm.uiState.value.cloudCreatePassphrase)
         vm.submit()
         advance()
-        vm.onCloudCreateConfirmed()
-        advance()
+        assertEquals(LoginStep.DEVICE_CHILD, vm.uiState.value.step)
 
         var signedIn = false
         val collector = launch(Dispatchers.Unconfined) {
@@ -501,12 +602,9 @@ class LoginModePickerTest {
     fun `backing out of cloud child setup returns to MODE and clears the cloud flag`() = runBlocking {
         signUpResult = cloudSuccess()
         val vm = buildCloudRoutingVm(hasChildren = { false })
-        vm.onModeSelected(LoginMode.CLOUD)
-        vm.onCloudTabChange(CloudTab.CREATE_ACCOUNT)
-        fillValidCreateForm(vm)
+        driveCreateToVerify(vm)
+        vm.onCloudPassphraseVerifyChange(vm.uiState.value.cloudCreatePassphrase)
         vm.submit()
-        advance()
-        vm.onCloudCreateConfirmed()
         advance()
         assertEquals(LoginStep.DEVICE_CHILD, vm.uiState.value.step)
 
@@ -521,4 +619,3 @@ class LoginModePickerTest {
     }
 
 }
-

@@ -69,6 +69,15 @@ Screenshots: `06-widgets-01…03` (v0.4 set) + new v0.5 evidence in `/tmp/widget
 
 `docs/screenshots/new-app/flows/06-widgets-01…03` — live widgets, running state, deep-link, nap-tap result, long-press resize, widget picker (preview copy "Four tappable care buttons…", "Last feed, diaper, nap, and pump at a glance"), config attempts. Engineer's: `docs/screenshots/new-app/widgets/*` (widget close-ups).
 
+## Captured set (2026-11-01 refresh)
+
+- `06-widgets-01-home-both-widgets.png` — clean home page: care dashboard (4×3, top) + quick actions (2×2, below), both rendering live Milo data; natural icon row + dock.
+- `06-widgets-02-home-care-dashboard.png` — care dashboard close-up (crop of 01).
+- `06-widgets-03-home-sleep-running.png` — sleep timer STARTED FROM THE WIDGET'S SLEEP CHIP (dogfooded tap-to-start): care dashboard shows the "Asleep since 09:52 · 0m" accent row, quick-actions Sleep chip is highlighted with the elapsed counter.
+- `06-widgets-04-quickactions-config.png` / `06-widgets-05-caredashboard-config.png` — the config activities, auto-opened on widget drop and saved with defaults (child Milo, all rows).
+
+Hand-capture deviation (documented per RUNBOOK rule 8 precedent): this group was re-captured by hand on a cleaned launcher (factory-reset home, both widgets placed, app signed in) because the gate's group 06 cannot navigate launcher pages yet (RUNBOOK P3). The gate's content-based matcher ("Last feed"/"Pump") works when the widgets share the visible page.
+
 ## Deviations from spec
 
 - **P2** — finding #5 (nap-row trampoline launches app; spec §7.2 "nap row starts a sleep timer" + widgets.md "without opening the app") — **resolved by design**: info rows opening the app is now the specified behavior, timers are never started from the widget (persona round 2, 2026-10-18).

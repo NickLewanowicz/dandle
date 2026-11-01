@@ -11,7 +11,7 @@ title: "Flow verification: Login"
 ## How to verify
 
 - Script: `scripts/qa/fresh-install-login.sh` (defaults: `app.dandle.debug`, `http://10.0.2.2:8000`, `admin`/`admin`) — taps `login/mode_server` on the picker, then the URL step. Exit 0 only when the `dashboard` tag is visible. Add `--pass wrongpass` for the failure branch (script exits 2 and prints `login/error_banner` text).
-- Tags: `login/mode_device`, `login/mode_server`, `login/mode_cloud`, `login/back`, `login/server_url`, `login/username`, `login/password`, `login/submit`, text node `Continue` (cleartext dialog), `login/error_banner`, `dashboard`; device/cloud flow: `login/child_name`, `login/child_birth_date`, `login/child_date_pick`, `login/child_submit`, `login/cloud_create_confirm`, `login/cloud_create_confirm_ok`; cloud flow: `login/cloud_tab/sign_in`, `login/cloud_tab/create`, `login/cloud_username`, `login/cloud_password`, `login/cloud_passphrase`, `login/cloud_passphrase_confirm`, `login/cloud_passphrase_warning`, `login/cloud_submit`.
+- Tags: `login/mode_device`, `login/mode_server`, `login/mode_cloud`, `login/back`, `login/server_url`, `login/username`, `login/password`, `login/submit`, text node `Continue` (cleartext dialog), `login/error_banner`, `dashboard`; device flow: `login/child_name`, `login/child_birth_date`, `login/child_date_pick`, `login/child_submit`; cloud flow (brief 06): `login/cloud_tab/sign_in`, `login/cloud_tab/create`, `login/cloud_service_notice`, `login/cloud_username`, `login/contact_email`, `login/cloud_password`, `login/cloud_password_confirm`, `login/cloud_passphrase_generate`, `login/cloud_passphrase`, `login/cloud_passphrase_regen`, `login/cloud_passphrase_custom`, `login/cloud_passphrase_continue`, `login/cloud_passphrase_verify`, `login/cloud_passphrase_back`, `login/cloud_passphrase_warning`, `login/cloud_submit`.
 - Logs: `scripts/qa/applog.sh` (`BB/LOGIN`, OkHttp), `scripts/qa/server-log.sh -f`.
 - Expected server requests (server mode): `GET /login/` (csrf) → `POST /login/` 302 → `GET /api/profile` → `GET /api/children/?limit=1` → full sync chain (`GET /api/children/?limit=100`, six per-type lists). No other 4xx. Device mode: **no network requests at all**. Cloud mode: `POST /api/collections/users/auth-with-password` (+ record CRUD on `sync_records` over TLS to pockethost).
 
@@ -26,8 +26,9 @@ title: "Flow verification: Login"
 | `http://` URL | Cleartext dialog, Continue proceeds |
 | Stored session, relaunch | Login skipped entirely |
 | Session expired (server) | Lands DIRECTLY on URL step, fields pre-filled, info banner |
-| Cloud create: passphrase mismatch | Live field error "Passphrases don't match.", submit gated |
-| Cloud create: submit | Confirm dialog "Save your passphrase somewhere safe." before the account exists (tag `login/cloud_create_confirm_ok`) |
+| Cloud create: generated passphrase | Field pre-filled + readable (`login/cloud_passphrase`); Regenerate replaces it; "Create my own" clears to editable (min 8 chars gates Continue) |
+| Cloud create: step 2 of 2, wrong paste | Live field error "That doesn't match — paste it again.", submit gated |
+| Cloud create: matching paste | `login/cloud_submit` enabled → child setup for a fresh account |
 | Cloud sign-in, wrong passphrase | Banner "That passphrase doesn't unlock this account's data." (distinct from bad credentials) |
 
 ## Screenshots

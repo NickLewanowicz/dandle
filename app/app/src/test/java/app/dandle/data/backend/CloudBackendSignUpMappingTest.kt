@@ -12,6 +12,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -90,5 +91,31 @@ class CloudBackendSignUpMappingTest {
 
         assertTrue(result is CloudLoginResult.Failure)
         assertEquals("not USERNAME_TAKEN — the name was invalid, not taken", CloudError.HTTP(400), (result as CloudLoginResult.Failure).error)
+    }
+
+    // -- contact_email wire shape (brief 06 §2) ---------------------------------------
+    // The optional contact address rides createUser as a plain `contact_email` field; a blank
+    // value must be OMITTED from the body entirely, never sent as an empty string.
+
+    @Test
+    fun `contact_email rides the createUser body when provided`() = runBlocking {
+        val backend = backendAnswering(status = 200, body = """{"id":"abc123def456ghi"}""")
+        backend.auth.signUp("fresh.name", "pw123456", "secret-passphrase", "jordan@example.com")
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(
+            "contact_email must ride the createUser body",
+            body.contains("\"contact_email\":\"jordan@example.com\""),
+        )
+        assertTrue("username still rides the create body", body.contains("\"username\":\"fresh.name\""))
+    }
+
+    @Test
+    fun `a blank contact email is omitted from the createUser body`() = runBlocking {
+        val backend = backendAnswering(status = 200, body = """{"id":"abc123def456ghi"}""")
+        backend.auth.signUp("fresh.name", "pw123456", "secret-passphrase", "")
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse("blank email must be omitted, never sent empty", body.contains("contact_email"))
     }
 }

@@ -6,7 +6,17 @@ package app.dandle.data.cloud
  * a wrong passphrase is [CloudError.WRONG_PASSPHRASE], distinct from bad login credentials.
  */
 interface CloudAuth {
-    suspend fun signUp(username: String, password: String, passphrase: String): CloudLoginResult
+    /**
+     * Creates the account. [contactEmail] is the OPTIONAL contact address (brief 06 §2) —
+     * plain metadata for service-change warnings, NOT a login identity and never verified;
+     * pass an empty string to omit it entirely from the createUser body.
+     */
+    suspend fun signUp(
+        username: String,
+        password: String,
+        passphrase: String,
+        contactEmail: String = "",
+    ): CloudLoginResult
     suspend fun signIn(username: String, password: String, passphrase: String): CloudLoginResult
 }
 

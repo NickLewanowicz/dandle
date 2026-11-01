@@ -22,6 +22,7 @@ import app.dandle.data.cloud.CloudError
 import app.dandle.data.cloud.CloudLoginResult
 import app.dandle.data.prefs.SessionStore
 import app.dandle.domain.NormalizedServerUrl
+import app.dandle.domain.PassphraseGenerator
 import app.dandle.domain.normalizeServerUrl
 
 /** Which error banner to show; null = none. Copy lives in the screen (spec §1.1.5). */
@@ -44,8 +45,15 @@ enum class LoginMode { DEVICE, SERVER, CLOUD }
 /** Progressive disclosure steps. MODE is the landing; the rest are sub-flow screens. */
 enum class LoginStep { MODE, DEVICE_CHILD, URL, CREDENTIALS, CLOUD_ENTRY }
 
-/** Cloud sub-flow tabs (brief 04 §B): shared fields, create adds the confirm row. */
+/** Cloud sub-flow tabs (brief 04 §B): each tab renders its own field set. */
 enum class CloudTab { SIGN_IN, CREATE_ACCOUNT }
+
+/**
+ * Create-tab passphrase state machine (brief 06 §4): GENERATE shows the pre-filled generated
+ * passphrase to save; VERIFY is the paste-to-confirm proof-of-backup. Both live inside
+ * CLOUD_ENTRY; the sign-in tab never enters the machine.
+ */
+enum class PassphraseStep { GENERATE, VERIFY }
 
 data class LoginUiState(
     val serverUrl: String = "",
@@ -71,15 +79,24 @@ data class LoginUiState(
     // -- Device-only sub-flow (brief 04 §A) --
     val childName: String = "",
     val childBirthDate: String = "", // ISO yyyy-MM-dd; blank is valid (stored as today)
-    // -- Cloud sub-flow (brief 04 §B) --
+    // -- Cloud sub-flow (brief 04 §B, brief 05 §5, brief 06) --
     val cloudTab: CloudTab = CloudTab.SIGN_IN,
     val cloudUsername: String = "",
     val cloudPassword: String = "",
     val cloudPassphrase: String = "",
-    val cloudPassphraseConfirm: String = "",
     val cloudPassphraseVisible: Boolean = false,
-    /** P0 (Jordan): create-account shows the data-safety gate BEFORE any network call. */
-    val cloudCreateConfirmVisible: Boolean = false,
+    // -- Cloud create-account (brief 06 §2-§4) --
+    /** Optional contact address (brief 06 §2): service-change warnings only, never marketing. */
+    val contactEmail: String = "",
+    /** Account password confirmation (brief 06 §3): must equal [cloudPassword] to submit. */
+    val cloudPasswordConfirm: String = "",
+    /** The create tab's passphrase working value (generated or user-chosen). */
+    val cloudCreatePassphrase: String = "",
+    /** True after "Create my own": field starts empty + obfuscated, regenerator disabled. */
+    val cloudCreatePassphraseCustom: Boolean = false,
+    val cloudPassphraseStep: PassphraseStep = PassphraseStep.GENERATE,
+    /** The VERIFY step's paste input (proof-of-backup; must equal [cloudCreatePassphrase]). */
+    val cloudPassphraseVerify: String = "",
     /**
      * Dead-card guard (ux review): the cloud card renders — and CLOUD is selectable — only
      * when an auth backend exists (null in partially-shipped builds), so no tap is a no-op.
@@ -123,21 +140,48 @@ data class LoginUiState(
     val canStartTracking: Boolean
         get() = childName.isNotBlank() && childBirthDateValid
 
-    /** Cloud field validation: mismatch is a live field error; the banner copy uses it too. */
-    val passphraseMismatch: Boolean
-        get() = cloudTab == CloudTab.CREATE_ACCOUNT &&
-            cloudPassphrase.isNotEmpty() &&
-            cloudPassphraseConfirm.isNotEmpty() &&
-            cloudPassphrase != cloudPassphraseConfirm
+    /**
+     * Optional email (brief 06 §2): blank is valid; a non-blank value must contain "@" —
+     * a live field error that blocks submit (no regex pedantry, just an obvious-catch).
+     */
+    val contactEmailValid: Boolean
+        get() = contactEmail.isBlank() || contactEmail.contains("@")
 
+    /** Account-password confirmation (brief 06 §3): live field error once both are typed. */
+    val cloudPasswordMismatch: Boolean
+        get() = cloudTab == CloudTab.CREATE_ACCOUNT &&
+            cloudPasswordConfirm.isNotEmpty() &&
+            cloudPasswordConfirm != cloudPassword
+
+    /** VERIFY step live error: non-empty paste that doesn't match the saved passphrase. */
+    val cloudVerifyMismatch: Boolean
+        get() = cloudPassphraseStep == PassphraseStep.VERIFY &&
+            cloudPassphraseVerify.isNotEmpty() &&
+            cloudPassphraseVerify != cloudCreatePassphrase
+
+    /** GENERATE step's Continue gate: non-blank; a custom (human-chosen) value needs >= 8 chars. */
+    val canContinuePassphrase: Boolean
+        get() = cloudCreatePassphrase.isNotBlank() &&
+            (!cloudCreatePassphraseCustom || cloudCreatePassphrase.length >= 8)
+
+    /**
+     * Cloud auth submit gate. Sign-in is one step (username + password + passphrase). The
+     * create flow (brief 06 §4) only submits from VERIFY with the paste matching the saved
+     * passphrase and the account fields valid — the old confirm-dialog gate is replaced by
+     * the two-step proof-of-backup itself.
+     */
     val canSubmitCloud: Boolean
         get() = when {
             submitting || step != LoginStep.CLOUD_ENTRY -> false
-            passphraseMismatch -> false
-            cloudTab == CloudTab.CREATE_ACCOUNT -> cloudUsername.isNotBlank() &&
-                cloudPassword.isNotBlank() && cloudPassphrase.isNotBlank() &&
-                cloudPassphraseConfirm.isNotBlank()
-            else -> cloudUsername.isNotBlank() && cloudPassword.isNotBlank() && cloudPassphrase.isNotBlank()
+            cloudTab == CloudTab.SIGN_IN ->
+                cloudUsername.isNotBlank() && cloudPassword.isNotBlank() && cloudPassphrase.isNotBlank()
+            else ->
+                cloudPassphraseStep == PassphraseStep.VERIFY &&
+                    cloudUsername.isNotBlank() && cloudPassword.isNotBlank() &&
+                    cloudPasswordConfirm == cloudPassword &&
+                    contactEmailValid &&
+                    cloudCreatePassphrase.isNotBlank() &&
+                    cloudPassphraseVerify == cloudCreatePassphrase
         }
 
     val canSubmit: Boolean
@@ -244,9 +288,13 @@ class LoginViewModel(
                             cloudUsername = session.cloudUsername.orEmpty(),
                             cloudPassword = "",
                             cloudPassphrase = "",
-                            cloudPassphraseConfirm = "",
                             cloudPassphraseVisible = false,
-                            cloudCreateConfirmVisible = false,
+                            contactEmail = "",
+                            cloudPasswordConfirm = "",
+                            cloudCreatePassphrase = "",
+                            cloudCreatePassphraseCustom = false,
+                            cloudPassphraseStep = PassphraseStep.GENERATE,
+                            cloudPassphraseVerify = "",
                             pendingCloudChildSetup = false,
                             // serverUrl survives sign-out IN THE STORE on purpose (login
                             // pre-fill, original-app behavior): clear the draft, then
@@ -479,10 +527,19 @@ class LoginViewModel(
         }
     }
 
-    // -- Cloud sub-flow (brief 04 §B, brief 05 §5) ---------------------------------
+    // -- Cloud sub-flow (brief 04 §B, brief 05 §5, brief 06 §2-§4) -----------------
 
+    /**
+     * Tab switch keeps typed drafts. First entry to the create tab PRE-FILLS a generated
+     * passphrase (brief 06 §4): the field arrives readable, ready to save, before any typing.
+     */
     fun onCloudTabChange(tab: CloudTab) = _uiState.update {
-        it.copy(cloudTab = tab, banner = null)
+        val preGenerated = if (tab == CloudTab.CREATE_ACCOUNT && it.cloudCreatePassphrase.isBlank()) {
+            it.copy(cloudCreatePassphrase = PassphraseGenerator.generate())
+        } else {
+            it
+        }
+        preGenerated.copy(cloudTab = tab, banner = null)
     }
 
     fun onCloudUsernameChange(value: String) = _uiState.update {
@@ -493,41 +550,87 @@ class LoginViewModel(
         it.copy(cloudPassword = value, banner = null)
     }
 
-    fun onCloudPassphraseChange(value: String) = _uiState.update {
-        it.copy(cloudPassphrase = value, banner = null)
+    fun onCloudPasswordConfirmChange(value: String) = _uiState.update {
+        it.copy(cloudPasswordConfirm = value, banner = null)
     }
 
-    fun onCloudPassphraseConfirmChange(value: String) = _uiState.update {
-        it.copy(cloudPassphraseConfirm = value, banner = null)
+    fun onContactEmailChange(value: String) = _uiState.update {
+        it.copy(contactEmail = value, banner = null)
+    }
+
+    fun onCloudPassphraseChange(value: String) = _uiState.update {
+        it.copy(cloudPassphrase = value, banner = null)
     }
 
     fun onCloudPassphraseVisibilityToggle() = _uiState.update {
         it.copy(cloudPassphraseVisible = !it.cloudPassphraseVisible)
     }
 
+    /** The create tab's passphrase field (generated mode shows it editable + readable). */
+    fun onCloudCreatePassphraseChange(value: String) = _uiState.update {
+        it.copy(cloudCreatePassphrase = value, banner = null)
+    }
+
+    /**
+     * Regenerate (brief 06 §4): only meaningful while still in generated mode — a no-op once
+     * the user chose their own passphrase (that value must never be silently overwritten).
+     */
+    fun onCloudPassphraseRegenerate() = _uiState.update {
+        if (it.cloudTab != CloudTab.CREATE_ACCOUNT || it.cloudCreatePassphraseCustom) {
+            it
+        } else {
+            it.copy(
+                cloudCreatePassphrase = PassphraseGenerator.generate(),
+                cloudPassphraseVerify = "",
+                banner = null,
+            )
+        }
+    }
+
+    /**
+     * "Create my own" (brief 06 §4): clears the field to editable-empty, obfuscated with the
+     * standard visibility toggle. One-way for the session — regenerating stays off so a typed
+     * passphrase is never clobbered.
+     */
+    fun onCloudPassphraseCreateOwn() = _uiState.update {
+        if (it.cloudTab != CloudTab.CREATE_ACCOUNT) {
+            it
+        } else {
+            it.copy(
+                cloudCreatePassphraseCustom = true,
+                cloudCreatePassphrase = "",
+                cloudPassphraseVisible = false,
+                cloudPassphraseVerify = "",
+                banner = null,
+            )
+        }
+    }
+
+    /** GENERATE → VERIFY (step 2 of 2): the paste field starts empty for a fresh paste. */
+    fun onCloudPassphraseContinue() {
+        val state = _uiState.value
+        if (state.cloudTab != CloudTab.CREATE_ACCOUNT || !state.canContinuePassphrase) return
+        _uiState.update { it.copy(cloudPassphraseStep = PassphraseStep.VERIFY, cloudPassphraseVerify = "", banner = null) }
+    }
+
+    /** VERIFY step paste input; mismatch surfaces live while typing. */
+    fun onCloudPassphraseVerifyChange(value: String) = _uiState.update {
+        it.copy(cloudPassphraseVerify = value, banner = null)
+    }
+
+    /** Back from VERIFY to GENERATE: the passphrase value is kept, only the step rewinds. */
+    fun onCloudPassphraseBack() {
+        if (_uiState.value.cloudPassphraseStep != PassphraseStep.VERIFY) return
+        _uiState.update { it.copy(cloudPassphraseStep = PassphraseStep.GENERATE, banner = null) }
+    }
+
     private fun submitCloud() {
         val state = _uiState.value
         if (!state.canSubmitCloud) return
-        if (state.cloudTab == CloudTab.CREATE_ACCOUNT) {
-            // P0 (Jordan): creating an account is irreversible — the passphrase is the only
-            // key and there is no reset. The data-safety gate must be confirmed BEFORE any
-            // network call. Sign-in is NOT gated.
-            _uiState.update { it.copy(cloudCreateConfirmVisible = true, banner = null) }
-            return
-        }
+        // Brief 06 §4: the confirm dialog is gone — canSubmitCloud already guarantees the
+        // create flow is on VERIFY with the paste-to-confirm proof passed. Sign-in submits
+        // directly, exactly as before.
         doCloudAuth()
-    }
-
-    /** The gate's confirm: hide the dialog, then — and only then — hit the network. */
-    fun onCloudCreateConfirmed() {
-        if (!_uiState.value.cloudCreateConfirmVisible) return
-        _uiState.update { it.copy(cloudCreateConfirmVisible = false) }
-        doCloudAuth()
-    }
-
-    /** The gate's "Go back": typed values are kept — cancelling must not wipe the draft. */
-    fun onCloudCreateCancelled() {
-        _uiState.update { it.copy(cloudCreateConfirmVisible = false) }
     }
 
     private fun doCloudAuth() {
@@ -537,7 +640,12 @@ class LoginViewModel(
         _uiState.update { it.copy(submitting = true, banner = null) }
         viewModelScope.launch {
             val result = if (state.cloudTab == CloudTab.CREATE_ACCOUNT) {
-                auth.signUp(state.cloudUsername.trim(), state.cloudPassword, state.cloudPassphrase)
+                auth.signUp(
+                    username = state.cloudUsername.trim(),
+                    password = state.cloudPassword,
+                    passphrase = state.cloudCreatePassphrase,
+                    contactEmail = state.contactEmail.trim(),
+                )
             } else {
                 auth.signIn(state.cloudUsername.trim(), state.cloudPassword, state.cloudPassphrase)
             }

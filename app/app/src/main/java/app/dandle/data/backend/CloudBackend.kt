@@ -65,8 +65,12 @@ class CloudBackend(
     private fun userEnvelope(user: JsonObject): String? =
         (user["wrapped_dek"] as? kotlinx.serialization.json.JsonPrimitive)?.content
 
-    /** Creates the account + first envelope. Username collisions map to USERNAME_TAKEN. */
-    private fun signUpInternal(username: String, password: String, passphrase: CharArray): AuthSuccess {
+    /**
+     * Creates the account + first envelope. Username collisions map to USERNAME_TAKEN.
+     * [contactEmail] rides createUser as `contact_email` (brief 06 §2 — optional, unverified,
+     * contact metadata only); a blank value omits the field from the wire entirely.
+     */
+    private fun signUpInternal(username: String, password: String, passphrase: CharArray, contactEmail: String): AuthSuccess {
         val (envelope, dek) = DekEnvelope.create(passphrase)
         try {
             pb.createUser(
@@ -77,6 +81,7 @@ class CloudBackend(
                     put("enc_params", envelopeKdfJson(envelope))
                     put("wrapped_dek", envelope.toJson())
                     put("crypto_version", DandleCrypto.CRYPTO_VERSION)
+                    if (contactEmail.isNotBlank()) put("contact_email", contactEmail)
                 },
             )
             RecordCipher.install(dek.encoded)
@@ -99,8 +104,13 @@ class CloudBackend(
     }
 
     val auth: CloudAuth = object : CloudAuth {
-        override suspend fun signUp(username: String, password: String, passphrase: String): CloudLoginResult =
-            authCall { signUpInternal(username, password, passphrase.toCharArray()) }
+        override suspend fun signUp(
+            username: String,
+            password: String,
+            passphrase: String,
+            contactEmail: String,
+        ): CloudLoginResult =
+            authCall { signUpInternal(username, password, passphrase.toCharArray(), contactEmail) }
 
         override suspend fun signIn(username: String, password: String, passphrase: String): CloudLoginResult =
             authCall { signInInternal(username, password, passphrase.toCharArray()) }

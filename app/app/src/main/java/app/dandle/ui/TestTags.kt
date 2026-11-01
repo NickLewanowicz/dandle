@@ -34,16 +34,25 @@ object TestTags {
     const val LOGIN_CHILD_SUBMIT = "login/child_submit"
     const val LOGIN_CLOUD_TAB_SIGNIN = "login/cloud_tab/sign_in"
     const val LOGIN_CLOUD_TAB_CREATE = "login/cloud_tab/create"
+    // Brief 06 §1: the muted service-honesty line under the cloud lead copy.
+    const val LOGIN_CLOUD_SERVICE_NOTICE = "login/cloud_service_notice"
     const val LOGIN_CLOUD_USERNAME = "login/cloud_username"
+    // Brief 06 §2: optional contact email on create-account (service-change warnings only).
+    const val LOGIN_CONTACT_EMAIL = "login/contact_email"
     const val LOGIN_CLOUD_PASSWORD = "login/cloud_password"
+    /** Brief 06 §3: account-password confirmation, side-by-side with the password field. */
+    const val LOGIN_CLOUD_PASSWORD_CONFIRM = "login/cloud_password_confirm"
     const val LOGIN_CLOUD_PASSPHRASE = "login/cloud_passphrase"
-    const val LOGIN_CLOUD_PASSPHRASE_CONFIRM = "login/cloud_passphrase_confirm"
+    // Brief 06 §4: the create-tab passphrase section + generate/verify state machine.
+    const val LOGIN_CLOUD_PASSPHRASE_GENERATE = "login/cloud_passphrase_generate"
+    const val LOGIN_CLOUD_PASSPHRASE_REGEN = "login/cloud_passphrase_regen"
+    const val LOGIN_CLOUD_PASSPHRASE_CUSTOM = "login/cloud_passphrase_custom"
+    const val LOGIN_CLOUD_PASSPHRASE_CONTINUE = "login/cloud_passphrase_continue"
+    const val LOGIN_CLOUD_PASSPHRASE_VERIFY = "login/cloud_passphrase_verify"
+    /** VERIFY step's "Back" TextButton (returns to GENERATE with the passphrase kept). */
+    const val LOGIN_CLOUD_PASSPHRASE_BACK = "login/cloud_passphrase_back"
     const val LOGIN_CLOUD_PASSPHRASE_WARNING = "login/cloud_passphrase_warning"
     const val LOGIN_CLOUD_SUBMIT = "login/cloud_submit"
-    // P0 data-safety gate: create-account never reaches the network before this dialog.
-    const val LOGIN_CLOUD_CREATE_CONFIRM = "login/cloud_create_confirm"
-    /** The gate's confirm ("I've saved it — create account"). */
-    const val LOGIN_CLOUD_CREATE_CONFIRM_OK = "login/cloud_create_confirm_ok"
 
     // Dashboard (UX spec §2)
     const val DASHBOARD = "dashboard"

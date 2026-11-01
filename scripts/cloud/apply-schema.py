@@ -88,6 +88,11 @@ def main():
         field("enc_params", "text"),
         field("wrapped_dek", "text", min=32),
         field("crypto_version", "number", onlyInt=True, min=1),
+        # Brief 06 §2: optional, unverified contact address for service-change warnings —
+        # NOT PB's auth email (no reset promises, no identity coupling). Cleartext by design
+        # (it is contact metadata); the app omits the field entirely when the user leaves it
+        # blank. No pattern beyond a max length.
+        field("contact_email", "text", max=254),
     ]
     for f in new_fields:
         if f["name"] not in existing:
