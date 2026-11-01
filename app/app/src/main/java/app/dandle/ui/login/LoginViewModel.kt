@@ -82,6 +82,10 @@ data class LoginUiState(
     // -- Cloud sub-flow (brief 04 §B, brief 05 §5, brief 06) --
     val cloudTab: CloudTab = CloudTab.SIGN_IN,
     val cloudUsername: String = "",
+    // Single password field, no adjacent confirm: NIST 800-63B endorses the Show toggle
+    // over re-entry, and the field's Show/Hide IS the verification (brief 06 amendment
+    // 2026-11-01: the adjacent confirm pair is the obsolete pattern; the next-step
+    // paste-verify is reserved for the passphrase, where loss is unrecoverable).
     val cloudPassword: String = "",
     val cloudPassphrase: String = "",
     val cloudPassphraseVisible: Boolean = false,
@@ -89,7 +93,6 @@ data class LoginUiState(
     /** Optional contact address (brief 06 §2): service-change warnings only, never marketing. */
     val contactEmail: String = "",
     /** Account password confirmation (brief 06 §3): must equal [cloudPassword] to submit. */
-    val cloudPasswordConfirm: String = "",
     /** The create tab's passphrase working value (generated or user-chosen). */
     val cloudCreatePassphrase: String = "",
     /** True after "Create my own": field starts empty + obfuscated, regenerator disabled. */
@@ -147,12 +150,6 @@ data class LoginUiState(
     val contactEmailValid: Boolean
         get() = contactEmail.isBlank() || contactEmail.contains("@")
 
-    /** Account-password confirmation (brief 06 §3): live field error once both are typed. */
-    val cloudPasswordMismatch: Boolean
-        get() = cloudTab == CloudTab.CREATE_ACCOUNT &&
-            cloudPasswordConfirm.isNotEmpty() &&
-            cloudPasswordConfirm != cloudPassword
-
     /** VERIFY step live error: non-empty paste that doesn't match the saved passphrase. */
     val cloudVerifyMismatch: Boolean
         get() = cloudPassphraseStep == PassphraseStep.VERIFY &&
@@ -178,7 +175,6 @@ data class LoginUiState(
             else ->
                 cloudPassphraseStep == PassphraseStep.VERIFY &&
                     cloudUsername.isNotBlank() && cloudPassword.isNotBlank() &&
-                    cloudPasswordConfirm == cloudPassword &&
                     contactEmailValid &&
                     cloudCreatePassphrase.isNotBlank() &&
                     cloudPassphraseVerify == cloudCreatePassphrase
@@ -290,7 +286,6 @@ class LoginViewModel(
                             cloudPassphrase = "",
                             cloudPassphraseVisible = false,
                             contactEmail = "",
-                            cloudPasswordConfirm = "",
                             cloudCreatePassphrase = "",
                             cloudCreatePassphraseCustom = false,
                             cloudPassphraseStep = PassphraseStep.GENERATE,
@@ -550,9 +545,6 @@ class LoginViewModel(
         it.copy(cloudPassword = value, banner = null)
     }
 
-    fun onCloudPasswordConfirmChange(value: String) = _uiState.update {
-        it.copy(cloudPasswordConfirm = value, banner = null)
-    }
 
     fun onContactEmailChange(value: String) = _uiState.update {
         it.copy(contactEmail = value, banner = null)

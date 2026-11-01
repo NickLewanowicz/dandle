@@ -41,7 +41,6 @@ object TestTags {
     const val LOGIN_CONTACT_EMAIL = "login/contact_email"
     const val LOGIN_CLOUD_PASSWORD = "login/cloud_password"
     /** Brief 06 §3: account-password confirmation, side-by-side with the password field. */
-    const val LOGIN_CLOUD_PASSWORD_CONFIRM = "login/cloud_password_confirm"
     const val LOGIN_CLOUD_PASSPHRASE = "login/cloud_passphrase"
     // Brief 06 §4: the create-tab passphrase section + generate/verify state machine.
     const val LOGIN_CLOUD_PASSPHRASE_GENERATE = "login/cloud_passphrase_generate"

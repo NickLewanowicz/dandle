@@ -273,7 +273,6 @@ class LoginModePickerTest {
         assertTrue("a fresh generated passphrase passes the Continue gate", vm.uiState.value.canContinuePassphrase)
         vm.onCloudUsernameChange("nick")
         vm.onCloudPasswordChange("pw")
-        vm.onCloudPasswordConfirmChange("pw")
         if (email.isNotEmpty()) vm.onContactEmailChange(email)
         vm.onCloudPassphraseContinue()
         assertEquals(PassphraseStep.VERIFY, vm.uiState.value.cloudPassphraseStep)
@@ -300,7 +299,6 @@ class LoginModePickerTest {
         viewModel.onCloudPassphraseBack() // even with every field filled, GENERATE cannot submit
         viewModel.onCloudUsernameChange("nick")
         viewModel.onCloudPasswordChange("pw")
-        viewModel.onCloudPasswordConfirmChange("pw")
         assertEquals(PassphraseStep.GENERATE, viewModel.uiState.value.cloudPassphraseStep)
         assertFalse("the two-step flow must gate the network behind VERIFY", viewModel.uiState.value.canSubmitCloud)
 
@@ -420,17 +418,13 @@ class LoginModePickerTest {
     }
 
     @Test
-    fun `password confirmation mismatch gates the create flow`() {
+    fun `single password field with no adjacent confirm — verification is the Show toggle`() {
         driveCreateToVerify()
-        viewModel.onCloudPasswordConfirmChange("different")
         viewModel.onCloudPassphraseVerifyChange(viewModel.uiState.value.cloudCreatePassphrase)
-
-        assertTrue("confirm-vs-password is a live field error", viewModel.uiState.value.cloudPasswordMismatch)
-        assertFalse("mismatched passwords gate the account creation", viewModel.uiState.value.canSubmitCloud)
-
-        viewModel.onCloudPasswordConfirmChange("pw")
-        assertFalse(viewModel.uiState.value.cloudPasswordMismatch)
-        assertTrue(viewModel.uiState.value.canSubmitCloud)
+        assertTrue(
+            "one password field verifies via Show toggle; the paste-verify is reserved for the passphrase",
+            viewModel.uiState.value.canSubmitCloud,
+        )
     }
 
     @Test

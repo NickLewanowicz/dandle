@@ -773,48 +773,24 @@ private fun CloudCreateFields(state: LoginUiState, viewModel: LoginViewModel) {
             .fillMaxWidth()
             .testTag(TestTags.LOGIN_CONTACT_EMAIL),
     )
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        OutlinedTextField(
-            value = state.cloudPassword,
-            onValueChange = viewModel::onCloudPasswordChange,
-            label = { Text("Password") },
-            singleLine = true,
-            visualTransformation =
-                if (state.passwordVisible) VisualTransformation.None
-                else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = viewModel::onPasswordVisibilityToggle) {
-                    Text(if (state.passwordVisible) "Hide" else "Show", style = MaterialTheme.typography.labelMedium)
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.LOGIN_CLOUD_PASSWORD),
-        )
-        OutlinedTextField(
-            value = state.cloudPasswordConfirm,
-            onValueChange = viewModel::onCloudPasswordConfirmChange,
-            // "Confirm", not "Confirm password": the label wraps in the half-width field and
-            // inflates the box taller than its neighbor (owner-reported misalignment).
-            label = { Text("Confirm") },
-            singleLine = true,
-            isError = state.cloudPasswordMismatch,
-            supportingText = if (state.cloudPasswordMismatch) {
-                { Text("Passwords don't match.") }
-            } else {
-                null
-            },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-            modifier = Modifier
-                .weight(1f)
-                .testTag(TestTags.LOGIN_CLOUD_PASSWORD_CONFIRM),
-        )
-    }
+    OutlinedTextField(
+        value = state.cloudPassword,
+        onValueChange = viewModel::onCloudPasswordChange,
+        label = { Text("Password") },
+        singleLine = true,
+        visualTransformation =
+            if (state.passwordVisible) VisualTransformation.None
+            else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = viewModel::onPasswordVisibilityToggle) {
+                Text(if (state.passwordVisible) "Hide" else "Show", style = MaterialTheme.typography.labelMedium)
+            }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.LOGIN_CLOUD_PASSWORD),
+    )
     // Visually separated section (brief 06 §3): the key that unlocks the data is a different
     // thing from the account password, so it gets its own labeled block.
     HorizontalDivider()
@@ -854,8 +830,7 @@ private fun CloudCreateFields(state: LoginUiState, viewModel: LoginViewModel) {
                 disabledReason = when {
                     state.cloudPassphraseVerify != state.cloudCreatePassphrase -> "Paste the passphrase to confirm"
                     !state.contactEmailValid -> "Fix the email address to continue"
-                    state.cloudPasswordConfirm != state.cloudPassword -> "Make the passwords match"
-                    else -> "Enter a username and password"
+                                        else -> "Enter a username and password"
                 },
                 onClick = viewModel::submit,
             )
