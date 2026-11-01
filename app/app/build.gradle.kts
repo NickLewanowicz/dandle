@@ -66,6 +66,11 @@ kotlin {
     }
 }
 
+// Brief 05 §3: export Room schemas so future migrations can use MigrationTestHelper.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -76,6 +81,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.kotlinx.coroutines.core)
@@ -84,6 +90,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
+    implementation(libs.bouncycastle)
     // BB/API request logging (BbLog-gated; see app.dandle.log.BbLog).
     implementation(libs.okhttp.logging)
 

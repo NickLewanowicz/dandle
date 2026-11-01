@@ -24,9 +24,16 @@ import app.dandle.App
  */
 object WidgetRefresher {
     suspend fun refreshAll(context: Context) {
+        // Never throw into callers (worker/dashboard paths), but a swallowed render failure is
+        // exactly how a blank widget goes undiagnosed (QA 2026-10-31): log it under BB/WIDGET.
         runCatching {
             QuickActionsWidget().updateAll(context)
             CareDashboardWidget().updateAll(context)
+        }.onFailure { e ->
+            app.dandle.log.BbLog.d(
+                app.dandle.log.BbLog.TAG_WIDGET,
+                "widget refresh failed: ${e.javaClass.simpleName}: ${e.message}",
+            )
         }
         updateLiveTick(context)
     }

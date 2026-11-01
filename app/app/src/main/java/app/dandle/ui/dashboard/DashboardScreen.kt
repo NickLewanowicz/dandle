@@ -123,7 +123,7 @@ fun DashboardScreen(
 
     LaunchedEffect(state.showLongPressHint) {
         if (state.showLongPressHint) {
-            snackbar.showSnackbar("Long-press an entry to open it in the Baby Buddy web app.")
+            snackbar.showSnackbar("Long-press an entry to open it in the Baby Buddy web app.") // server mode only (hint is gated backend-side)
             viewModel.onLongPressHintShown()
         }
     }
@@ -184,7 +184,12 @@ fun DashboardScreen(
                     onLongPressRow = { event ->
                         val url = viewModel.webUrlFor(event)
                         if (url == null) {
-                            scope.launch { snackbar.showSnackbar("This entry hasn't synced yet.") }
+                            // Brief 05 §4: on device-only/cloud backends there is no web UI to
+                            // open — long-press still means Quick Edit, so stay silent unless
+                            // this is genuinely an unsynced SERVER entry.
+                            if (state.backend == app.dandle.data.backend.Backend.BABYBUDDY) {
+                                scope.launch { snackbar.showSnackbar("This entry hasn't synced yet.") }
+                            }
                         } else {
                             runCatching {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -235,7 +240,12 @@ fun DashboardScreen(
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
             title = { Text("Sign out?") },
-            text = { Text("This clears the stored key and local data on this device. Data on the server is untouched.") },
+            text = {
+                // Brief 05 §4, three-way (P2 QA 2026-10-31): a server sign-out leaves the
+                // server copy; LOCAL sign-out IS the data (wipe); CLOUD sign-out clears only
+                // this device's copy — the encrypted account stays.
+                Text(DashboardViewModel.signOutCopyFor(state.backend))
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showSignOutDialog = false
@@ -283,6 +293,7 @@ fun DashboardScreen(
             event = edit.event,
             draft = edit.draft,
             validationReason = viewModel.editValidationReason(edit),
+            nowMillis = nowMillis,
             failureReason = edit.failureReason,
             onDraftChange = viewModel::onEditDraftChange,
             onStartTimeSet = viewModel::onEditStartTimeSet,
@@ -319,7 +330,7 @@ fun DashboardScreen(
 private fun HeaderRow(
     children: List<app.dandle.domain.model.Child>,
     activeChild: app.dandle.domain.model.Child?,
-    onSelectChild: (Long) -> Unit,
+    onSelectChild: (String) -> Unit,
     onSignOut: () -> Unit,
     onHelp: () -> Unit,
     onAbout: () -> Unit,

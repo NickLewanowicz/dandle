@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.dandle.ui.TestTags
@@ -57,8 +58,16 @@ class MainActivitySmokeTest {
         awaitTag(TestTags.LOGIN)
         composeRule.onNodeWithTag(TestTags.LOGIN).assertIsDisplayed()
 
-        // Step 1 (progressive disclosure): the URL field and the Continue probe. The
-        // credentials form and the Sign in button are withheld until the server verifies.
+        // Brief 04: the picker is the landing; picking the server card reveals step 1 of the
+        // pinned progressive flow (URL probe), and credentials stay withheld until verified.
+        // The three cards exist (the third can sit below the fold on tiny test viewports).
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_DEVICE).assertIsDisplayed()
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_SERVER).performScrollTo()
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_SERVER).assertIsDisplayed()
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_CLOUD).performScrollTo()
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_CLOUD).assertExists()
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_SERVER).performClick()
+        awaitTag(TestTags.LOGIN_SERVER_URL)
         composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.LOGIN_CONTINUE).assertIsDisplayed()
         composeRule.onNodeWithTag(TestTags.LOGIN_SUBMIT).assertDoesNotExist()
@@ -70,7 +79,9 @@ class MainActivitySmokeTest {
         val mock = startProbeServer()
         awaitTag(TestTags.LOGIN)
 
-        // Step 1 -> 2: verify the http:// mock URL — cleartext warning, then credentials.
+        // Picker -> Step 1 -> 2: verify the http:// mock URL — cleartext warning, then creds.
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_SERVER).performClick()
+        awaitTag(TestTags.LOGIN_SERVER_URL)
         composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL)
             .performTextInput(mock.url("/").toString())
         composeRule.onNodeWithTag(TestTags.LOGIN_CONTINUE).performClick()

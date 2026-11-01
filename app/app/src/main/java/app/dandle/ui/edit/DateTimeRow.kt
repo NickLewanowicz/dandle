@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.dandle.R
+import app.dandle.domain.TimeEditLogic
 import app.dandle.ui.dashboard.dayLabel
 import java.time.Instant
 import java.time.LocalDate
@@ -45,13 +46,16 @@ private val compactDateFormat = DateTimeFormatter.ofPattern("MMM d")
  * native Material TimePicker pre-populated; the small calendar button opens the native
  * DatePicker (then the TimePicker). No steppers — this is exactly what the Baby Buddy web UI
  * and the platform offer, nothing more. Both entry points are pre-populated with the current
- * value so the common case (nudge the minutes) is tap → adjust → OK.
+ * value so the common case (nudge the minutes) is tap → adjust → OK. A plain dial inherits
+ * the row's day and is resolved with [TimeEditLogic.resolveDialedTime] against [nowMillis]
+ * (backward-midnight); an explicit calendar pick pins its day as chosen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DateTimeRow(
     label: String,
     millis: Long,
+    nowMillis: Long,
     onPicked: (Long) -> Unit,
     modifier: Modifier = Modifier,
     valueTag: String? = null,
@@ -103,7 +107,8 @@ fun DateTimeRow(
         )
         is Flow.Time -> TimeStep(
             millis = millis,
-            date = current.date ?: Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate(),
+            chosenDate = current.date,
+            nowMillis = nowMillis,
             onPicked = {
                 flow = Flow.Idle
                 onPicked(it)
@@ -153,12 +158,17 @@ private fun DatePickerStep(
     }
 }
 
-/** Pre-populated native time picker, combined with the calendar [date] on OK. */
+/**
+ * Pre-populated native time picker, combined with the calendar [chosenDate] on OK
+ * (null = no calendar pick; the day is inherited from the row's current value and the
+ * dialed wall-clock is resolved with [TimeEditLogic.resolveDialedTime] against [nowMillis]).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeStep(
     millis: Long,
-    date: LocalDate,
+    chosenDate: LocalDate?,
+    nowMillis: Long,
     onPicked: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -172,13 +182,17 @@ private fun TimeStep(
         confirmButton = {
             TextButton(onClick = {
                 onDismiss()
-                onPicked(
-                    date
-                        .atTime(timeState.hour, timeState.minute)
-                        .atZone(zone)
-                        .toInstant()
-                        .toEpochMilli(),
-                )
+                val combined = (chosenDate ?: initial.toLocalDate())
+                    .atTime(timeState.hour, timeState.minute)
+                    .atZone(zone)
+                    .toInstant()
+                    .toEpochMilli()
+                val resolved = if (chosenDate == null) {
+                    TimeEditLogic.resolveDialedTime(combined, nowMillis)
+                } else {
+                    combined
+                }
+                onPicked(resolved)
             }) { Text("OK") }
         },
         dismissButton = {

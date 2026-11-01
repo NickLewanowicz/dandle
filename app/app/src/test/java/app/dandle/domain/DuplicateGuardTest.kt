@@ -21,9 +21,9 @@ class DuplicateGuardTest {
         solid: Boolean? = null,
     ) = Event(
         localUuid = "local-1",
-        serverId = 7,
+        serverId = "7",
         type = type,
-        childId = 1,
+        childId = "1",
         startMillis = now - startMinusMinutes * 60_000,
         endMillis = now - startMinusMinutes * 60_000 + durationMinutes * 60_000,
         wet = wet,

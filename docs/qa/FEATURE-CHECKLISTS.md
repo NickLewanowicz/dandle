@@ -234,6 +234,62 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **JVM tests:** `TimerSceneTest` (motif mapping + WCAG AA ≥4.5:1 for every text/surface pair), `FeedingCascadeTest` (collapse state machine), `WidgetStopDeepLinkTest` (guard opens the timer's card).
 
+## 12. Login rebrand & mode picker (brief 04)
+
+**Goal:** every install lands on the Dandle brand block + "Where should your data live?" picker; each mode opens its own sub-flow; the server flow is byte-for-byte unchanged; stored-session re-auth skips the picker.
+
+**Steps**
+1. `scripts/qa/fresh-install-login.sh` — picker → server card → URL → cleartext → dashboard (regression).
+2. `scripts/qa/ui-tap-tag.sh login/mode_device` — device child setup; `login/child_submit` disabled reasons; future birth date field error.
+3. `scripts/qa/ui-tap-tag.sh login/mode_cloud` — cloud form; mismatch gates submit; passphrase warning visible; CREATE submit raises the confirm dialog ("Save your passphrase somewhere safe.", `login/cloud_create_confirm_ok` proceeds, Go back keeps drafts); wrong-passphrase banner distinct from bad credentials (see checklist 14).
+4. Verify back behavior: any sub-flow's `login/back` returns to the picker with typed drafts intact.
+5. Verify session-expired re-auth lands directly on the URL step (no picker).
+
+**Tags:** `login/mode_device`, `login/mode_server`, `login/mode_cloud`, `login/back`, `login/child_name`, `login/child_birth_date`, `login/child_date_pick`, `login/child_submit`, `login/cloud_tab/sign_in`, `login/cloud_tab/create`, `login/cloud_username`, `login/cloud_password`, `login/cloud_passphrase`, `login/cloud_passphrase_confirm`, `login/cloud_passphrase_warning`, `login/cloud_submit`, `login/cloud_create_confirm`, `login/cloud_create_confirm_ok`, `login/logo`, `login/background_art`.
+
+**Expected server requests:** server mode unchanged (csrf → 302 → profile → children). Device mode: none. Cloud mode: PocketBase `auth-with-password` / user record create only at auth time.
+
+**Expected UI states:** picker (fresh) / URL step / credentials / cleartext dialog / error banners / child setup / cloud form — all in light+dark with the tinted background art.
+
+**JVM tests:** `LoginModePickerTest` (picker landing, drafts survive back, device flow persists LOCAL session, cloud gating), `LoginProgressiveStepsTest` + `LoginApiKeyModeTest` (server flow regression), `MainActivitySmokeTest` (picker renders, cards advance).
+
+## 13. On-device backend (brief 05 §4)
+
+**Goal:** a serverless install tracks with zero network and zero sync debt; sign out is a wipe.
+
+**Steps**
+1. Picker → device mode → child setup → dashboard (no network at any step — `scripts/qa/applog.sh` shows no BB/API calls).
+2. `scripts/qa/offline.sh on` → save a diaper → row appears immediately; `dashboard/sync_chip` shows no unsynced count; outbox empty.
+3. Long-press a row: no web-app hint; Quick Edit still opens. Edit + save: identity stable (no duplicate rows).
+4. Sign out: dialog copy "This permanently clears all data on this device. There is no server copy." → confirm → picker; device data gone.
+
+**Tags:** `login/mode_device`, `dashboard/quick_action/CHANGE`, `dashboard/sync_chip`, `dashboard/timeline`.
+
+**Expected server requests:** none, ever.
+
+**Expected UI states:** child setup validation; offline save is instant and clean (no pending badge).
+
+**JVM tests:** `LocalBackendTest` (inline drain, minted stable ids — the "synced ⇒ serverId != null" invariant, delete completes, unsent 0, pull success, LWW policy off).
+
+## 14. Dandle Cloud — encrypted sync (brief 05 §5)
+
+**Goal:** events sync to dandle.pockethost.io with the server storing only ciphertext; a passphrase works across devices; a wrong passphrase fails distinctly.
+
+**Steps**
+1. Create account (unique username) → child setup → save a feeding.
+2. Zero-knowledge check: superuser GET of the user's `sync_records` shows `payload` = base64 ciphertext (no plaintext domain content); `type`/`client_updated` plaintext by design (partial encryption, brief 05 §5.1).
+3. Sign out → sign in (same username + password + passphrase) → timeline pulls down decrypted.
+4. Wrong passphrase → "That passphrase doesn't unlock this account's data." (distinct banner, passphrase field error).
+5. Server-side rules pinned by the 2026-11-01 smoke: cross-user isolation (0 records for another user), hard DELETE rejected (tombstone-only), tombstone PATCH ok.
+
+**Tags:** `login/mode_cloud`, `login/cloud_*`, `dashboard/timeline`.
+
+**Expected server requests:** `POST /api/collections/users/auth-with-password`, `POST/PATCH/GET /api/collections/sync_records/records` (TLS).
+
+**Expected UI states:** mismatch live error; muted loss warning; wrong-passphrase banner; offline banner "Couldn't reach Dandle Cloud…".
+
+**JVM tests:** `CryptoTest` (HKDF RFC 5869 vector, Argon2id, envelope round-trip, wrong-passphrase, AAD swap rejection, fresh nonce), `LocalBackendTest` LWW tombstone merge (shared merge path).
+
 ## TEMPLATE (copy for every new feature)
 
 ## N. `<Feature name>` (spec §`<ref>`)

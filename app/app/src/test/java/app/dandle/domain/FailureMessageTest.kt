@@ -22,9 +22,9 @@ class FailureMessageTest {
 
     private fun clashEvent(type: EventType = EventType.SLEEP) = Event(
         localUuid = "clash",
-        serverId = 4,
+        serverId = "4",
         type = type,
-        childId = 1,
+        childId = "1",
         startMillis = atHour(13, 15),
         endMillis = atHour(14, 0),
         syncState = SyncState.SYNCED,
@@ -36,7 +36,7 @@ class FailureMessageTest {
             reason = "Another entry intersects the specified time period. " +
                 "Conflicting entry: Sleep (10/16/26 01:15 PM - 10/16/26 02:00 PM)",
             conflictUiPath = "sleep",
-            conflictServerId = 4,
+            conflictServerId = "4",
             clash = clashEvent(),
         )
         // Format follows the DEVICE localized time (persona round 2: the dialog must
@@ -55,7 +55,7 @@ class FailureMessageTest {
             reason = "Another entry intersects the specified time period. " +
                 "Conflicting entry: Sleep (11/19/17 03:00 - 11/19/17 04:30)",
             conflictUiPath = "sleep",
-            conflictServerId = 4,
+            conflictServerId = "4",
         )
         assertEquals("This overlaps the 03:00–04:30 nap.", message)
     }
@@ -65,7 +65,7 @@ class FailureMessageTest {
         val message = FailureMessage.translate(
             reason = "Another entry intersects the specified time period.",
             conflictUiPath = "feedings",
-            conflictServerId = 9,
+            conflictServerId = "9",
         )
         assertEquals("This overlaps an existing feed.", message)
     }

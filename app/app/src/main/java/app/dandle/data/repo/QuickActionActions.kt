@@ -28,14 +28,14 @@ class QuickActionActions(
 ) {
 
     /** The child widgets act on: persisted selection, falling back to the first child (spec §2). */
-    suspend fun activeChildId(): Long? =
+    suspend fun activeChildId(): String? =
         sessionStore.sessionFlow.firstOrNull()?.activeChildId
             ?: childRepository.children.firstOrNull()?.firstOrNull()?.id
 
-    suspend fun runningTimer(kind: EventType, childId: Long): RunningTimer? =
+    suspend fun runningTimer(kind: EventType, childId: String): RunningTimer? =
         timerRepository.findRunning(kind, childId)
 
-    suspend fun startTimer(kind: EventType, childId: Long): RunningTimer =
+    suspend fun startTimer(kind: EventType, childId: String): RunningTimer =
         timerRepository.start(kind, childId)
 
     suspend fun discardTimer(timer: RunningTimer) = timerRepository.discard(timer)
@@ -44,6 +44,6 @@ class QuickActionActions(
     fun stopGuardNeeded(timer: RunningTimer): Boolean =
         StopGuard.shouldConfirm(serverClock.nowMillis() - timer.startedAtMillis)
 
-    suspend fun latestEvent(childId: Long, type: EventType): Event? =
+    suspend fun latestEvent(childId: String, type: EventType): Event? =
         eventRepository.latestByType(childId, type)
 }

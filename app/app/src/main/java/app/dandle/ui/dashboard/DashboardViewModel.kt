@@ -100,6 +100,8 @@ data class DashboardUiState(
     val unsentCount: Int = 0,
     val sessionExpired: Boolean = false,
     val serverUrl: String? = null,
+    /** Active session backend (brief 05 §3) — gates server-only affordances (web deep link). */
+    val backend: app.dandle.data.backend.Backend = app.dandle.data.backend.Backend.BABYBUDDY,
     /** One-shot: show the long-press hint snackbar on the first populated timeline. */
     val showLongPressHint: Boolean = false,
 )
@@ -137,7 +139,7 @@ class DashboardViewModel(
      * on every cold-start widget stop tap (QA 2026-10-19). Deep-link handling awaits this.
      */
     private val uiStateConstructed = kotlinx.coroutines.CompletableDeferred<Unit>()
-    private val activeChildId = MutableStateFlow<Long?>(null)
+    private val activeChildId = MutableStateFlow<String?>(null)
     private val refreshing = MutableStateFlow(false)
     private val openPanel = MutableStateFlow<OpenPanel?>(null)
     private val duplicatePrompt = MutableStateFlow<DuplicatePrompt?>(null)
@@ -412,6 +414,7 @@ class DashboardViewModel(
             unsentCount = core.unsentCount,
             sessionExpired = sessionCore.session.sessionExpired,
             serverUrl = sessionCore.session.serverUrl,
+            backend = sessionCore.session.backend,
             showLongPressHint = showLongPressHint.value,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
@@ -421,10 +424,13 @@ class DashboardViewModel(
         uiStateConstructed.complete(Unit)
     }
 
-    /** Shows the long-press hint once, on the first populated timeline render (UX spec §2). */
+    /** Shows the long-press hint once, on the first populated timeline render (UX spec §2).
+     *  Server backends only — LOCAL/Cloud have no web UI to escape to (brief 05 §4). */
     fun maybeShowLongPressHint() {
         if (showLongPressHint.value) return
         viewModelScope.launch {
+            val backend = container.sessionStore.sessionFlow.firstOrNull()?.backend
+            if (backend != app.dandle.data.backend.Backend.BABYBUDDY) return@launch
             if (!quickActions.wasLongPressHintShown() &&
                 totalTimelineCount.value > 0 &&
                 uiState.value.timeline.isNotEmpty()
@@ -441,7 +447,7 @@ class DashboardViewModel(
 
     // -- Child selection -----------------------------------------------------------
 
-    fun selectChild(childId: Long) {
+    fun selectChild(childId: String) {
         app.dandle.log.BbLog.d(TAG_UI, "child switch -> $childId")
         val outgoing = openPanel.value
         val previousChildId = activeChildId.value
@@ -700,7 +706,7 @@ class DashboardViewModel(
         heldSave = null
     }
 
-    private suspend fun commitSave(type: EventType, childId: Long, draft: EventDraft, timer: RunningTimer?) {
+    private suspend fun commitSave(type: EventType, childId: String, draft: EventDraft, timer: RunningTimer?) {
         val created = if (type.isTimed) {
             val running = timer ?: timerRepo.findRunning(type, childId) ?: return
             timerRepo.stopAndSave(running, draft)
@@ -718,7 +724,7 @@ class DashboardViewModel(
         app.dandle.widget.WidgetRefresher.refreshAll(appContext)
     }
 
-    private suspend fun openPanelFor(type: EventType, childId: Long) {
+    private suspend fun openPanelFor(type: EventType, childId: String) {
         app.dandle.log.BbLog.d(TAG_UI, "openPanelFor ${type.name} child=$childId")
         // One editor at a time (original app): persist the outgoing panel closed, keep values.
         openPanel.value?.takeIf { it.type != type }?.let { current ->
@@ -745,7 +751,7 @@ class DashboardViewModel(
     }
 
     /** Stored field values for this child+type; feeding defaults learn per child (spec §3.1). */
-    private suspend fun panelDraftFor(type: EventType, childId: Long): PanelDraft {
+    private suspend fun panelDraftFor(type: EventType, childId: String): PanelDraft {
         val stored = quickActions.panel(childId, type.name) ?: PanelDraft()
         if (type == EventType.FEEDING && stored.feedingType == null) {
             val def = quickActions.feedingDefault(childId)
@@ -818,6 +824,11 @@ class DashboardViewModel(
 
     /** Long-press → same entry on the Baby Buddy web UI (spec §4.2). Null when unsynced. */
     fun webUrlFor(event: Event): String? {
+        // P2 (QA 2026-10-31): the web escape hatch is a BABYBUDDY-server affordance only
+        // (brief 05 §4). SessionStore.clear() deliberately KEEPS server_url for login pre-fill,
+        // so in LOCAL/CLOUD mode the stored URL alone must never re-arm the deep link — gate on
+        // the active backend (mirrors maybeShowLongPressHint's server-only rule).
+        if (uiState.value.backend != app.dandle.data.backend.Backend.BABYBUDDY) return null
         val serverId = event.serverId ?: return null
         val server = uiState.value.serverUrl?.trimEnd('/') ?: return null
         return "$server/${event.type.uiPath}/$serverId/"
@@ -993,7 +1004,7 @@ class DashboardViewModel(
 
     // -- Helpers -----------------------------------------------------------------------
 
-    private fun PanelDraft.toEventDraft(type: EventType, childId: Long, now: Long): EventDraft {
+    private fun PanelDraft.toEventDraft(type: EventType, childId: String, now: Long): EventDraft {
         val amount = amountText.trim().replace(',', '.').toDoubleOrNull()?.coerceAtLeast(0.0)
         val startAdjust = startedMinutesAgo * 60_000L
         return EventDraft(
@@ -1027,6 +1038,22 @@ class DashboardViewModel(
         editState.value?.let { "${it.event.type.name} ${it.event.localUuid}" } ?: "none"
 
     companion object {
+        /**
+         * P2 (QA 2026-10-31): the sign-out dialog copy is three-way — the removed
+         * `activeChildIsLocalBackend` (backend != BABYBUDDY) conflated LOCAL and CLOUD,
+         * showing cloud users a device-wipe warning that erases their cloud copy from the
+         * picture. Pure + companion so it is testable without a ViewModel/container; the
+         * dialog derives from the UiState's backend (already session-driven).
+         */
+        fun signOutCopyFor(backend: app.dandle.data.backend.Backend): String = when (backend) {
+            app.dandle.data.backend.Backend.BABYBUDDY ->
+                "This clears the stored key and local data on this device. Data on the server is untouched."
+            app.dandle.data.backend.Backend.LOCAL ->
+                "This permanently clears all data on this device. There is no server copy."
+            app.dandle.data.backend.Backend.CLOUD ->
+                "This clears this device's copy. Your encrypted data stays safe in Dandle Cloud."
+        }
+
         const val TIMELINE_PAGE = 30
         const val TIMELINE_PAGE_PER_TYPE = 20
         const val INITIAL_FETCH_LIMIT_PER_TYPE = 50

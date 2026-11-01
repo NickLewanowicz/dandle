@@ -22,7 +22,7 @@ sealed interface BackendError {
         val rawBody: String?,
         val displayReason: String?,
         val conflictUiPath: String? = null,
-        val conflictServerId: Long? = null,
+        val conflictServerId: String? = null,
     ) : BackendError
 
     /** The targeted record no longer exists server-side. */
@@ -43,8 +43,8 @@ class BackendException(val error: BackendError) : Exception(error.toString())
 
 /** Result of a single push attempt (brief 05 §1). */
 sealed interface PushResult {
-    /** Landed; carries the server-assigned record id (CREATE only). */
-    data class Ok(val serverId: Long) : PushResult
+    /** Landed; carries the server-assigned record id (CREATE only), backend-native as a string. */
+    data class Ok(val serverId: String) : PushResult
 
     /** Delete landed, or the record was already gone — both leave the server without the row. */
     data object Deleted : PushResult

@@ -51,7 +51,7 @@ class QuickActionsConfigActivity : ComponentActivity() {
         val container = (application as App).container
         setContent {
             BabyBuddyNextTheme {
-                var childId by remember { mutableStateOf<Long?>(null) }
+                var childId by remember { mutableStateOf<String?>(null) }
                 var slots by remember { mutableStateOf(QuickActionsWidget.DEFAULT_SLOTS) }
                 val children by container.childRepository.children
                     .collectAsStateWithLifecycle(initialValue = emptyList())

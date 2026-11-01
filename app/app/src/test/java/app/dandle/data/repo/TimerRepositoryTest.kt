@@ -98,7 +98,7 @@ class TimerRepositoryTest {
             requestDrain = { },
         )
         timerRepo = TimerRepository(
-            timerMirror = app.dandle.data.backend.BabyBuddyTimerMirror({ api }),
+            timerMirrorProvider = { app.dandle.data.backend.BabyBuddyTimerMirror({ api }) },
             db = db,
             eventRepository = eventRepo,
             clock = clock,
@@ -118,8 +118,8 @@ class TimerRepositoryTest {
 
     @Test
     fun `start is idempotent per child and kind - re-tap focuses instead of duplicating`() = runTest {
-        val first = timerRepo.start(EventType.SLEEP, childId = 1)
-        val second = timerRepo.start(EventType.SLEEP, childId = 1)
+        val first = timerRepo.start(EventType.SLEEP, childId = "1")
+        val second = timerRepo.start(EventType.SLEEP, childId = "1")
         assertEquals(first.localId, second.localId)
         assertEquals(first.startedAtMillis, second.startedAtMillis)
         assertEquals(1, db.timerDao().snapshot().size)
@@ -127,44 +127,44 @@ class TimerRepositoryTest {
 
     @Test
     fun `same kind for a different child is a separate timer`() = runTest {
-        timerRepo.start(EventType.SLEEP, childId = 1)
-        timerRepo.start(EventType.SLEEP, childId = 2)
+        timerRepo.start(EventType.SLEEP, childId = "1")
+        timerRepo.start(EventType.SLEEP, childId = "2")
         assertEquals(2, db.timerDao().snapshot().size)
     }
 
     @Test
     fun `offline start still runs the timer locally`() = runTest {
         // No scripted 201 → the createTimer call 500s; the timer must survive.
-        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
+        val timer = timerRepo.start(EventType.SLEEP, childId = "1")
         assertNull(timer.serverTimerId)
-        assertNotNull(timerRepo.findRunning(EventType.SLEEP, 1))
+        assertNotNull(timerRepo.findRunning(EventType.SLEEP, "1"))
     }
 
     @Test
     fun `stopAndSave stamps start from the timer and end from the server clock`() = runTest {
         responses += timerCreatedResponse(11, "2025-10-09T03:31:30Z")
-        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
+        val timer = timerRepo.start(EventType.SLEEP, childId = "1")
         responses += MockResponse().setResponseCode(204) // timer delete on save
 
         timerRepo.stopAndSave(
             timer,
             EventDraft(
                 type = EventType.SLEEP,
-                childId = 1,
+                childId = "1",
                 startMillis = 0, // overridden by the timer's start
                 endMillis = 0,   // overridden by the server's now
                 noteText = "night sleep",
             ),
         )
 
-        val events = db.eventDao().observeTimeline(1).first()
+        val events = db.eventDao().observeTimeline("1").first()
         assertEquals(1, events.size)
         val saved = events.single()
         assertEquals(timer.startedAtMillis, saved.startMillis)
         assertEquals(serverNow, saved.endMillis)
         assertEquals(SyncState.PENDING.name, saved.syncState)
         // Timer row is gone after save.
-        assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
+        assertNull(timerRepo.findRunning(EventType.SLEEP, "1"))
         // The server timer delete was attempted as part of save.
         assertTrue(seenRequests.any { it == "DELETE /api/timers/11/" })
     }
@@ -172,7 +172,7 @@ class TimerRepositoryTest {
     @Test
     fun `panel started-ago adjustment backdates only the entry start (T2)`() = runTest {
         responses += timerCreatedResponse(12, "2025-10-09T03:31:30Z")
-        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
+        val timer = timerRepo.start(EventType.SLEEP, childId = "1")
         responses += MockResponse().setResponseCode(204) // timer delete on save
 
         val adjust = 20 * 60_000L
@@ -180,7 +180,7 @@ class TimerRepositoryTest {
             timer,
             EventDraft(
                 type = EventType.SLEEP,
-                childId = 1,
+                childId = "1",
                 startMillis = 0, // overridden: timer start minus the panel adjustment
                 endMillis = 0,   // overridden by the server's now
                 noteText = "nap that started early",
@@ -188,28 +188,28 @@ class TimerRepositoryTest {
             ),
         )
 
-        val saved = db.eventDao().observeTimeline(1).first().single()
+        val saved = db.eventDao().observeTimeline("1").first().single()
         assertEquals("start = timer start backdated by the adjust", timer.startedAtMillis - adjust, saved.startMillis)
         assertEquals("end stays the stop time (duration rules unchanged)", serverNow, saved.endMillis)
         assertEquals(serverNow - saved.startMillis, saved.endMillis - saved.startMillis)
-        assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
+        assertNull(timerRepo.findRunning(EventType.SLEEP, "1"))
     }
 
     @Test
     fun `discard removes the timer without logging anything`() = runTest {
-        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
+        val timer = timerRepo.start(EventType.SLEEP, childId = "1")
         timerRepo.discard(timer)
-        assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
-        assertEquals(0, db.eventDao().observeTimeline(1).first().size)
+        assertNull(timerRepo.findRunning(EventType.SLEEP, "1"))
+        assertEquals(0, db.eventDao().observeTimeline("1").first().size)
     }
 
     @Test
     fun `restore - server timers we track are not duplicated on refresh`() = runTest {
         responses += timerCreatedResponse(21, "2025-10-09T04:00:00Z")
-        val timer = timerRepo.start(EventType.SLEEP, childId = 1)
-        timerRepo.refresh(childId = 1) // server still lists timer 21
+        val timer = timerRepo.start(EventType.SLEEP, childId = "1")
+        timerRepo.refresh(childId = "1") // server still lists timer 21
         assertEquals(1, db.timerDao().snapshot().size)
-        assertEquals(timer.localId, timerRepo.findRunning(EventType.SLEEP, 1)!!.localId)
+        assertEquals(timer.localId, timerRepo.findRunning(EventType.SLEEP, "1")!!.localId)
     }
 
     @Test
@@ -222,10 +222,10 @@ class TimerRepositoryTest {
                 {"id":31,"child":1,"name":"Sleep-BBapp:2","start":"2025-10-09T04:10:00Z"}
             ]}""",
         )
-        timerRepo.refresh(childId = 1)
-        val adopted = timerRepo.findRunning(EventType.SLEEP, 1)
+        timerRepo.refresh(childId = "1")
+        val adopted = timerRepo.findRunning(EventType.SLEEP, "1")
         assertNotNull(adopted)
-        assertEquals(31L, adopted!!.serverTimerId)
+        assertEquals("31", adopted!!.serverTimerId)
         assertEquals(
             app.dandle.domain.Iso8601.parse("2025-10-09T04:10:00Z"),
             adopted.startedAtMillis,
@@ -239,52 +239,52 @@ class TimerRepositoryTest {
                 {"id":41,"child":1,"name":"Manual timer","start":"2025-10-09T04:20:00Z"}
             ]}""",
         )
-        timerRepo.refresh(childId = 1)
-        assertNull(timerRepo.findRunning(EventType.SLEEP, 1))
+        timerRepo.refresh(childId = "1")
+        assertNull(timerRepo.findRunning(EventType.SLEEP, "1"))
         assertEquals(0, db.timerDao().snapshot().size)
     }
 
     @Test
     fun `refresh drops a synced timer that vanished from the server (stopped elsewhere)`() = runTest {
         responses += timerCreatedResponse(21, "2025-10-09T04:00:00Z")
-        timerRepo.start(EventType.SLEEP, childId = 1)
+        timerRepo.start(EventType.SLEEP, childId = "1")
         // The timer was stopped on another device / via the web UI: the server lists nothing.
         responses += MockResponse().setResponseCode(200).setBody(
             """{"count":0,"next":null,"previous":null,"results":[]}""",
         )
-        timerRepo.refresh(childId = 1)
-        assertNull("a server-deleted timer must not keep running locally", timerRepo.findRunning(EventType.SLEEP, 1))
+        timerRepo.refresh(childId = "1")
+        assertNull("a server-deleted timer must not keep running locally", timerRepo.findRunning(EventType.SLEEP, "1"))
         assertEquals(0, db.timerDao().snapshot().size)
     }
 
     @Test
     fun `refresh keeps another child's synced timer (listing is per child)`() = runTest {
         responses += timerCreatedResponse(22, "2025-10-09T04:00:00Z")
-        timerRepo.start(EventType.SLEEP, childId = 2)
+        timerRepo.start(EventType.SLEEP, childId = "2")
         // Child 1's timer list is empty — it says nothing about child 2's timer.
         responses += MockResponse().setResponseCode(200).setBody(
             """{"count":0,"next":null,"previous":null,"results":[]}""",
         )
-        timerRepo.refresh(childId = 1)
-        assertNotNull(timerRepo.findRunning(EventType.SLEEP, childId = 2))
+        timerRepo.refresh(childId = "1")
+        assertNotNull(timerRepo.findRunning(EventType.SLEEP, childId = "2"))
         assertEquals(1, db.timerDao().snapshot().size)
     }
 
     @Test
     fun `refresh keeps an offline-created timer (no server id yet)`() = runTest {
-        timerRepo.start(EventType.SLEEP, childId = 1) // unscripted create → 500 → local-only
+        timerRepo.start(EventType.SLEEP, childId = "1") // unscripted create → 500 → local-only
         responses += MockResponse().setResponseCode(200).setBody(
             """{"count":0,"next":null,"previous":null,"results":[]}""",
         )
-        timerRepo.refresh(childId = 1)
-        assertNotNull("an offline timer is still waiting to sync — it must survive", timerRepo.findRunning(EventType.SLEEP, 1))
+        timerRepo.refresh(childId = "1")
+        assertNotNull("an offline timer is still waiting to sync — it must survive", timerRepo.findRunning(EventType.SLEEP, "1"))
     }
 
     // -- Process death: the Room row is the timer -----------------------------------
 
     /** A brand-new repository stack over the same Room instance (fresh "process"). */
     private fun restartedTimerRepo() = TimerRepository(
-        timerMirror = app.dandle.data.backend.BabyBuddyTimerMirror({ api }),
+        timerMirrorProvider = { app.dandle.data.backend.BabyBuddyTimerMirror({ api }) },
         db = db,
         eventRepository = eventRepo,
         clock = Clock { wallNow },
@@ -294,13 +294,13 @@ class TimerRepositoryTest {
     @Test
     fun `timer started offline survives a restart and elapsed comes from the persisted start`() = runTest {
         // Offline start: no scripted 201 → local row only, no server timer.
-        val started = timerRepo.start(EventType.SLEEP, childId = 1)
+        val started = timerRepo.start(EventType.SLEEP, childId = "1")
         assertNull(started.serverTimerId)
 
         // 12m34s later the process is dead and restarted: a fresh repository reads Room.
         wallNow += 12 * 60_000L + 34_000L
         val restarted = restartedTimerRepo()
-        val restored = restarted.findRunning(EventType.SLEEP, childId = 1)!!
+        val restored = restarted.findRunning(EventType.SLEEP, childId = "1")!!
         assertEquals("start survives verbatim", started.startedAtMillis, restored.startedAtMillis)
 
         // The dashboard's live-counter math (serverClock.nowMillis() - startedAtMillis):
@@ -312,13 +312,13 @@ class TimerRepositoryTest {
         // Stopping after the restart still saves the ORIGINAL start with the fresh end.
         restarted.stopAndSave(
             restored,
-            EventDraft(type = EventType.SLEEP, childId = 1, startMillis = 0, endMillis = 0),
+            EventDraft(type = EventType.SLEEP, childId = "1", startMillis = 0, endMillis = 0),
         )
-        val saved = db.eventDao().observeTimeline(1).first().single()
+        val saved = db.eventDao().observeTimeline("1").first().single()
         assertEquals(started.startedAtMillis, saved.startMillis)
         assertEquals(wallNow + 90_000L, saved.endMillis)
         assertEquals(12 * 60_000L + 34_000L, saved.endMillis - saved.startMillis)
-        assertNull(restarted.findRunning(EventType.SLEEP, childId = 1))
+        assertNull(restarted.findRunning(EventType.SLEEP, childId = "1"))
     }
 
     @Test
@@ -326,15 +326,15 @@ class TimerRepositoryTest {
         // Start at 23:55:00Z server time, stop at 00:07:00Z the next UTC day: no local-field
         // day arithmetic may leak into the duration.
         wallNow = Iso8601.parse("2025-10-09T23:55:00Z") - 90_000L
-        val started = timerRepo.start(EventType.SLEEP, childId = 1)
+        val started = timerRepo.start(EventType.SLEEP, childId = "1")
         wallNow = Iso8601.parse("2025-10-10T00:07:00Z") - 90_000L
 
         restartedTimerRepo().stopAndSave(
             started,
-            EventDraft(type = EventType.SLEEP, childId = 1, startMillis = 0, endMillis = 0),
+            EventDraft(type = EventType.SLEEP, childId = "1", startMillis = 0, endMillis = 0),
         )
 
-        val saved = db.eventDao().observeTimeline(1).first().single()
+        val saved = db.eventDao().observeTimeline("1").first().single()
         assertEquals(Iso8601.parse("2025-10-09T23:55:00Z"), saved.startMillis)
         assertEquals(Iso8601.parse("2025-10-10T00:07:00Z"), saved.endMillis)
         assertEquals(12 * 60_000L, saved.endMillis - saved.startMillis)

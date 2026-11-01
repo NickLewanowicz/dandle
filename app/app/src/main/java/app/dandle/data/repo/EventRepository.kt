@@ -33,6 +33,8 @@ class EventRepository(
     private val drainer: OutboxDrainer,
     /** Best-effort one-shot drain trigger after writes (e.g. SyncWorker.enqueue). */
     private val requestDrain: suspend () -> Unit,
+    /** CLOUD merges by LWW + tombstones; server-authoritative backends overwrite SYNCED rows. */
+    private val lwwMerge: () -> Boolean = { false },
 ) {
 
     private val eventDao get() = db.eventDao()
@@ -62,14 +64,14 @@ class EventRepository(
      * every local write boundary (create/edit/delete/retry/refresh/drain). Duplicate emissions
      * are harmless — the uiState StateFlow dedupes structurally.
      */
-    fun observeTimeline(childId: Long): Flow<List<Event>> =
+    fun observeTimeline(childId: String): Flow<List<Event>> =
         kotlinx.coroutines.flow.merge(
             eventDao.observeTimeline(childId),
             timelineWrites.map { eventDao.timeline(childId) },
         ).map { rows -> rows.map { it.toModel() } }
 
     /** Newest same-type entry for the child — the duplicate guard's probe (spec §3.7). */
-    suspend fun latestByType(childId: Long, type: EventType): Event? =
+    suspend fun latestByType(childId: String, type: EventType): Event? =
         eventDao.latestByType(childId, type.name)?.toModel()
 
     /** One event by local id (Quick Edit sheet open — also covers FAILED rows). */
@@ -235,16 +237,25 @@ class EventRepository(
     suspend fun refresh(limitPerType: Int = 50): RefreshResult {
         return try {
             val fetched = puller.pullRecentEvents(limitPerType)
+            val lww = lwwMerge()
             val merged = fetched.mapNotNull { incoming ->
                 val existing = eventDao.byServerId(incoming.type, incoming.serverId!!)
                 when {
+                    // Cloud tombstone: adopt it (hide the row locally) wherever the record lives.
+                    lww && incoming.deleted -> incoming.copy(
+                        localUuid = existing?.localUuid ?: incoming.localUuid,
+                        createdAtMillis = existing?.createdAtMillis ?: 0,
+                    )
                     existing == null -> incoming
+                    // PENDING/FAILED local edit wins over the (stale) server copy.
+                    SyncState.valueOf(existing.syncState) != SyncState.SYNCED -> null
+                    // Cloud LWW: the newer client write wins (server-clock-adjusted stamps).
+                    lww && existing.updatedAtMillis > incoming.updatedAtMillis -> null
                     SyncState.valueOf(existing.syncState) == SyncState.SYNCED -> incoming.copy(
                         localUuid = existing.localUuid,
                         createdAtMillis = existing.createdAtMillis,
                         updatedAtMillis = existing.updatedAtMillis,
                     )
-                    // PENDING/FAILED local edit wins over the (stale) server copy.
                     else -> null
                 }
             }

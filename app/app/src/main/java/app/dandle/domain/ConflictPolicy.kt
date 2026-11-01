@@ -21,8 +21,8 @@ import kotlinx.serialization.json.jsonPrimitive
 data class ConflictRef(
     /** Web-UI path segment of the conflicting entry, e.g. "sleep" (research doc §7). */
     val uiPath: String,
-    /** Server id of the conflicting entry. */
-    val serverId: Long,
+    /** Server id of the conflicting entry (backend-native id as a string). */
+    val serverId: String,
 )
 
 data class DrfError(
@@ -80,7 +80,7 @@ object ConflictPolicy {
     fun parseConflictLink(message: String): ConflictRef? {
         val href = Regex("""href="([^"]+)"""").find(message)?.groupValues?.get(1) ?: return null
         val match = Regex("""/([a-z-]+)/(\d+)/?$""").find(href) ?: return null
-        return ConflictRef(uiPath = match.groupValues[1], serverId = match.groupValues[2].toLong())
+        return ConflictRef(uiPath = match.groupValues[1], serverId = match.groupValues[2])
     }
 
     /** Removes HTML tags (the overlap message embeds an <a> element). */

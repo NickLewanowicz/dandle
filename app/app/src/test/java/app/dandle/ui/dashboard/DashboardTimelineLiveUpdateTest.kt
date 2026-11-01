@@ -122,7 +122,7 @@ class DashboardTimelineLiveUpdateTest {
         // in start() below, routing every API call to the MockWebServer.
         runBlocking {
             container.sessionStore.saveLogin(server.url("/").toString().trimEnd('/'), "key", "admin")
-            container.sessionStore.setActiveChild(1)
+            container.sessionStore.setActiveChild("1")
         }
         container.initDatabase(context)
         container.start()

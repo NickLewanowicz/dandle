@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -119,7 +119,7 @@ class CareDashboardWidget : GlanceAppWidget() {
     }
 
     companion object {
-        val KEY_CHILD_ID = longPreferencesKey("child_id")
+        val KEY_CHILD_ID = stringPreferencesKey("child_id")
         private fun rowKey(type: EventType) = booleanPreferencesKey("row_${type.name}")
 
         /** Default: all four canonical rows (spec §7.2). */
@@ -128,7 +128,17 @@ class CareDashboardWidget : GlanceAppWidget() {
                 .filter { prefs[rowKey(it)] ?: true }
                 .toSet()
 
-        suspend fun saveConfig(context: Context, id: GlanceId, childId: Long, visible: Set<EventType>) {
+        /**
+         * Type-safe legacy read (P1 QA 2026-10-31): the pre-refactor build saved "child_id"
+         * with [androidx.datastore.preferences.core.longPreferencesKey], and Preferences keys
+         * compare equal by NAME alone — a direct `prefs[KEY_CHILD_ID]` would
+         * ClassCastException the stored Long into String at the call site. Read the raw map
+         * so a legacy Long degrades to null; the next [saveConfig] write-heals to a String.
+         */
+        fun configuredChildId(prefs: Preferences): String? =
+            prefs.asMap()[KEY_CHILD_ID] as? String
+
+        suspend fun saveConfig(context: Context, id: GlanceId, childId: String, visible: Set<EventType>) {
             updateAppWidgetState(context, id) { prefs ->
                 prefs[KEY_CHILD_ID] = childId
                 EventType.entries.forEach { prefs[rowKey(it)] = it in visible }

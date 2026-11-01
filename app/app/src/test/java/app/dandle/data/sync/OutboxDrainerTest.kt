@@ -113,7 +113,7 @@ class OutboxDrainerTest {
         offsetMinutes: Int = 0,
     ) = EventDraft(
         type = EventType.CHANGE,
-        childId = 1,
+        childId = "1",
         startMillis = now - offsetMinutes * 60_000L,
         endMillis = now - offsetMinutes * 60_000L,
         wet = wet,
@@ -122,7 +122,7 @@ class OutboxDrainerTest {
 
     private fun feedingDraft() = EventDraft(
         type = EventType.FEEDING,
-        childId = 1,
+        childId = "1",
         startMillis = now - 900_000,
         endMillis = now,
         feedingType = "formula",
@@ -130,7 +130,7 @@ class OutboxDrainerTest {
         amount = 120.0,
     )
 
-    private suspend fun timeline() = db.eventDao().observeTimeline(1)
+    private suspend fun timeline() = db.eventDao().observeTimeline("1")
 
     private suspend fun allEvents() = timeline().first().map { it.toModel() }
 
@@ -157,7 +157,7 @@ class OutboxDrainerTest {
         assertEquals(OutboxDrainer.Outcome.Completed, outcome)
         val synced = allEvents().single()
         assertEquals(SyncState.SYNCED, synced.syncState)
-        assertEquals(948L, synced.serverId)
+        assertEquals("948", synced.serverId)
         assertTrue(outboxSnapshot().isEmpty())
         assertEquals(listOf("POST /api/changes/"), seenRequests)
 
@@ -206,9 +206,9 @@ class OutboxDrainerTest {
         assertEquals(SyncState.FAILED, failed.syncState)
         assertTrue(failed.failureReason!!.contains("intersects"))
         assertEquals("feedings", failed.conflictUiPath)
-        assertEquals(7L, failed.conflictServerId)
+        assertEquals("7", failed.conflictServerId)
         assertEquals(SyncState.SYNCED, synced.syncState)
-        assertEquals(77L, synced.serverId)
+        assertEquals("77", synced.serverId)
         assertTrue(outboxSnapshot().isEmpty()) // the doomed op is dropped, not retried forever
     }
 
@@ -369,12 +369,12 @@ class OutboxDrainerTest {
 
         assertEquals(SyncState.FAILED, failedOverlap.syncState)
         assertEquals("changes", failedOverlap.conflictUiPath)
-        assertEquals(7L, failedOverlap.conflictServerId)
+        assertEquals("7", failedOverlap.conflictServerId)
         assertEquals(SyncState.FAILED, failedField.syncState)
         assertTrue(failedField.failureReason!!.contains("amount"))
         assertFalse(failedField.failureReason!!.contains("<"))
         assertEquals(SyncState.SYNCED, synced.syncState)
-        assertEquals(31L, synced.serverId)
+        assertEquals("31", synced.serverId)
         assertTrue("all three ops resolved", outboxSnapshot().isEmpty())
         assertEquals(
             listOf("POST /api/changes/", "POST /api/feedings/", "POST /api/changes/"),
@@ -388,13 +388,13 @@ class OutboxDrainerTest {
         // Simulate a crash between the server's 201 and the outbox-op delete: the row already
         // carries its server id, but the op is still queued.
         val row = db.eventDao().byLocalUuid(created.localUuid)!!
-        db.eventDao().upsert(row.copy(serverId = 55, syncState = SyncState.SYNCED.name))
+        db.eventDao().upsert(row.copy(serverId = "55", syncState = SyncState.SYNCED.name))
 
         drainer().drain()
 
         assertTrue("no second POST may reach the server", seenRequests.isEmpty())
         assertTrue(outboxSnapshot().isEmpty())
-        assertEquals(55L, db.eventDao().byLocalUuid(created.localUuid)!!.serverId)
+        assertEquals("55", db.eventDao().byLocalUuid(created.localUuid)!!.serverId)
     }
 
     @Test
@@ -412,7 +412,7 @@ class OutboxDrainerTest {
         val failed = allEvents().single()
         assertEquals(SyncState.FAILED, failed.syncState)
         assertTrue(failed.failureReason!!.contains("solid"))
-        assertEquals("the entry stays addressable for Quick Edit / retry", 948L, failed.serverId)
+        assertEquals("the entry stays addressable for Quick Edit / retry", "948", failed.serverId)
         assertTrue(outboxSnapshot().isEmpty())
         assertEquals(listOf("POST /api/changes/", "PATCH /api/changes/948/"), seenRequests)
     }
@@ -465,7 +465,7 @@ class OutboxDrainerTest {
 
         val synced = allEvents().single()
         assertEquals(SyncState.SYNCED, synced.syncState)
-        assertEquals(63L, synced.serverId)
+        assertEquals("63", synced.serverId)
         assertTrue(outboxSnapshot().isEmpty())
         // Retry replays the entry the user authored, byte-identical — not a mutated copy.
         assertEquals(firstBody, server.takeRequest().body.readUtf8())
@@ -488,7 +488,7 @@ class OutboxDrainerTest {
 
         val op = outboxSnapshot().single()
         assertEquals("EDIT", op.opType)
-        assertEquals(948L, OutboxPayloads.decodeServerId(json, op.payload))
+        assertEquals("948", OutboxPayloads.decodeServerId(json, op.payload))
         assertEquals(SyncState.PENDING, allEvents().single().syncState)
 
         responses.add(
@@ -519,11 +519,11 @@ class OutboxDrainerTest {
         assertEquals(EventRepository.RefreshResult.Success, result)
         val events = allEvents()
         assertEquals(2, events.size)
-        val edited = events.first { it.serverId == 5L }
+        val edited = events.first { it.serverId == "5" }
         assertEquals(created.localUuid, edited.localUuid)
         assertEquals(SyncState.PENDING, edited.syncState)
         assertEquals(200.0, edited.amount!!, 0.0)
-        val fresh = events.first { it.serverId == 9L }
+        val fresh = events.first { it.serverId == "9" }
         assertEquals(SyncState.SYNCED, fresh.syncState)
         assertEquals("server:FEEDING:9", fresh.localUuid)
         // The queued EDIT op survived untouched — it is still the user's truth to replay.

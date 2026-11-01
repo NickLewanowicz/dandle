@@ -2,7 +2,17 @@
 title: "Brief 04: Login rebrand & data-mode picker"
 ---
 
-> **STATUS: Draft — awaiting owner approval.** UX spec reviewed by ux-designer persona (2026-10-31); implementation pairing with Brief 05 (the picker's device/cloud modes are enabled by Brief 05 phases 4–5).
+> **STATUS: Implemented (2026-11-01)** — owner approved in session; tagline D1 and art direction A applied; capture-flows updated for the picker; QA evidence in docs/flows/new-app/10-login.md.
+
+> **Amended 2026-11-01 after user-persona (Jordan) + ux-designer reviews:**
+> 1. **Picker stakes copy** — device card adds "Not shared.", cloud card adds "Starts empty.", and a muted line under the cards states data can't be moved between backends later (true in v1: switching is confirm-wipe).
+> 2. **Cloud create gate** — Create-account shows a non-skippable confirm dialog ("Save your passphrase somewhere safe.") before the account exists; sign-in is not gated. Tags `login/cloud_create_confirm(_ok)`.
+> 3. **Birth date optional** in device setup (blank → stored as today; "Optional — used to show your baby's age."), keeping the future-date validation when set.
+> 4. **Icons** — the spec originally named `Smartphone/Dns/CloudLock` from material-icons-extended, a dependency the project does not ship. Maintainer decision: do NOT add the extended set; server card uses core `Icons.Filled.Home`, device keeps the crawl glyph, cloud keeps the upload glyph.
+> 5. **Date-picker affordance** — the whole readOnly field opens the dialog (tag `login/child_birth_date` now clickable) plus a trailing `login/child_date_pick` button.
+> 6. **Motion section is CUT** (was over-specified as a requirement; the built screen ships zero decorative motion, which the budget prefers). Step switches are instant.
+> 7. Dead-button guard: the cloud card renders only when the cloud backend is compiled in (no silent no-op submits).
+> Review evidence: Jordan verdict "fix blockers 1–2, the bones are the best login flow I've used at 3 a.m."; ux-designer verdict "ready to ship, no blockers" with the deviations above.
 
 # Brief 04 — Login Rebrand & Data-Mode Picker
 

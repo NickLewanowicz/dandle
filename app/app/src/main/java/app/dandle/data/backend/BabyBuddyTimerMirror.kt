@@ -13,24 +13,24 @@ class BabyBuddyTimerMirror(
     private val apiProvider: () -> BabyBuddyApi,
 ) : TimerMirror {
 
-    override suspend fun create(childId: Long, kind: EventType, startIso: String): Long = wrap {
+    override suspend fun create(childId: String, kind: EventType, startIso: String): String = wrap {
         apiProvider().createTimer(
             app.dandle.data.api.TimerWriteDto(
-                child = childId,
+                child = childId.toLong(),
                 name = kind.serverTimerName,
                 start = startIso,
             )
-        ).id
+        ).id.toString()
     }
 
-    override suspend fun delete(serverTimerId: Long): Unit = wrap {
-        val response = apiProvider().deleteTimer(serverTimerId)
+    override suspend fun delete(serverTimerId: String): Unit = wrap {
+        val response = apiProvider().deleteTimer(serverTimerId.toLong())
         check(response.isSuccessful || response.code() == 404)
     }
 
-    override suspend fun listForChild(childId: Long): List<ServerTimer> = wrap {
-        apiProvider().listTimers(child = childId, limit = 100).results.map {
-            ServerTimer(id = it.id, name = it.name, childId = it.child, startIso = it.start)
+    override suspend fun listForChild(childId: String): List<ServerTimer> = wrap {
+        apiProvider().listTimers(child = childId.toLong(), limit = 100).results.map {
+            ServerTimer(id = it.id.toString(), name = it.name, childId = it.child?.toString(), startIso = it.start)
         }
     }
 

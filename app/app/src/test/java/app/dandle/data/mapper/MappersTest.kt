@@ -27,7 +27,7 @@ class MappersTest {
         )
         val entity = dto.toEntity()
         assertEquals("server:FEEDING:51", entity.localUuid)
-        assertEquals(51L, entity.serverId)
+        assertEquals("51", entity.serverId)
         assertEquals(EventType.FEEDING.name, entity.type)
         assertEquals(SyncState.SYNCED.name, entity.syncState)
         assertEquals(Iso8601.parse("2026-10-16T09:00:00-04:00"), entity.startMillis)
@@ -55,7 +55,7 @@ class MappersTest {
     fun `note draft write always carries time (PATCH must not re-stamp)`() {
         val draft = EventDraft(
             type = EventType.NOTE,
-            childId = 1,
+            childId = "1",
             startMillis = Iso8601.parse("2026-10-16T10:00:00Z"),
             endMillis = Iso8601.parse("2026-10-16T10:00:00Z"),
             noteText = "First smile!",
@@ -70,7 +70,7 @@ class MappersTest {
     fun `feeding draft write carries required type and method and omits nulls`() {
         val draft = EventDraft(
             type = EventType.FEEDING,
-            childId = 1,
+            childId = "1",
             startMillis = Iso8601.parse("2026-10-16T13:00:00Z"),
             endMillis = Iso8601.parse("2026-10-16T13:15:00Z"),
             feedingType = "breast milk",
@@ -87,7 +87,7 @@ class MappersTest {
     fun `pumping draft defaults amount to zero (server-required)`() {
         val draft = EventDraft(
             type = EventType.PUMPING,
-            childId = 1,
+            childId = "1",
             startMillis = 0,
             endMillis = 60_000,
         )

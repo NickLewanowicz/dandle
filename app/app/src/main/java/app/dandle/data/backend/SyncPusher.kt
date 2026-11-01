@@ -10,7 +10,7 @@ import app.dandle.domain.model.EventType
  */
 interface SyncPusher {
     suspend fun pushCreate(type: EventType, draft: EventDraft): PushResult
-    suspend fun pushEdit(type: EventType, serverId: Long, draft: EventDraft): PushResult
+    suspend fun pushEdit(type: EventType, serverId: String, draft: EventDraft): PushResult
 
     /**
      * 404 on delete counts as success ([PushResult.Deleted]) — another client may have beaten
@@ -18,5 +18,5 @@ interface SyncPusher {
      * reported as [BackendError.Http]; the drainer keeps the op queued (matching the historical
      * Response-based behavior where deletes never paused the queue).
      */
-    suspend fun pushDelete(type: EventType, serverId: Long): PushResult
+    suspend fun pushDelete(type: EventType, serverId: String): PushResult
 }

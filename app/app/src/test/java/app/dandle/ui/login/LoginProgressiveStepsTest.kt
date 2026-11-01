@@ -74,6 +74,13 @@ class LoginProgressiveStepsTest {
         )
     }
 
+    /** Brief 04: the picker is the landing; SERVER tests pick it first. */
+    private fun pickServer() {
+        assertEquals(LoginStep.MODE, viewModel.uiState.value.step)
+        viewModel.onModeSelected(LoginMode.SERVER)
+        assertEquals(LoginStep.URL, viewModel.uiState.value.step)
+    }
+
     @After
     fun tearDown() {
         Dispatchers.resetMain()
@@ -100,8 +107,8 @@ class LoginProgressiveStepsTest {
 
     @Test
     fun `a reachable url advances to the credentials step`() = runBlocking {
-        // Fresh state: step 1, and the probe button is gated on a non-blank URL.
-        assertEquals(LoginStep.URL, viewModel.uiState.value.step)
+        // Fresh state: the picker; picking SERVER lands on step 1 of the pinned flow.
+        pickServer()
         assertFalse(viewModel.uiState.value.canContinue)
         viewModel.onServerUrlChange(server.url("/").toString())
         assertTrue(viewModel.uiState.value.canContinue)
@@ -117,6 +124,7 @@ class LoginProgressiveStepsTest {
 
     @Test
     fun `an unreachable url stays on the url step with the unreachable banner`() = runBlocking {
+        pickServer()
         val url = server.url("/").toString()
         server.shutdown() // connection refused — LoginFlowTest's double-shutdown precedent
 
@@ -134,6 +142,7 @@ class LoginProgressiveStepsTest {
 
     @Test
     fun `editing the server url on the credentials step keeps the state consistent`() = runBlocking {
+        pickServer()
         viewModel.onServerUrlChange(server.url("/").toString())
         continueFromUrlToCredentials()
 
@@ -167,6 +176,7 @@ class LoginProgressiveStepsTest {
     @Test
     fun `submit before the credentials step is a no op`() = runBlocking {
         // Everything filled: only the step gating may block — and it must.
+        pickServer()
         viewModel.onServerUrlChange(server.url("/").toString())
         viewModel.onUsernameChange("user")
         viewModel.onPasswordChange("secret")

@@ -78,6 +78,8 @@ class LoginApiKeyModeTest {
             ),
             sessionStore = sessionStore,
         )
+        // Brief 04: the picker is the landing — this suite exercises the SERVER sub-flow.
+        viewModel.onModeSelected(LoginMode.SERVER)
     }
 
     @After

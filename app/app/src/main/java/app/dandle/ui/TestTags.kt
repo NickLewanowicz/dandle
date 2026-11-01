@@ -20,6 +20,31 @@ object TestTags {
     const val LOGIN_CONTINUE = "login/continue"
     const val LOGIN_SERVER_VERIFIED = "login/server_verified"
 
+    // Login rebrand + mode picker (brief 04)
+    const val LOGIN_LOGO = "login/logo"
+    const val LOGIN_BACKGROUND_ART = "login/background_art"
+    const val LOGIN_BACK = "login/back"
+    const val LOGIN_MODE_DEVICE = "login/mode_device"
+    const val LOGIN_MODE_SERVER = "login/mode_server"
+    const val LOGIN_MODE_CLOUD = "login/mode_cloud"
+    const val LOGIN_CHILD_NAME = "login/child_name"
+    const val LOGIN_CHILD_BIRTH_DATE = "login/child_birth_date"
+    /** The birth-date field's trailing "Pick" button (the whole field is also clickable). */
+    const val LOGIN_CHILD_DATE_PICK = "login/child_date_pick"
+    const val LOGIN_CHILD_SUBMIT = "login/child_submit"
+    const val LOGIN_CLOUD_TAB_SIGNIN = "login/cloud_tab/sign_in"
+    const val LOGIN_CLOUD_TAB_CREATE = "login/cloud_tab/create"
+    const val LOGIN_CLOUD_USERNAME = "login/cloud_username"
+    const val LOGIN_CLOUD_PASSWORD = "login/cloud_password"
+    const val LOGIN_CLOUD_PASSPHRASE = "login/cloud_passphrase"
+    const val LOGIN_CLOUD_PASSPHRASE_CONFIRM = "login/cloud_passphrase_confirm"
+    const val LOGIN_CLOUD_PASSPHRASE_WARNING = "login/cloud_passphrase_warning"
+    const val LOGIN_CLOUD_SUBMIT = "login/cloud_submit"
+    // P0 data-safety gate: create-account never reaches the network before this dialog.
+    const val LOGIN_CLOUD_CREATE_CONFIRM = "login/cloud_create_confirm"
+    /** The gate's confirm ("I've saved it — create account"). */
+    const val LOGIN_CLOUD_CREATE_CONFIRM_OK = "login/cloud_create_confirm_ok"
+
     // Dashboard (UX spec §2)
     const val DASHBOARD = "dashboard"
     const val DASHBOARD_CHILD_SWITCHER = "dashboard/child_switcher"

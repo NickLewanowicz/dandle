@@ -43,6 +43,24 @@ class ChildRepository(
         }
     }
 
+    /**
+     * On-device backend (brief 05 §4): mints and stores a local child. There is no server to
+     * validate against; birth time is unknown (null) and the slug is a local- prefixed id.
+     */
+    suspend fun createLocal(firstName: String, birthDate: String): Child {
+        val id = java.util.UUID.randomUUID().toString()
+        val entity = app.dandle.data.db.ChildEntity(
+            id = id,
+            firstName = firstName.trim(),
+            lastName = null,
+            birthDate = birthDate,
+            birthTime = null,
+            slug = "local-$id",
+        )
+        db.childDao().upsertAll(listOf(entity))
+        return entity.toModel()
+    }
+
     suspend fun clear() {
         db.childDao().clear()
     }

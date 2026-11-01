@@ -13,9 +13,34 @@ object TimeEditLogic {
 
     const val MAX_DURATION_MILLIS: Long = 24 * 60 * 60_000L
 
+    private const val ONE_DAY_MILLIS: Long = 24 * 60 * 60_000L
+
     /** Stepper increments (spec: −15m / −1m / +1m / +15m). */
     const val STEP_SMALL_MINUTES: Long = 1L
     const val STEP_LARGE_MINUTES: Long = 15L
+
+    /**
+     * Resolves a DIALED wall-clock time — the day inherited from the row's current value, not
+     * chosen on the calendar — to the instant the parent means.
+     *
+     * QA 2026-10-31: at 00:44 local, dialing 23:46 on a "Today 00:44" entry produced
+     * TODAY 23:46 (~23 h in the future): inline "Entries can't be in the future.", Save
+     * disabled, no PATCH. A parent fixing a pre-midnight entry in the first hours after
+     * midnight could not express "yesterday". Rule:
+     * - picked ≤ now → keep (the normal same-day edit).
+     * - picked in the future → fall back to the previous day (picked − 24 h) when that
+     *   occurrence is the one CLOSER to now (the dial jumped forward by more than half a
+     *   day — late evening dialed shortly after midnight) and is not itself in the future;
+     *   otherwise keep picked, so the existing "Entries can't be in the future." validation
+     *   still guards small forward dials (14:00 dialing 15:30 stays an error, not a silent
+     *   22.5 h backdate) and impossible times (clock skew even putting yesterday ahead).
+     */
+    fun resolveDialedTime(pickedMillis: Long, nowMillis: Long): Long {
+        if (pickedMillis <= nowMillis) return pickedMillis
+        val previousDayMillis = pickedMillis - ONE_DAY_MILLIS
+        val previousDayIsCloser = nowMillis - previousDayMillis < pickedMillis - nowMillis
+        return if (previousDayMillis <= nowMillis && previousDayIsCloser) previousDayMillis else pickedMillis
+    }
 
     /**
      * Start move with duration preservation. Returns the corrected (start, end) pair:

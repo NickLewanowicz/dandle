@@ -3,6 +3,7 @@ package app.dandle.data
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -77,6 +78,9 @@ class AppContainer(
     @Volatile
     private var authExpiredMirror: Boolean = false
 
+    @Volatile
+    private var backendMirror: app.dandle.data.backend.Backend = app.dandle.data.backend.Backend.BABYBUDDY
+
     /**
      * Clients/Retrofit are lazy (perf: cold start): none of them are touched before the first
      * frame — the dashboard renders from Room and refreshes via LaunchedEffect afterwards.
@@ -140,17 +144,163 @@ class AppContainer(
 
     // -- Backend gateways (brief 05 §1): the only places that know the wire protocol. ----
 
-    private val syncPusher: app.dandle.data.backend.SyncPusher by lazy {
+    private val babyBuddyPusher: app.dandle.data.backend.SyncPusher by lazy {
         app.dandle.data.backend.BabyBuddySyncPusher({ api }, json)
     }
 
-    private val puller: app.dandle.data.backend.PullGateway by lazy {
+    private val babyBuddyPuller: app.dandle.data.backend.PullGateway by lazy {
         app.dandle.data.backend.BabyBuddyPuller({ api })
     }
 
-    private val timerMirror: app.dandle.data.backend.TimerMirror by lazy {
+    private val babyBuddyTimerMirror: app.dandle.data.backend.TimerMirror by lazy {
         app.dandle.data.backend.BabyBuddyTimerMirror({ api })
     }
+
+    private val localPusher = app.dandle.data.backend.LocalSyncPusher()
+    private val localPuller = app.dandle.data.backend.LocalPuller()
+
+    /** Dandle Cloud adapter (brief 05 §5): PocketBase client + crypto-bound auth/push/pull. */
+    val cloudBackend: app.dandle.data.backend.CloudBackend by lazy {
+        app.dandle.data.backend.CloudBackend(
+            pb = app.dandle.data.cloud.PocketBaseClient(
+                baseUrl = CLOUD_BASE_URL,
+                client = loginClient, // no auth interceptor: cloud calls carry their own token
+                json = json,
+            ),
+            json = json,
+        )
+    }
+
+    val cloudAuth: app.dandle.data.cloud.CloudAuth get() = cloudBackend.auth
+
+    /**
+     * Cloud child setup (brief 05 §5.4; P1 fix QA 2026-10-31): pushes the just-created local
+     * child as the account's first cloud record under a client-minted record id (the id rides
+     * the create so the pull-side AAD check passes), then ADOPTS that id as the child's
+     * identity on this device (see [adoptCloudChildIdentity]) so events pushed later converge
+     * across devices. Reads the session store, NOT the in-memory mirrors: saveCloudLogin and
+     * this call can be moments apart in different coroutines, and the mirrors only update via
+     * the async start() collector. No-op without a cloud session (defensive; the login flow
+     * only calls this after auth). A failed push throws before any adoption — the child stays
+     * local-only and the next child-setup pass pushes it again.
+     */
+    suspend fun pushCloudChild(child: app.dandle.domain.model.Child) {
+        val session = sessionStore.sessionFlow.first()
+        val token = session.cloudToken ?: return
+        val userId = session.cloudUserId ?: return
+        val cloudId = cloudBackend.pushChild(
+            token,
+            userId,
+            app.dandle.data.db.ChildEntity(
+                id = child.id,
+                firstName = child.firstName,
+                lastName = child.lastName,
+                birthDate = child.birthDate,
+                birthTime = child.birthTime,
+                slug = child.slug,
+            ),
+        )
+        adoptCloudChildIdentity(fromId = child.id, toId = cloudId)
+    }
+
+    /**
+     * P1 identity adoption (QA 2026-10-31): after a successful child push, the cloud record
+     * id becomes THE child identity on this device — the Room rows are rekeyed in ONE
+     * transaction (children.id PK, events.childId, timers.childId) and the active-child
+     * session pointer moves with them. This is what makes later event pushes carry the cloud
+     * id in their payloads, so a second device pulls one consistent child instead of a
+     * UUID/record-id split brain. Runs inline during cloud child setup BEFORE SignedIn, so no
+     * concurrent writes are expected; the transaction keeps the three updates atomic anyway.
+     * The DataStore pointer update follows the transaction (it cannot join a Room tx); a crash
+     * between the two self-heals on the dashboard, which falls back to the first child when
+     * the stored id no longer matches any row.
+     */
+    private suspend fun adoptCloudChildIdentity(fromId: String, toId: String) {
+        if (fromId == toId) return
+        val db = db()
+        db.withTransaction {
+            db.childDao().rekeyId(fromId, toId)
+            db.eventDao().reassignChild(fromId, toId)
+            db.timerDao().reassignChild(fromId, toId)
+        }
+        val session = sessionStore.sessionFlow.first()
+        if (session.activeChildId == fromId) sessionStore.setActiveChild(toId)
+        app.dandle.log.BbLog.d(
+            app.dandle.log.BbLog.TAG_SYNC,
+            "cloud child identity adopted: $fromId -> $toId",
+        )
+    }
+
+    /**
+     * Cloud child routing (P1 fix QA 2026-10-31): true when the freshly-authenticated account
+     * already has children. Reads the session store for the same freshness reason as
+     * [pushCloudChild]; lets backend/network errors propagate so the caller (LoginViewModel)
+     * can fail OPEN into the dashboard instead of trapping a reachable account in setup.
+     */
+    suspend fun cloudHasChildren(): Boolean {
+        val session = sessionStore.sessionFlow.first()
+        return cloudBackend.hasChildren(session.cloudToken.orEmpty(), session.cloudUserId.orEmpty())
+    }
+
+    /** Android Keystore vault: DEK at rest is hardware-wrapped (brief 05 §5.2). */
+    val vault: app.dandle.data.crypto.PassphraseVault by lazy {
+        app.dandle.crypto.KeystoreVault()
+    }
+
+    /** Session-mirrored cloud credentials (token + user id) for per-call gateway construction. */
+    @Volatile private var cloudTokenMirror: String? = null
+
+    @Volatile private var cloudUserIdMirror: String? = null
+
+    private fun cloudPusherOrNull(): app.dandle.data.backend.SyncPusher? {
+        val token = cloudTokenMirror ?: return null
+        val userId = cloudUserIdMirror ?: return null
+        return cloudBackend.pusher(token, userId)
+    }
+
+    private fun cloudPullerOrNull(): app.dandle.data.backend.PullGateway? {
+        val token = cloudTokenMirror ?: return null
+        val userId = cloudUserIdMirror ?: return null
+        return cloudBackend.puller(token, userId)
+    }
+
+    /** Per-call backend routing (brief 05 §3): the backend can change only via sign-out, but
+     *  the container outlives sessions — so every dispatch re-reads the mirror. */
+    private val syncPusher = object : app.dandle.data.backend.SyncPusher {
+        private fun delegate(): app.dandle.data.backend.SyncPusher = when (backendMirror) {
+            app.dandle.data.backend.Backend.LOCAL -> localPusher
+            app.dandle.data.backend.Backend.CLOUD -> cloudPusherOrNull() ?: localPusher
+            app.dandle.data.backend.Backend.BABYBUDDY -> babyBuddyPusher
+        }
+
+        override suspend fun pushCreate(type: app.dandle.domain.model.EventType, draft: app.dandle.domain.model.EventDraft) =
+            delegate().pushCreate(type, draft)
+
+        override suspend fun pushEdit(
+            type: app.dandle.domain.model.EventType,
+            serverId: String,
+            draft: app.dandle.domain.model.EventDraft,
+        ) = delegate().pushEdit(type, serverId, draft)
+
+        override suspend fun pushDelete(type: app.dandle.domain.model.EventType, serverId: String) =
+            delegate().pushDelete(type, serverId)
+    }
+
+    private val puller = object : app.dandle.data.backend.PullGateway {
+        private fun delegate(): app.dandle.data.backend.PullGateway = when (backendMirror) {
+            app.dandle.data.backend.Backend.LOCAL -> localPuller
+            app.dandle.data.backend.Backend.CLOUD -> cloudPullerOrNull() ?: localPuller
+            app.dandle.data.backend.Backend.BABYBUDDY -> babyBuddyPuller
+        }
+
+        override suspend fun listChildren(): List<app.dandle.data.db.ChildEntity> = delegate().listChildren()
+
+        override suspend fun pullRecentEvents(limitPerType: Int): List<app.dandle.data.db.EventEntity> =
+            delegate().pullRecentEvents(limitPerType)
+    }
+
+    /** CLOUD merges by LWW + tombstones; BABYBUDDY stays server-authoritative (brief 05 §5.4). */
+    val lwwMerge: Boolean get() = backendMirror == app.dandle.data.backend.Backend.CLOUD
 
     // -- Offline-first store -----------------------------------------------------
 
@@ -166,6 +316,7 @@ class AppContainer(
     private val dbLazy: Lazy<BabyBuddyDatabase> = lazy {
         val context = appContext ?: error("AppContainer.initDatabase(context) was not called")
         Room.databaseBuilder(context.applicationContext, BabyBuddyDatabase::class.java, BabyBuddyDatabase.NAME)
+            .addMigrations(*app.dandle.data.db.Migrations.ALL)
             // T1: TRUNCATE journal, not WAL. Single-process, tiny write volume — WAL buys
             // nothing here, and its snapshot-per-read-connection semantics are the prime
             // suspect for the device-only "timeline flow serves a frozen snapshot" failure
@@ -229,15 +380,28 @@ class AppContainer(
             json = json,
             clock = clock,
             drainer = drainer,
-            // One-shot drain attempt after every write, via WorkManager (collapses concurrent
-            // requests, retries with backoff when the network is down).
-            requestDrain = { SyncWorker.enqueue(appContext ?: error("initDatabase not called")) },
+            // One-shot drain attempt after every write. Server backends go via WorkManager
+            // (collapses concurrent requests, retries with backoff when the network is down);
+            // LOCAL completes inline — a CONNECTED constraint would defer a queue that needs
+            // no network forever (brief 05 §4).
+            requestDrain = {
+                if (backendMirror == app.dandle.data.backend.Backend.LOCAL) {
+                    drainer.drain()
+                } else {
+                    SyncWorker.enqueue(appContext ?: error("initDatabase not called"))
+                }
+            },
+            lwwMerge = { backendMirror == app.dandle.data.backend.Backend.CLOUD },
         )
     }
 
     val timerRepository: TimerRepository by lazy {
         TimerRepository(
-            timerMirror = timerMirror,
+            timerMirrorProvider = {
+                if (backendMirror == app.dandle.data.backend.Backend.LOCAL ||
+                    backendMirror == app.dandle.data.backend.Backend.CLOUD
+                ) null else babyBuddyTimerMirror
+            },
             db = db(),
             eventRepository = eventRepository,
             clock = clock,
@@ -280,6 +444,17 @@ class AppContainer(
                 apiKeyMirror = session.apiKey
                 serverUrlMirror = session.serverUrl
                 authExpiredMirror = session.sessionExpired
+                backendMirror = session.backend
+                cloudTokenMirror = session.cloudToken
+                cloudUserIdMirror = session.cloudUserId
+                // Reinstall the record-cipher key after process death: the DEK comes back
+                // from the Keystore-wrapped vault, never from the network (brief 05 §5.2).
+                val vaultBlob = session.cloudVault
+                if (session.backend == app.dandle.data.backend.Backend.CLOUD && vaultBlob != null) {
+                    runCatching {
+                        app.dandle.data.crypto.RecordCipher.install(vault.unwrap(unb64(vaultBlob)))
+                    }
+                }
             }
         }
     }
@@ -287,5 +462,10 @@ class AppContainer(
     companion object {
         /** BB/API log lines are truncated to ~2KB (review + product logging rules). */
         private const val MAX_LOG_LINE_CHARS = 2_048
+
+        private fun unb64(text: String): ByteArray = java.util.Base64.getDecoder().decode(text)
+
+        /** Dandle Cloud (brief 05 §5): the owner's PocketBase instance. */
+        const val CLOUD_BASE_URL = "https://dandle.pockethost.io/"
     }
 }

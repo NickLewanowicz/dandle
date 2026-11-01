@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [ChildEntity::class, EventEntity::class, TimerEntity::class, OutboxOpEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class BabyBuddyDatabase : RoomDatabase() {

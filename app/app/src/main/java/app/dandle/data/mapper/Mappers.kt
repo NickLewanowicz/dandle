@@ -36,7 +36,7 @@ import app.dandle.domain.model.RunningTimer
 // -- Child -------------------------------------------------------------------
 
 fun ChildDto.toEntity() = ChildEntity(
-    id = id,
+    id = id.toString(),
     firstName = firstName,
     lastName = lastName,
     birthDate = birthDate,
@@ -58,13 +58,13 @@ fun ChildEntity.toModel() = Child(
 private const val SERVER_UUID_PREFIX = "server:"
 
 /** Synthetic stable local id for server-sourced rows (merge key during refresh). */
-fun serverLocalUuid(type: EventType, serverId: Long) = "$SERVER_UUID_PREFIX${type.name}:$serverId"
+fun serverLocalUuid(type: EventType, serverId: String) = "$SERVER_UUID_PREFIX${type.name}:$serverId"
 
 fun ChangeDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.CHANGE, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.CHANGE, id.toString()),
+    serverId = id.toString(),
     type = EventType.CHANGE.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(time),
     endMillis = Iso8601.parse(time),
     feedingType = null, feedingMethod = null, amount = amount,
@@ -76,10 +76,10 @@ fun ChangeDto.toEntity() = EventEntity(
 )
 
 fun FeedingDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.FEEDING, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.FEEDING, id.toString()),
+    serverId = id.toString(),
     type = EventType.FEEDING.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(start),
     endMillis = Iso8601.parse(end),
     feedingType = type, feedingMethod = method, amount = amount,
@@ -91,10 +91,10 @@ fun FeedingDto.toEntity() = EventEntity(
 )
 
 fun SleepDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.SLEEP, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.SLEEP, id.toString()),
+    serverId = id.toString(),
     type = EventType.SLEEP.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(start),
     endMillis = Iso8601.parse(end),
     feedingType = null, feedingMethod = null, amount = null,
@@ -106,10 +106,10 @@ fun SleepDto.toEntity() = EventEntity(
 )
 
 fun NoteDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.NOTE, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.NOTE, id.toString()),
+    serverId = id.toString(),
     type = EventType.NOTE.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(time),
     endMillis = Iso8601.parse(time),
     feedingType = null, feedingMethod = null, amount = null,
@@ -121,10 +121,10 @@ fun NoteDto.toEntity() = EventEntity(
 )
 
 fun PumpingDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.PUMPING, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.PUMPING, id.toString()),
+    serverId = id.toString(),
     type = EventType.PUMPING.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(start),
     endMillis = Iso8601.parse(end),
     feedingType = null, feedingMethod = null, amount = amount,
@@ -136,10 +136,10 @@ fun PumpingDto.toEntity() = EventEntity(
 )
 
 fun TummyTimeDto.toEntity() = EventEntity(
-    localUuid = serverLocalUuid(EventType.TUMMY_TIME, id),
-    serverId = id,
+    localUuid = serverLocalUuid(EventType.TUMMY_TIME, id.toString()),
+    serverId = id.toString(),
     type = EventType.TUMMY_TIME.name,
-    childId = child,
+    childId = child.toString(),
     startMillis = Iso8601.parse(start),
     endMillis = Iso8601.parse(end),
     feedingType = null, feedingMethod = null, amount = null,
@@ -178,7 +178,7 @@ fun EventEntity.toModel() = Event(
 // -- Domain draft → write DTO (exact server fields; ISO UTC stamps) ----------------
 
 fun EventDraft.toChangeWrite() = ChangeWriteDto(
-    child = childId,
+    child = childId.toLong(),
     time = Iso8601.format(startMillis),
     wet = wet ?: false,
     solid = solid ?: false,
@@ -188,7 +188,7 @@ fun EventDraft.toChangeWrite() = ChangeWriteDto(
 )
 
 fun EventDraft.toFeedingWrite() = FeedingWriteDto(
-    child = childId,
+    child = childId.toLong(),
     start = Iso8601.format(startMillis),
     end = Iso8601.format(endMillis),
     type = feedingType ?: "breast milk",
@@ -198,21 +198,21 @@ fun EventDraft.toFeedingWrite() = FeedingWriteDto(
 )
 
 fun EventDraft.toSleepWrite() = SleepWriteDto(
-    child = childId,
+    child = childId.toLong(),
     start = Iso8601.format(startMillis),
     end = Iso8601.format(endMillis),
     notes = noteText,
 )
 
 fun EventDraft.toNoteWrite() = NoteWriteDto(
-    child = childId,
+    child = childId.toLong(),
     note = noteText.orEmpty(),
     // Always stamped: PATCHing a note without `time` re-stamps it server-side (research doc §4).
     time = Iso8601.format(startMillis),
 )
 
 fun EventDraft.toPumpingWrite() = PumpingWriteDto(
-    child = childId,
+    child = childId.toLong(),
     start = Iso8601.format(startMillis),
     end = Iso8601.format(endMillis),
     amount = amount ?: 0.0, // server-required (research doc §4); UI defaults to 0.0
@@ -220,7 +220,7 @@ fun EventDraft.toPumpingWrite() = PumpingWriteDto(
 )
 
 fun EventDraft.toTummyTimeWrite() = TummyTimeWriteDto(
-    child = childId,
+    child = childId.toLong(),
     start = Iso8601.format(startMillis),
     end = Iso8601.format(endMillis),
     milestone = milestone,
@@ -232,9 +232,9 @@ fun EventDraft.toTummyTimeWrite() = TummyTimeWriteDto(
 fun TimerDto.toEntity(nowMillis: Long) = TimerEntity(
     id = 0,
     kind = EventType.FEEDING.name, // overwritten by the caller, which knows the matched kind
-    childId = child ?: 0,
+    childId = (child ?: 0).toString(),
     startedAtMillis = start?.let { runCatching { Iso8601.parse(it) }.getOrDefault(nowMillis) } ?: nowMillis,
-    serverTimerId = id,
+    serverTimerId = id.toString(),
     createdAtMillis = nowMillis,
 )
 

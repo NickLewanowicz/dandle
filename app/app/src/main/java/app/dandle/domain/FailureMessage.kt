@@ -32,7 +32,7 @@ object FailureMessage {
     fun translate(
         reason: String?,
         conflictUiPath: String? = null,
-        conflictServerId: Long? = null,
+        conflictServerId: String? = null,
         clash: Event? = null,
     ): String {
         val clean = reason?.trim().takeUnless { it.isNullOrEmpty() }

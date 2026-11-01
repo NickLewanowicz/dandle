@@ -32,6 +32,9 @@ object BbLog {
      */
     const val TAG_START = "BB/START"
 
+    /** Widget render/refresh failures (blank-widget diagnosis; never logged on success). */
+    const val TAG_WIDGET = "BB/WIDGET"
+
     /** Injectable/stubbable master switch (checked on every call). */
     @Volatile
     var enabled: Boolean = BuildConfig.DEBUG && !(Build.FINGERPRINT ?: "").contains("robolectric", ignoreCase = true)

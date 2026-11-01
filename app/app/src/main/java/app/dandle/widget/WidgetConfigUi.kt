@@ -26,9 +26,9 @@ fun ConfigSectionLabel(text: String) {
 
 @Composable
 fun ChildPicker(
-    children: List<Pair<Long, String>>,
-    selected: Long?,
-    onSelect: (Long) -> Unit,
+    children: List<Pair<String, String>>,
+    selected: String?,
+    onSelect: (String) -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),

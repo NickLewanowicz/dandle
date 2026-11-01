@@ -19,7 +19,7 @@ class WidgetStateMapperTest {
 
     private fun event(
         type: EventType,
-        childId: Long = 1,
+        childId: String = "1",
         endedMinutesAgo: Long,
         amount: Double? = null,
         wet: Boolean? = null,
@@ -29,7 +29,7 @@ class WidgetStateMapperTest {
         val end = now - endedMinutesAgo * 60_000
         return Event(
             localUuid = "u-$type-$endedMinutesAgo",
-            serverId = 1,
+            serverId = "1",
             type = type,
             childId = childId,
             startMillis = end - durationMinutes * 60_000,
@@ -41,7 +41,7 @@ class WidgetStateMapperTest {
         )
     }
 
-    private fun timer(kind: EventType, childId: Long = 1, startedMinutesAgo: Long = 12) =
+    private fun timer(kind: EventType, childId: String = "1", startedMinutesAgo: Long = 12) =
         RunningTimer(
             localId = 1,
             kind = kind,
@@ -82,7 +82,7 @@ class WidgetStateMapperTest {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.SLEEP, EventType.FEEDING, EventType.CHANGE, EventType.PUMPING),
             timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 12)),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
         )
         val sleep = slots.first { it.type == EventType.SLEEP }
@@ -100,7 +100,7 @@ class WidgetStateMapperTest {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.SLEEP),
             timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 0)), // started "now"
-            childId = 1,
+            childId = "1",
             nowMillis = now,
         )
         assertEquals("0m", slots.single().elapsedText)
@@ -110,8 +110,8 @@ class WidgetStateMapperTest {
     fun `another child's timer does not accent this widget's slots`() {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.SLEEP),
-            timers = listOf(timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 12)),
-            childId = 1,
+            timers = listOf(timer(EventType.SLEEP, childId = "2", startedMinutesAgo = 12)),
+            childId = "1",
             nowMillis = now,
         )
         assertEquals(false, slots.single().running)
@@ -131,7 +131,7 @@ class WidgetStateMapperTest {
                 event(EventType.PUMPING, endedMinutesAgo = 180, amount = 85.0),
             ),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.FEEDING, EventType.CHANGE, EventType.SLEEP, EventType.PUMPING),
         )
@@ -163,7 +163,7 @@ class WidgetStateMapperTest {
                 event(EventType.SLEEP, endedMinutesAgo = 30, durationMinutes = 8 * 60),
             ),
             timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 45)),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.SLEEP),
         )
@@ -189,7 +189,7 @@ class WidgetStateMapperTest {
                 event(EventType.SLEEP, endedMinutesAgo = 300, durationMinutes = 185),
             ),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.CHANGE, EventType.SLEEP),
         )
@@ -208,7 +208,7 @@ class WidgetStateMapperTest {
         val state = WidgetStateMapper.careDashboard(
             events = listOf(event(EventType.FEEDING, endedMinutesAgo = 12, amount = 120.0)),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.FEEDING, EventType.PUMPING), // pump configured but has no data
         )
@@ -219,9 +219,9 @@ class WidgetStateMapperTest {
     @Test
     fun `another child's events never appear in the rows`() {
         val state = WidgetStateMapper.careDashboard(
-            events = listOf(event(EventType.FEEDING, childId = 2, endedMinutesAgo = 5, amount = 50.0)),
+            events = listOf(event(EventType.FEEDING, childId = "2", endedMinutesAgo = 5, amount = 50.0)),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.FEEDING),
         )
@@ -237,7 +237,7 @@ class WidgetStateMapperTest {
                 event(EventType.FEEDING, endedMinutesAgo = 12, amount = -1.0),
             ),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.PUMPING, EventType.FEEDING),
         )
@@ -252,7 +252,7 @@ class WidgetStateMapperTest {
         val state = WidgetStateMapper.careDashboard(
             events = listOf(event(EventType.FEEDING, endedMinutesAgo = 12, amount = 120.0)),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.FEEDING),
             childName = "Milo",
@@ -265,7 +265,7 @@ class WidgetStateMapperTest {
         val state = WidgetStateMapper.careDashboard(
             events = emptyList(),
             timers = listOf(timer(EventType.FEEDING, startedMinutesAgo = 66)),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.FEEDING),
         )
@@ -285,7 +285,7 @@ class WidgetStateMapperTest {
                 timer(EventType.TUMMY_TIME, startedMinutesAgo = 23),
                 timer(EventType.SLEEP, startedMinutesAgo = 95),
             ),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.SLEEP, EventType.PUMPING),
         )
@@ -304,8 +304,8 @@ class WidgetStateMapperTest {
     fun `another child's timer is not this widget's running row`() {
         val state = WidgetStateMapper.careDashboard(
             events = emptyList(),
-            timers = listOf(timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 40)),
-            childId = 1,
+            timers = listOf(timer(EventType.SLEEP, childId = "2", startedMinutesAgo = 40)),
+            childId = "1",
             nowMillis = now,
             visible = setOf(EventType.SLEEP),
         )
@@ -318,11 +318,11 @@ class WidgetStateMapperTest {
     fun `cross-child timer line names the other child kind and elapsed`() {
         val cross = WidgetStateMapper.crossChildTimers(
             timers = listOf(
-                timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5), // own child: ignored
-                timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 32),
+                timer(EventType.SLEEP, childId = "1", startedMinutesAgo = 5), // own child: ignored
+                timer(EventType.SLEEP, childId = "2", startedMinutesAgo = 32),
             ),
-            childId = 1,
-            otherChildFirstNames = mapOf(2L to "Zoe"),
+            childId = "1",
+            otherChildFirstNames = mapOf("2" to "Zoe"),
             nowMillis = now,
         )
         val line = cross.single()
@@ -334,8 +334,8 @@ class WidgetStateMapperTest {
     @Test
     fun `cross-child lines are empty when only this child's timer runs`() {
         val cross = WidgetStateMapper.crossChildTimers(
-            timers = listOf(timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 5)),
-            childId = 1,
+            timers = listOf(timer(EventType.SLEEP, childId = "1", startedMinutesAgo = 5)),
+            childId = "1",
             otherChildFirstNames = emptyMap(),
             nowMillis = now,
         )
@@ -345,9 +345,9 @@ class WidgetStateMapperTest {
     @Test
     fun `cross-child line with unknown child name degrades without lying`() {
         val cross = WidgetStateMapper.crossChildTimers(
-            timers = listOf(timer(EventType.PUMPING, childId = 2, startedMinutesAgo = 7)),
-            childId = 1,
-            otherChildFirstNames = mapOf(2L to null),
+            timers = listOf(timer(EventType.PUMPING, childId = "2", startedMinutesAgo = 7)),
+            childId = "1",
+            otherChildFirstNames = mapOf("2" to null),
             nowMillis = now,
         )
         assertEquals("Another child", cross.single().childFirstName)
@@ -361,12 +361,12 @@ class WidgetStateMapperTest {
         // Twins: two other children with timers at once — awareness must cover both.
         val cross = WidgetStateMapper.crossChildTimers(
             timers = listOf(
-                timer(EventType.SLEEP, childId = 1, startedMinutesAgo = 10), // own child
-                timer(EventType.PUMPING, childId = 3, startedMinutesAgo = 4),
-                timer(EventType.SLEEP, childId = 2, startedMinutesAgo = 31),
+                timer(EventType.SLEEP, childId = "1", startedMinutesAgo = 10), // own child
+                timer(EventType.PUMPING, childId = "3", startedMinutesAgo = 4),
+                timer(EventType.SLEEP, childId = "2", startedMinutesAgo = 31),
             ),
-            childId = 1,
-            otherChildFirstNames = mapOf(2L to "Zoe", 3L to "Finn"),
+            childId = "1",
+            otherChildFirstNames = mapOf("2" to "Zoe", "3" to "Finn"),
             nowMillis = now,
         )
         assertEquals(listOf(EventType.SLEEP, EventType.PUMPING), cross.map { it.kind })
@@ -383,7 +383,7 @@ class WidgetStateMapperTest {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.CHANGE, EventType.FEEDING),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             latest = mapOf(
                 EventType.CHANGE to event(EventType.CHANGE, endedMinutesAgo = 90),
@@ -399,7 +399,7 @@ class WidgetStateMapperTest {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.SLEEP),
             timers = listOf(timer(EventType.SLEEP, startedMinutesAgo = 17)),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             latest = mapOf(EventType.SLEEP to event(EventType.SLEEP, endedMinutesAgo = 50)),
         )
@@ -413,7 +413,7 @@ class WidgetStateMapperTest {
         val slots = WidgetStateMapper.quickActionSlots(
             configured = listOf(EventType.PUMPING),
             timers = emptyList(),
-            childId = 1,
+            childId = "1",
             nowMillis = now,
             latest = emptyMap(),
         )

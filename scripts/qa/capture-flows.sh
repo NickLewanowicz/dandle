@@ -917,13 +917,51 @@ check_env() {
 # ------------------------------------------------------- group 01: login ---
 
 do_login_drive() {
-  # Assumes the login screen is visible. Captures initial + cleartext + error
-  # banner (cheap: one deliberate wrong-password round-trip), then signs in.
+  # Assumes the login screen is visible. Captures picker + initial + cleartext +
+  # error banner (cheap: one deliberate wrong-password round-trip), then signs in.
   # Tolerates the post-sign-out ANR ("Wait") while the app clears its DB.
+  # Brief 04: the MODE PICKER is the landing — pick the server card to reach the
+  # pinned URL step; a stored-session re-auth lands directly on the URL step.
   local i xml
   for i in $(seq 1 20); do
     if xml="$(dump_with_retry 2>/dev/null)"; then
       if bounds_of "$xml" "login/server_url" >/dev/null; then break; fi
+      if bounds_of "$xml" "login/mode_server" >/dev/null; then
+        shot 01-login-00-mode-picker
+        # Device setup + cloud create are captured from the picker BEFORE the server
+        # flow commits. Nothing here signs in or creates anything: the device form is
+        # typed but never submitted, the cloud create tab is only SHOT (warning row
+        # visible), and both sub-flows return to the picker before mode_server is tapped.
+        if tap_tag "login/mode_device"; then
+          if wait_for_tag "login/child_name" 10 2 >/dev/null; then
+            type_into "login/child_name" "QA Device Kid" || warn "child_name typing failed"
+            hide_kb || true
+            shot 01-login-05-device-setup
+          else
+            warn "device setup never appeared"
+          fi
+          tap_tag "login/back" || warn "login/back tap failed"
+          sleep 2
+        else
+          warn "mode_device tap failed"
+        fi
+        if tap_tag "login/mode_cloud"; then
+          if wait_for_tag "login/cloud_tab/create" 10 2 >/dev/null; then
+            tap_tag "login/cloud_tab/create" || warn "cloud_tab/create tap failed"
+            sleep 1
+            shot 01-login-06-cloud-create   # passphrase-loss warning row visible
+          else
+            warn "cloud entry never appeared"
+          fi
+          tap_tag "login/back" || warn "login/back tap failed"
+          sleep 2
+        else
+          warn "mode_cloud tap failed"
+        fi
+        tap_tag "login/mode_server" || warn "mode_server tap failed"
+        sleep 2
+        continue
+      fi
       if printf '%s' "$xml" | grep -q "isn't responding"; then
         warn "ANR dialog detected — tapping Wait"
         tap_text "$xml" "Wait" || true
@@ -1023,6 +1061,7 @@ g01_login() {
     if xml="$(dump_with_retry 2>/dev/null)"; then
       if   bounds_of "$xml" "dashboard"       >/dev/null; then state="dashboard"; break
       elif bounds_of "$xml" "login/server_url" >/dev/null; then state="login";     break
+      elif bounds_of "$xml" "login/mode_server" >/dev/null; then state="login";     break
       elif bounds_of "$xml" "dashboard/panel/close" >/dev/null; then
         # A create sheet restored from a previous run's draft (process-death restore is a
         # feature) — it is its own window and hides the dashboard tags. Close it.
@@ -1321,7 +1360,7 @@ g04_edit() {
   step "04: feeding sheet + START moved one hour earlier via the native picker"
   if find_row_text "Bottle · Amount: 149" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
-    local xml before after new_hm changed hh mm
+    local xml before after new_hm changed hh mm fut f_hm f_hh f_mm n_hh n_mm
     xml="$(dump_with_retry)" || return 1
     before="$(sheet_time_value "$xml" 1)"
     shot 04-edit-01-feeding-sheet   # START + END native-picker rows visible (U6)
@@ -1335,11 +1374,26 @@ g04_edit() {
     xml="$(dump_with_retry)" || return 1
     after="$(sheet_time_value "$xml" 1)"
     shot 04-edit-02-feeding-picked   # value visibly changed
-    if [[ -n "$before" && -n "$after" && "$before" != "$after" && "$after" == Today* ]]; then changed=1; else changed=0; fi
-    # "Today*" guards a date-picker regression that produced TOMORROW for evening
-    # times (UTC round-trip); an hour-earlier move always stays on the same day
-    # (except within the first hour after midnight — accepted edge).
-    assert_chk "$changed" "A2a edit sheet value visibly changed via the native time picker, same day ($before -> $after)"
+    # Future guard: the picked value must not read as a FUTURE timestamp of ANY day —
+    # "Tomorrow …" (the old date-picker UTC-round-trip regression) or "Today HH:MM"
+    # with the clock time ahead of now (2026-10-31: at 00:44 a 23:46 dial produced
+    # future TODAY 23:46, Save stayed disabled, and only the downstream A2b FAIL
+    # surfaced it — this guard must fail the canary right here instead).
+    # Yesterday / past-date labels are legitimate readings (the app's backward-midnight
+    # resolution and an hour-earlier move run just after midnight both produce them).
+    fut=0
+    if [[ "$after" == Tomorrow* ]]; then
+      fut=1
+    elif [[ "$after" == Today* ]]; then
+      f_hm="${after##* }"; f_hh="${f_hm%%:*}"; f_mm="${f_hm#*:}"
+      n_hh="$(date +%H)"; n_mm="$(date +%M)"
+      if [[ "$f_hh" =~ ^[0-9]+$ && "$f_mm" =~ ^[0-9]+$ ]] \
+         && (( 10#$f_hh > 10#$n_hh || (10#$f_hh == 10#$n_hh && 10#$f_mm > 10#$n_mm) )); then
+        fut=1
+      fi
+    fi
+    if [[ -n "$before" && -n "$after" && "$before" != "$after" && "$fut" == 0 ]]; then changed=1; else changed=0; fi
+    assert_chk "$changed" "A2a edit sheet value visibly changed via the native time picker, not a future timestamp ($before -> $after)"
     new_hm="${after##* }"
     # Save by text (dialog-window tags are invisible to uiautomator, QA finding #8).
     if tap_row_text "Save"; then
@@ -1840,8 +1894,12 @@ g06_widgets() {
   wait_launcher 5 || true
 
   step "06: config screens via long-press -> Configure"
+  # QA fix (2026-10-31): the widgets render CONTENT-ONLY (no title text node), so grepping
+  # the dump for the titles "Quick actions"/"Care dashboard" never matched a healthy pair.
+  # The patterns are content strings the widgets DO render as exact text nodes:
+  # quick actions slot label "Pump", care dashboard row label "Last feed".
   local spec pat name lp x y
-  for spec in "Quick actions|06-widgets-04-quickactions-config" "Care dashboard|06-widgets-05-caredashboard-config"; do
+  for spec in "Pump|06-widgets-04-quickactions-config" "Last feed|06-widgets-05-caredashboard-config"; do
     pat="${spec%%|*}"; name="${spec#*|}"
     if lp="$(widget_lp_bounds "$pat")"; then
       read -r x y <<< "$lp"

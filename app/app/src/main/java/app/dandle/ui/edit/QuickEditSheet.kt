@@ -69,7 +69,9 @@ private val compactDateFormat = DateTimeFormatter.ofPattern("MMM d")
  * Quick Edit sheet (functional spec §5, UX spec §4): type fields mirror the create card, each
  * time is a standard native-picker row ([DateTimeRow], owner rework U6 — no steppers), start
  * moves preserve duration (caller applies TimeEditLogic), inline validation disables Save with
- * a reason, FAILED entries get a failure banner + Retry, Delete is confirmed.
+ * a reason, FAILED entries get a failure banner + Retry, Delete is confirmed. [nowMillis] is
+ * the live server clock (same source the inline validation uses) and drives the picker's
+ * backward-midnight day resolution.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +79,7 @@ fun QuickEditSheet(
     event: Event,
     draft: EventDraft,
     validationReason: String?,
+    nowMillis: Long,
     failureReason: String? = null,
     onDraftChange: ((EventDraft) -> EventDraft) -> Unit,
     onStartTimeSet: (Long) -> Unit,
@@ -176,6 +179,7 @@ fun QuickEditSheet(
                 DateTimeRow(
                     label = "START",
                     millis = draft.startMillis,
+                    nowMillis = nowMillis,
                     onPicked = onStartTimeSet,
                     valueTag = "${TestTags.EDIT_SHEET}/time_start",
                     modifier = Modifier.padding(top = 16.dp),
@@ -183,6 +187,7 @@ fun QuickEditSheet(
                 DateTimeRow(
                     label = "END",
                     millis = draft.endMillis,
+                    nowMillis = nowMillis,
                     onPicked = onEndTimeSet,
                     valueTag = "${TestTags.EDIT_SHEET}/time_end",
                     modifier = Modifier.padding(top = 8.dp),
@@ -191,6 +196,7 @@ fun QuickEditSheet(
                 DateTimeRow(
                     label = "TIME",
                     millis = draft.startMillis,
+                    nowMillis = nowMillis,
                     onPicked = onStartTimeSet,
                     valueTag = "${TestTags.EDIT_SHEET}/time_time",
                     modifier = Modifier.padding(top = 16.dp),

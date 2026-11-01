@@ -69,18 +69,18 @@ class QuickActionStore(private val file: Path) {
 
     // -- Learned feeding defaults (per child) ------------------------------------
 
-    fun observeFeedingDefault(childId: Long): Flow<FeedingDefault> = dataStore.data.map { p ->
+    fun observeFeedingDefault(childId: String): Flow<FeedingDefault> = dataStore.data.map { p ->
         FeedingDefault(
             typeWire = p[Keys.feedingType(childId)] ?: FeedingDefault.FALLBACK.typeWire,
             methodWire = p[Keys.feedingMethod(childId)] ?: FeedingDefault.FALLBACK.methodWire,
         )
     }
 
-    suspend fun feedingDefault(childId: Long): FeedingDefault =
+    suspend fun feedingDefault(childId: String): FeedingDefault =
         observeFeedingDefault(childId).first()
 
     /** Persists the last-used type+method for this child (called on every feeding save). */
-    suspend fun rememberFeeding(childId: Long, typeWire: String, methodWire: String) {
+    suspend fun rememberFeeding(childId: String, typeWire: String, methodWire: String) {
         dataStore.edit { p ->
             p[Keys.feedingType(childId)] = typeWire
             p[Keys.feedingMethod(childId)] = methodWire
@@ -89,19 +89,19 @@ class QuickActionStore(private val file: Path) {
 
     // -- Panel drafts (per child + type) ------------------------------------------
 
-    fun observePanel(childId: Long, type: String): Flow<PanelDraft?> = dataStore.data.map { p ->
+    fun observePanel(childId: String, type: String): Flow<PanelDraft?> = dataStore.data.map { p ->
         p[Keys.panel(childId, type)]?.let(::decodeDraft)
     }
 
-    suspend fun panel(childId: Long, type: String): PanelDraft? =
+    suspend fun panel(childId: String, type: String): PanelDraft? =
         observePanel(childId, type).first()
 
-    suspend fun savePanel(childId: Long, type: String, draft: PanelDraft) {
+    suspend fun savePanel(childId: String, type: String, draft: PanelDraft) {
         dataStore.edit { p -> p[Keys.panel(childId, type)] = json.encodeToString(draft) }
     }
 
     /** Successful save: the draft is consumed (spec: drafts "clear only on successful save"). */
-    suspend fun clearPanel(childId: Long, type: String) {
+    suspend fun clearPanel(childId: String, type: String) {
         dataStore.edit { p -> p.remove(Keys.panel(childId, type)) }
     }
 
@@ -130,9 +130,9 @@ class QuickActionStore(private val file: Path) {
     }
 
     private object Keys {
-        fun feedingType(childId: Long) = stringPreferencesKey("feeding_type_$childId")
-        fun feedingMethod(childId: Long) = stringPreferencesKey("feeding_method_$childId")
-        fun panel(childId: Long, type: String) = stringPreferencesKey("panel_${childId}_$type")
+        fun feedingType(childId: String) = stringPreferencesKey("feeding_type_$childId")
+        fun feedingMethod(childId: String) = stringPreferencesKey("feeding_method_$childId")
+        fun panel(childId: String, type: String) = stringPreferencesKey("panel_${childId}_$type")
         val LONGPRESS_HINT_SHOWN = booleanPreferencesKey("hint_longpress_shown")
     }
 }

@@ -29,7 +29,7 @@ class ConflictPolicyTest {
         val parsed = ConflictPolicy.parse400Body(
             """{"non_field_errors": ["Another entry intersects the specified time period. Conflicting entry: <a href=\"/sleep/4/\">Sleep (11/19/17 03:00 - 11/19/17 04:30)</a>"]}"""
         )
-        assertEquals(ConflictRef(uiPath = "sleep", serverId = 4), parsed!!.conflictingEntry)
+        assertEquals(ConflictRef(uiPath = "sleep", serverId = "4"), parsed!!.conflictingEntry)
         assertEquals(
             "Another entry intersects the specified time period. Conflicting entry: Sleep (11/19/17 03:00 - 11/19/17 04:30)",
             parsed.displayReason,

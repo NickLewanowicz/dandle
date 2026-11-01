@@ -123,7 +123,7 @@ class QuickActionsWidget : GlanceAppWidget() {
     }
 
     companion object {
-        val KEY_CHILD_ID = longPreferencesKey("child_id")
+        val KEY_CHILD_ID = stringPreferencesKey("child_id")
         private fun slotKey(index: Int) = stringPreferencesKey("slot$index")
 
         val DEFAULT_SLOTS = listOf(EventType.SLEEP, EventType.FEEDING, EventType.CHANGE, EventType.PUMPING)
@@ -134,10 +134,18 @@ class QuickActionsWidget : GlanceAppWidget() {
                     ?: DEFAULT_SLOTS[index]
             }
 
-        fun configuredChildId(prefs: Preferences): Long? =
-            prefs[KEY_CHILD_ID]
+        /**
+         * Type-safe legacy read (P1 QA 2026-10-31): the pre-refactor build saved this key with
+         * [androidx.datastore.preferences.core.longPreferencesKey] — Preferences keys compare
+         * equal by NAME alone, so a plain `prefs[KEY_CHILD_ID]` ClassCastExceptions the stored
+         * Long into String at the call site (same bug class as the SessionStore active-child
+         * migration). Reading the raw map degrades a legacy Long to null; the next
+         * [saveConfig] write-heals the key into a String.
+         */
+        fun configuredChildId(prefs: Preferences): String? =
+            prefs.asMap()[KEY_CHILD_ID] as? String
 
-        suspend fun saveConfig(context: Context, id: GlanceId, childId: Long, slots: List<EventType>) {
+        suspend fun saveConfig(context: Context, id: GlanceId, childId: String, slots: List<EventType>) {
             updateAppWidgetState(context, id) { prefs ->
                 prefs[KEY_CHILD_ID] = childId
                 slots.forEachIndexed { index, type -> prefs[slotKey(index)] = type.name }

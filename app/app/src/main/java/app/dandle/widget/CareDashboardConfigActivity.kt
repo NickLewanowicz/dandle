@@ -49,7 +49,7 @@ class CareDashboardConfigActivity : ComponentActivity() {
         val allRows = listOf(EventType.FEEDING, EventType.CHANGE, EventType.SLEEP, EventType.PUMPING)
         setContent {
             BabyBuddyNextTheme {
-                var childId by remember { mutableStateOf<Long?>(null) }
+                var childId by remember { mutableStateOf<String?>(null) }
                 var visible by remember {
                     mutableStateOf(allRows.toSet())
                 }

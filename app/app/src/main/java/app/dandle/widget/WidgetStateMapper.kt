@@ -86,7 +86,7 @@ object WidgetStateMapper {
     fun quickActionSlots(
         configured: List<EventType>,
         timers: List<RunningTimer>,
-        childId: Long,
+        childId: String,
         nowMillis: Long,
         latest: Map<EventType, app.dandle.domain.model.Event> = emptyMap(),
     ): List<QuickActionSlot> = configured.map { type ->
@@ -127,7 +127,7 @@ object WidgetStateMapper {
     fun careDashboard(
         events: List<Event>,
         timers: List<RunningTimer>,
-        childId: Long,
+        childId: String,
         nowMillis: Long,
         visible: Set<EventType>,
         childName: String? = null,
@@ -187,8 +187,8 @@ object WidgetStateMapper {
      */
     fun crossChildTimers(
         timers: List<RunningTimer>,
-        childId: Long,
-        otherChildFirstNames: Map<Long, String?>,
+        childId: String,
+        otherChildFirstNames: Map<String, String?>,
         nowMillis: Long,
     ): List<CrossChildTimerState> = timers
         .filter { it.childId != childId }

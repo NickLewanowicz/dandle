@@ -24,7 +24,8 @@ import app.dandle.domain.model.RunningTimer
  * purely on this device (brief 05 §1).
  */
 class TimerRepository(
-    private val timerMirror: TimerMirror?,
+    /** Evaluated per call: the active backend decides whether timers mirror to a server. */
+    private val timerMirrorProvider: () -> TimerMirror?,
     private val db: BabyBuddyDatabase,
     private val eventRepository: EventRepository,
     private val clock: Clock,
@@ -40,7 +41,7 @@ class TimerRepository(
         timerDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
     /** The running timer for this child+kind, or null (spec §3: never two of the same kind). */
-    suspend fun findRunning(kind: EventType, childId: Long): RunningTimer? =
+    suspend fun findRunning(kind: EventType, childId: String): RunningTimer? =
         timerDao.findRunning(childId, kind.name)?.toModel()
 
     /** One-shot snapshot for widget rendering (no Flow collection on Glance's main). */
@@ -52,7 +53,7 @@ class TimerRepository(
      * call succeeds (id attached to the row). A duplicate running timer for the same child+kind
      * returns the existing one (spec §3: tapping focuses the running timer, never duplicates).
      */
-    suspend fun start(kind: EventType, childId: Long): RunningTimer {
+    suspend fun start(kind: EventType, childId: String): RunningTimer {
         require(kind.isTimed) { "${kind.name} is not a timer type" }
         timerDao.findRunning(childId, kind.name)?.let { return it.toModel() }
 
@@ -70,7 +71,7 @@ class TimerRepository(
         app.dandle.log.BbLog.d(TAG, "start ${kind.name} child=$childId localId=$localId at=$startedAt")
         // Best-effort server timer (so it shows on the web); silent when offline.
         try {
-            val created = timerMirror?.create(childId, kind, Iso8601.format(startedAt))
+            val created = timerMirrorProvider()?.create(childId, kind, Iso8601.format(startedAt))
             created?.let { timerDao.setServerTimerId(localId, it) }
         } catch (_: Exception) {
             // Offline / unreachable: the timer keeps running locally; the eventual entry syncs.
@@ -114,7 +115,7 @@ class TimerRepository(
     private suspend fun removeTimer(timer: RunningTimer) {
         timerDao.delete(timer.localId)
         timer.serverTimerId?.let { serverTimerId ->
-            if (timerMirror == null) return
+            val timerMirror = timerMirrorProvider() ?: return
             try {
                 timerMirror.delete(serverTimerId)
             } catch (e: BackendException) {
@@ -132,8 +133,8 @@ class TimerRepository(
      * or a timer started from another device with this app's naming). Local rows win; server
      * timers we don't track get adopted so they can still be stopped/saved.
      */
-    suspend fun refresh(childId: Long) {
-        val mirror = timerMirror ?: return
+    suspend fun refresh(childId: String) {
+        val mirror = timerMirrorProvider() ?: return
         try {
             val serverAppTimers = mirror.listForChild(childId).filter { timer ->
                 timer.name != null && EventType.entries.any { it.serverTimerName == timer.name }

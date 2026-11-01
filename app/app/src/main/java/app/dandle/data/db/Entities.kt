@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /*
- * Schema decisions (brief 01 §5 asked for a justified choice):
+ * Schema decisions (brief 01 §5 asked for a justified choice; brief 05 §3 changed identity):
  *
  * EventEntity is a SINGLE table with a `type` discriminator + nullable per-type columns.
  * Rationale: the app's core query is the merged six-type timeline ("all events for child X,
@@ -17,11 +17,16 @@ import androidx.room.PrimaryKey
  *
  * All timestamps are epoch millis (Long) per the brief; type values reference
  * domain.model.EventType / SyncState by NAME for stable, diffable rows.
+ *
+ * Identity (brief 05 §3): every server/child id is a String. Baby Buddy's numeric pks are
+ * stringified at the DTO boundary; PocketBase ids are 15-char strings; the on-device backend
+ * mints UUIDs. `deleted` is the cloud-sync tombstone (brief 05 §5.4) — inert for backends
+ * that hard-delete.
  */
 
 @Entity(tableName = "children")
 data class ChildEntity(
-    @PrimaryKey val id: Long,
+    @PrimaryKey val id: String,
     val firstName: String,
     val lastName: String?,
     val birthDate: String,
@@ -39,11 +44,11 @@ data class ChildEntity(
 data class EventEntity(
     /** Local identity (uuid); survives as the outbox's join key (spec §6.1). */
     @PrimaryKey val localUuid: String,
-    /** Server pk; null until a CREATE op lands. */
-    val serverId: Long?,
+    /** Server record id; null until a CREATE op lands. Backend-native id as a string. */
+    val serverId: String?,
     /** EventType.name */
     val type: String,
-    val childId: Long,
+    val childId: String,
     /** Instant types: the event time. Timed types: start. */
     val startMillis: Long,
     /** Instant types: == startMillis. */
@@ -61,9 +66,11 @@ data class EventEntity(
     val failureReason: String?,
     /** Parsed conflict target of an overlap rejection (spec §3.8). */
     val conflictUiPath: String?,
-    val conflictServerId: Long?,
+    val conflictServerId: String?,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    /** Cloud-sync tombstone (brief 05 §5.4): deleted rows are hidden from every read. */
+    val deleted: Boolean = false,
 )
 
 /** Running timers — local rows first (spec §3), server timer id attached when online. */
@@ -72,9 +79,9 @@ data class TimerEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     /** EventType.name — only the four timed kinds occur. */
     val kind: String,
-    val childId: Long,
+    val childId: String,
     val startedAtMillis: Long,
-    val serverTimerId: Long?,
+    val serverTimerId: String?,
     val createdAtMillis: Long,
 )
 

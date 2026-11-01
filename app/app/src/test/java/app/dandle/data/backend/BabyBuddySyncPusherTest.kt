@@ -31,7 +31,7 @@ class BabyBuddySyncPusherTest {
 
     private val draft = EventDraft(
         type = EventType.SLEEP,
-        childId = 1L,
+        childId = "1",
         startMillis = 1_760_000_000_000L,
         endMillis = 1_760_000_060_000L,
         noteText = "nap",
@@ -63,7 +63,7 @@ class BabyBuddySyncPusherTest {
     fun `create returns the server id on 201`() = runTest {
         enqueue(201, """{"id": 42, "child": 1, "start": "2025-10-05T10:00:00Z", "end": "2025-10-05T10:10:00Z", "notes": "nap"}""")
         val result = pusher().pushCreate(EventType.SLEEP, draft)
-        assertEquals(PushResult.Ok(42L), result)
+        assertEquals(PushResult.Ok("42"), result)
         val recorded = server.takeRequest()
         assertEquals("/api/sleep/", recorded.path)
         assertTrue(recorded.body.readUtf8().contains(""""child":1"""))
@@ -76,31 +76,31 @@ class BabyBuddySyncPusherTest {
             """{"non_field_errors": ["Another entry intersects the specified time period. """ +
                 """Conflicting entry: <a href=\"/sleep/4/\">Sleep</a>"]}""",
         )
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         val error = (result as PushResult.Err).error as BackendError.Validation
         assertEquals("sleep", error.conflictUiPath)
-        assertEquals(4L, error.conflictServerId)
+        assertEquals("4", error.conflictServerId)
         assertTrue(error.displayReason!!.contains("intersects"))
     }
 
     @Test
     fun `401 maps to AuthExpired`() = runTest {
         enqueue(401, """{"detail":"Invalid token."}""")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         assertEquals(BackendError.AuthExpired, (result as PushResult.Err).error)
     }
 
     @Test
     fun `403 with token-invalid body maps to AuthExpired`() = runTest {
         enqueue(403, """{"detail":"Invalid token."}""")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         assertEquals(BackendError.AuthExpired, (result as PushResult.Err).error)
     }
 
     @Test
     fun `403 permission-denied does NOT map to AuthExpired`() = runTest {
         enqueue(403, """{"detail":"You do not have permission to perform this action."}""")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         val error = (result as PushResult.Err).error
         assertTrue(error is BackendError.Http && error.status == 403)
     }
@@ -108,21 +108,21 @@ class BabyBuddySyncPusherTest {
     @Test
     fun `404 on edit maps to NotFound`() = runTest {
         enqueue(404, """{"detail":"Not found."}""")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         assertEquals(BackendError.NotFound, (result as PushResult.Err).error)
     }
 
     @Test
     fun `5xx maps to ServerError`() = runTest {
         enqueue(502, "bad gateway")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         assertEquals(BackendError.ServerError(502), (result as PushResult.Err).error)
     }
 
     @Test
     fun `other 4xx maps to Http with the status`() = runTest {
         enqueue(405, """{"detail":"Method not allowed."}""")
-        val result = pusher().pushEdit(EventType.SLEEP, 7L, draft)
+        val result = pusher().pushEdit(EventType.SLEEP, "7", draft)
         val error = (result as PushResult.Err).error
         assertTrue(error is BackendError.Http && error.status == 405)
     }
@@ -130,14 +130,14 @@ class BabyBuddySyncPusherTest {
     @Test
     fun `delete treats 404 as success`() = runTest {
         enqueue(404, "")
-        val result = pusher().pushDelete(EventType.SLEEP, 7L)
+        val result = pusher().pushDelete(EventType.SLEEP, "7")
         assertEquals(PushResult.Deleted, result)
     }
 
     @Test
     fun `delete reports other non-2xx as Http and does NOT special-case 401`() = runTest {
         enqueue(401, """{"detail":"Authentication credentials were not provided."}""")
-        val result = pusher().pushDelete(EventType.SLEEP, 7L)
+        val result = pusher().pushDelete(EventType.SLEEP, "7")
         val error = (result as PushResult.Err).error
         assertTrue(error is BackendError.Http && error.status == 401)
     }
@@ -159,7 +159,7 @@ class BabyBuddySyncPusherTest {
     @Test
     fun `edit encodes only draft fields (partial PATCH body)`() = runTest {
         enqueue(200, """{"id": 7, "child": 1, "note": "nap", "time": "2025-10-05T10:00:00Z"}""")
-        pusher().pushEdit(EventType.NOTE, 7L, draft.copy(type = EventType.NOTE, endMillis = draft.startMillis))
+        pusher().pushEdit(EventType.NOTE, "7", draft.copy(type = EventType.NOTE, endMillis = draft.startMillis))
         val body = server.takeRequest().body.readUtf8()
         // NoteWriteDto: child/note/time — end is not a note field, notes carry the text.
         assertTrue(body.contains(""""note":"nap""""))

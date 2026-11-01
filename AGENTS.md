@@ -11,7 +11,7 @@ A modern, offline-first Android client for [Baby Buddy](https://github.com/babyb
 2. **Match the server exactly.** API behavior is documented in `docs/research/babybuddy-api.md` (verified against server source). Field names, validation rules, and error shapes are law.
 3. **Match the original UX where it works.** The six quick actions (Feeding, Diaper, Sleep, Notes, Pumping, Tummy time), tap-to-toggle timers, and long-press-to-web are pinned behavior. Flow specs live in `docs/flows/`. Change flows only via a Maintainer-approved brief.
 4. **Offline-first.** The Room DB is the UI's source of truth. Server sync is a background concern; every create/edit works with no network and lands in a sync queue. Failures surface in-app with a resolution path (edit or delete locally) — never a dead-end error.
-5. **Always keep the escape hatch.** Long-press on any entry opens the same event on the Baby Buddy web UI (`{server}/{uiPath}/{id}/`). The web UI always has more fields than us; that's fine and intentional.
+5. **Always keep the escape hatch (server backends).** Long-press on any entry opens the same event on the Baby Buddy web UI (`{server}/{uiPath}/{id}/`). The web UI always has more fields than us; that's fine and intentional. Amended 2026-11-01 (brief 05 D10): the hatch exists only for the BabyBuddy-server backend — on-device and Dandle Cloud modes have no web UI to open, so the long-press surfaces Quick Edit only there.
 6. **All original-scope flows must be documented** in `docs/flows/` with screenshots in `docs/screenshots/` before we call them done.
 
 ## Repo layout

@@ -36,7 +36,7 @@ enum class EventType(
 enum class SyncState { SYNCED, PENDING, FAILED }
 
 data class Child(
-    val id: Long,
+    val id: String,
     val firstName: String,
     val lastName: String?,
     val slug: String,
@@ -47,9 +47,9 @@ data class Child(
 /** A timeline event, all six types unified. Instant types keep end == start. */
 data class Event(
     val localUuid: String,
-    val serverId: Long?,
+    val serverId: String?,
     val type: EventType,
-    val childId: Long,
+    val childId: String,
     val startMillis: Long,
     val endMillis: Long,
     // Type-specific payload (only the fields relevant to [type] are non-null).
@@ -66,7 +66,7 @@ data class Event(
     val failureReason: String? = null,
     /** Parsed conflicting entry from an overlap rejection (spec §3.8). */
     val conflictUiPath: String? = null,
-    val conflictServerId: Long? = null,
+    val conflictServerId: String? = null,
     val createdAtMillis: Long = 0,
     val updatedAtMillis: Long = 0,
 ) {
@@ -76,7 +76,7 @@ data class Event(
 /** Field bundle for creating or editing an event (the Quick Edit sheet's write model, Stage 2). */
 data class EventDraft(
     val type: EventType,
-    val childId: Long,
+    val childId: String,
     val startMillis: Long,
     val endMillis: Long,
     val feedingType: String? = null,
@@ -99,10 +99,10 @@ data class EventDraft(
 data class RunningTimer(
     val localId: Long,
     val kind: EventType,
-    val childId: Long,
+    val childId: String,
     val startedAtMillis: Long,
     /** Server timer created when the start happened online; null when started offline. */
-    val serverTimerId: Long?,
+    val serverTimerId: String?,
 )
 
 /** Editable draft rebuilt from a stored event (Quick Edit sheet's starting point, spec §5). */

@@ -85,8 +85,12 @@ else
   ash monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
 fi
 
-say "==> wait for login screen (tag: login/server_url)"
-wait_for_tag "login/server_url" 60 2 >/dev/null || die "login screen never appeared (60s)"
+say "==> wait for login screen (tag: login/mode_server — brief 04 picker is the landing)"
+wait_for_tag "login/mode_server" 60 2 >/dev/null || die "login picker never appeared (60s)"
+tap_tag "login/mode_server" || die "could not tap the Baby Buddy server card"
+
+say "==> wait for server URL step (tag: login/server_url)"
+wait_for_tag "login/server_url" 60 2 >/dev/null || die "server URL step never appeared (60s)"
 
 say "==> typing server URL (step 1 of the progressive login)"
 type_field "login/server_url" "$URL"

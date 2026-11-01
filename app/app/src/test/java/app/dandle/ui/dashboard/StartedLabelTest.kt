@@ -31,7 +31,7 @@ class StartedLabelTest {
         type = EventType.SLEEP,
         draft = PanelDraft(startedMinutesAgo = startedMinutesAgo),
         timer = timerStart?.let {
-            RunningTimer(localId = 1, kind = EventType.SLEEP, childId = 1, startedAtMillis = it, serverTimerId = null)
+            RunningTimer(localId = 1, kind = EventType.SLEEP, childId = "1", startedAtMillis = it, serverTimerId = null)
         },
     )
 

@@ -17,6 +17,14 @@ interface ChildDao {
     @Query("SELECT COUNT(*) FROM children")
     suspend fun count(): Int
 
+    /**
+     * Cloud identity adoption (P1 fix QA 2026-10-31): rekeys the row's primary key from the
+     * local UUID to the cloud record id after a successful push. No FK constraints reference
+     * children.id (see Entities.kt), so a plain PK update is safe.
+     */
+    @Query("UPDATE children SET id = :to WHERE id = :from")
+    suspend fun rekeyId(from: String, to: String)
+
     @Query("DELETE FROM children")
     suspend fun clear()
 }
@@ -33,30 +41,30 @@ interface EventDao {
     suspend fun byLocalUuid(localUuid: String): EventEntity?
 
     @Query("SELECT * FROM events WHERE type = :type AND serverId = :serverId LIMIT 1")
-    suspend fun byServerId(type: String, serverId: Long): EventEntity?
+    suspend fun byServerId(type: String, serverId: String): EventEntity?
 
-    @Query("SELECT * FROM events WHERE childId = :childId ORDER BY startMillis DESC")
-    fun observeTimeline(childId: Long): Flow<List<EventEntity>>
+    @Query("SELECT * FROM events WHERE childId = :childId AND deleted = 0 ORDER BY startMillis DESC")
+    fun observeTimeline(childId: String): Flow<List<EventEntity>>
 
     /** One-shot timeline read — the write-boundary reconciliation query (see EventRepository). */
-    @Query("SELECT * FROM events WHERE childId = :childId ORDER BY startMillis DESC")
-    suspend fun timeline(childId: Long): List<EventEntity>
+    @Query("SELECT * FROM events WHERE childId = :childId AND deleted = 0 ORDER BY startMillis DESC")
+    suspend fun timeline(childId: String): List<EventEntity>
 
-    @Query("SELECT COUNT(*) FROM events")
+    @Query("SELECT COUNT(*) FROM events WHERE deleted = 0")
     fun observeCount(): Flow<Int>
 
     /** Newest same-type entry for a child — the duplicate guard's probe (spec §3.7). */
     @Query(
-        "SELECT * FROM events WHERE childId = :childId AND type = :type " +
+        "SELECT * FROM events WHERE childId = :childId AND type = :type AND deleted = 0 " +
             "ORDER BY endMillis DESC LIMIT 1"
     )
-    suspend fun latestByType(childId: Long, type: String): EventEntity?
+    suspend fun latestByType(childId: String, type: String): EventEntity?
 
-    @Query("SELECT COUNT(*) FROM events WHERE syncState = 'FAILED'")
+    @Query("SELECT COUNT(*) FROM events WHERE syncState = 'FAILED' AND deleted = 0")
     fun observeFailedCount(): Flow<Int>
 
     /** Entries not yet on the server (PENDING + FAILED) — the session-expiry "N unsent" count. */
-    @Query("SELECT COUNT(*) FROM events WHERE syncState != 'SYNCED'")
+    @Query("SELECT COUNT(*) FROM events WHERE syncState != 'SYNCED' AND deleted = 0")
     fun observeUnsentCount(): Flow<Int>
 
     @Query("DELETE FROM events WHERE localUuid = :localUuid")
@@ -75,7 +83,7 @@ interface EventDao {
         syncState: String,
         failureReason: String?,
         conflictUiPath: String?,
-        conflictServerId: Long?,
+        conflictServerId: String?,
         updatedAt: Long,
     )
 
@@ -83,6 +91,10 @@ interface EventDao {
         "conflictUiPath = NULL, conflictServerId = NULL, updatedAtMillis = :updatedAt " +
         "WHERE localUuid = :localUuid")
     suspend fun markPending(localUuid: String, syncState: String, updatedAt: Long)
+
+    /** Cloud identity adoption (P1 fix QA 2026-10-31): move rows to the adopted child id. */
+    @Query("UPDATE events SET childId = :to WHERE childId = :from")
+    suspend fun reassignChild(from: String, to: String)
 }
 
 @Dao
@@ -100,10 +112,14 @@ interface TimerDao {
     suspend fun snapshot(): List<TimerEntity>
 
     @Query("SELECT * FROM timers WHERE childId = :childId AND kind = :kind LIMIT 1")
-    suspend fun findRunning(childId: Long, kind: String): TimerEntity?
+    suspend fun findRunning(childId: String, kind: String): TimerEntity?
 
     @Query("UPDATE timers SET serverTimerId = :serverTimerId WHERE id = :id")
-    suspend fun setServerTimerId(id: Long, serverTimerId: Long?)
+    suspend fun setServerTimerId(id: Long, serverTimerId: String?)
+
+    /** Cloud identity adoption (P1 fix QA 2026-10-31): move rows to the adopted child id. */
+    @Query("UPDATE timers SET childId = :to WHERE childId = :from")
+    suspend fun reassignChild(from: String, to: String)
 
     @Query("DELETE FROM timers WHERE id = :id")
     suspend fun delete(id: Long)

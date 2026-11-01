@@ -87,7 +87,7 @@ class DashboardWidgetSaveLiveUpdateTest {
         )
         runBlocking {
             container.sessionStore.saveLogin(server.url("/").toString().trimEnd('/'), "key", "admin")
-            container.sessionStore.setActiveChild(1)
+            container.sessionStore.setActiveChild("1")
         }
         container.initDatabase(context)
         container.start()
@@ -151,7 +151,7 @@ class DashboardWidgetSaveLiveUpdateTest {
 
         val draft = app.dandle.domain.model.EventDraft(
             type = EventType.CHANGE,
-            childId = 1,
+            childId = "1",
             startMillis = System.currentTimeMillis(),
             endMillis = System.currentTimeMillis(),
             wet = true,
@@ -204,7 +204,7 @@ class DashboardWidgetSaveLiveUpdateTest {
 
         val draft = app.dandle.domain.model.EventDraft(
             type = EventType.NOTE,
-            childId = 1,
+            childId = "1",
             startMillis = System.currentTimeMillis(),
             endMillis = System.currentTimeMillis(),
             noteText = "nudge pin",

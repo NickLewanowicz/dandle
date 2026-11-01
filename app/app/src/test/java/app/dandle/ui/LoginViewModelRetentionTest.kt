@@ -3,6 +3,7 @@ package app.dandle.ui
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -140,6 +141,14 @@ class LoginViewModelRetentionTest {
 
         // And the click path still drives the rendered state — through BOTH progressive steps,
         // ending in the navigation the original dead-end bug swallowed.
+        // Brief 04: the picker is the landing — select the Baby Buddy server card first.
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag(TestTags.LOGIN_MODE_SERVER).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(TestTags.LOGIN_MODE_SERVER).performClick()
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag(TestTags.LOGIN_SERVER_URL).fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL)
             .performTextClearance() // guard: session prefill may have landed after the init read
         composeRule.onNodeWithTag(TestTags.LOGIN_SERVER_URL)

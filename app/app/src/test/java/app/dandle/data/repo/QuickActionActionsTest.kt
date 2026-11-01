@@ -100,7 +100,7 @@ class QuickActionActionsTest {
             ),
             requestDrain = { },
         )
-        timerRepo = TimerRepository(app.dandle.data.backend.BabyBuddyTimerMirror({ api }), db, eventRepo, clock, serverClock)
+        timerRepo = TimerRepository(timerMirrorProvider = { app.dandle.data.backend.BabyBuddyTimerMirror({ api }) }, db = db, eventRepository = eventRepo, clock = clock, serverClock = serverClock)
         facade = QuickActionActions(timerRepo, eventRepo, quickActions, childRepo, sessionStore, serverClock)
     }
 
@@ -110,7 +110,7 @@ class QuickActionActionsTest {
         db.close()
     }
 
-    private fun seedChild(id: Long, name: String) {
+    private fun seedChild(id: String, name: String) {
         runTest {
             db.childDao().upsertAll(
                 listOf(
@@ -125,30 +125,30 @@ class QuickActionActionsTest {
 
     @Test
     fun `active child comes from the session and falls back to the first child`() = runTest {
-        seedChild(1, "Milo")
-        seedChild(2, "Zoe")
+        seedChild("1", "Milo")
+        seedChild("2", "Zoe")
         // No persisted selection → first child (spec §2 default).
-        assertEquals(1L, facade.activeChildId())
+        assertEquals("1", facade.activeChildId())
         // Persisted selection wins.
-        sessionStore.setActiveChild(2)
-        assertEquals(2L, facade.activeChildId())
+        sessionStore.setActiveChild("2")
+        assertEquals("2", facade.activeChildId())
     }
 
     @Test
     fun `start is idempotent per kind and child - widget re-taps never duplicate`() = runTest {
-        seedChild(1, "Milo")
+        seedChild("1", "Milo")
         responses += MockResponse().setResponseCode(201).setBody("""{"id":3,"child":1,"name":"Sleep-BBapp:2"}""")
-        val first = facade.startTimer(EventType.SLEEP, childId = 1)
-        val second = facade.startTimer(EventType.SLEEP, childId = 1)
+        val first = facade.startTimer(EventType.SLEEP, childId = "1")
+        val second = facade.startTimer(EventType.SLEEP, childId = "1")
         assertEquals(first.localId, second.localId)
-        assertEquals(first, facade.runningTimer(EventType.SLEEP, 1))
+        assertEquals(first, facade.runningTimer(EventType.SLEEP, "1"))
         assertEquals(1, db.timerDao().snapshot().size)
     }
 
     @Test
     fun `stop guard decision matches the in-app threshold`() = runTest {
-        seedChild(1, "Milo")
-        val timer = facade.startTimer(EventType.SLEEP, childId = 1)
+        seedChild("1", "Milo")
+        val timer = facade.startTimer(EventType.SLEEP, childId = "1")
         // Timer just started (now == start): under the 10s guard.
         assertFalse(facade.stopGuardNeeded(timer))
         // A timer started >10s ago needs the guard in-app; the widget opens the app instead.
@@ -158,34 +158,34 @@ class QuickActionActionsTest {
 
     @Test
     fun `discard removes the running timer`() = runTest {
-        seedChild(1, "Milo")
-        val timer = facade.startTimer(EventType.SLEEP, childId = 1)
+        seedChild("1", "Milo")
+        val timer = facade.startTimer(EventType.SLEEP, childId = "1")
         facade.discardTimer(timer)
-        assertNull(facade.runningTimer(EventType.SLEEP, 1))
+        assertNull(facade.runningTimer(EventType.SLEEP, "1"))
     }
 
     @Test
     fun `latest event lookup is per type and child`() = runTest {
-        seedChild(1, "Milo")
+        seedChild("1", "Milo")
         responses += MockResponse().setResponseCode(200).setBody(
             """{"count":1,"next":null,"previous":null,"results":[
                 {"id":5,"child":1,"time":"2025-10-09T05:00:00Z","wet":true,"solid":false,"color":"brown"}
             ]}""",
         )
         db.eventDao().upsertAll(listOf(ChangeDtoForTest()))
-        val change = facade.latestEvent(1, EventType.CHANGE)
+        val change = facade.latestEvent("1", EventType.CHANGE)
         assertNotNull(change)
         assertEquals(true, change!!.wet)
-        assertNull(facade.latestEvent(1, EventType.FEEDING))
-        assertNull(facade.latestEvent(2, EventType.CHANGE))
+        assertNull(facade.latestEvent("1", EventType.FEEDING))
+        assertNull(facade.latestEvent("2", EventType.CHANGE))
     }
 
     /** Change row shaped like the mapper's output (keeps the test free of mapper helpers). */
     private fun ChangeDtoForTest() = app.dandle.data.db.EventEntity(
         localUuid = "server:CHANGE:5",
-        serverId = 5,
+        serverId = "5",
         type = EventType.CHANGE.name,
-        childId = 1,
+        childId = "1",
         startMillis = now,
         endMillis = now,
         feedingType = null, feedingMethod = null, amount = null,

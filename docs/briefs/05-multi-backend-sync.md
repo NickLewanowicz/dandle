@@ -2,7 +2,7 @@
 title: "Brief 05: Multi-backend sync — typed backend layer, on-device mode, encrypted Dandle Cloud"
 ---
 
-> **STATUS: Draft — awaiting owner approval.** Architecture reviewed by android-engineer persona against the current tree (2026-10-31); all file:line references verified. Login UI pairing: Brief 04.
+> **STATUS: Implemented (2026-11-01)** — all decisions D1–D10 applied as recommended. Phases 2–3 committed separately (aa69d6e, 13cba6f); schema live on pockethost (rules smoke 2026-11-01); upgrade-path DataStore migration hardened after an emulator-found crash loop (same-name Preferences key). QA evidence in docs/flows/new-app/11+12.
 
 # Brief 05 — Multi-Backend Sync
 

@@ -141,8 +141,11 @@ class EventRepositoryEditTest {
         val ops = db.outboxDao().snapshot()
         assertEquals("stale CREATE is dropped, one fresh op remains", 1, ops.size)
         assertEquals("CREATE", ops.single().opType)
-        val body = json.parseToJsonElement(ops.single().payload).jsonObject
-        assertEquals("edited", body["notes"]!!.jsonPrimitive.content)
+        // Brief 05 §3: payloads are backend-neutral drafts; decode through the codec.
+        val draft = app.dandle.data.sync.OutboxPayloads.decodeDraft(
+            json, EventType.SLEEP, ops.single().payload,
+        )
+        assertEquals("edited", draft.noteText)
 
         // Drain: exactly one POST, carrying the EDITED body.
         responses += ok(EventType.SLEEP, 77)
@@ -151,7 +154,7 @@ class EventRepositoryEditTest {
         assertTrue(seen.single().startsWith("POST /api/sleep/"))
         assertTrue(seen.single().contains(""""notes":"edited""""))
         val row = db.eventDao().byLocalUuid(created.localUuid)!!
-        assertEquals(77L, row.serverId)
+        assertEquals("77", row.serverId)
         assertEquals(SyncState.SYNCED.name, row.syncState)
         assertEquals(0, db.outboxDao().snapshot().size)
     }
@@ -257,7 +260,7 @@ class EventRepositoryEditTest {
             ),
             EventType.CHANGE to EventDraft(
                 type = EventType.CHANGE,
-                childId = 1,
+                childId = "1",
                 startMillis = now,
                 endMillis = now,
                 wet = true,
@@ -269,14 +272,14 @@ class EventRepositoryEditTest {
             EventType.SLEEP to sleepDraft(noteText = "night stretch"),
             EventType.NOTE to EventDraft(
                 type = EventType.NOTE,
-                childId = 1,
+                childId = "1",
                 startMillis = now,
                 endMillis = now,
                 noteText = "first words!",
             ),
             EventType.PUMPING to EventDraft(
                 type = EventType.PUMPING,
-                childId = 1,
+                childId = "1",
                 startMillis = now,
                 endMillis = now + 1,
                 amount = 85.0,
@@ -284,7 +287,7 @@ class EventRepositoryEditTest {
             ),
             EventType.TUMMY_TIME to EventDraft(
                 type = EventType.TUMMY_TIME,
-                childId = 1,
+                childId = "1",
                 startMillis = now,
                 endMillis = now + 2,
                 milestone = "Rolled over!",
@@ -336,7 +339,7 @@ class EventRepositoryEditTest {
 
     private fun sleepDraft(noteText: String = "nap", startShift: Long = 0) = EventDraft(
         type = EventType.SLEEP,
-        childId = 1,
+        childId = "1",
         startMillis = now + startShift,
         endMillis = now + startShift + 45 * 60_000,
         noteText = noteText,
@@ -349,7 +352,7 @@ class EventRepositoryEditTest {
         noteText: String? = null,
     ) = EventDraft(
         type = EventType.FEEDING,
-        childId = 1,
+        childId = "1",
         startMillis = now,
         endMillis = now + 10 * 60_000,
         feedingType = typeWire,

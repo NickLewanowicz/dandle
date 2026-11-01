@@ -10,9 +10,9 @@ class EventHeadlineTest {
         EventHeadline.headline(
             Event(
                 localUuid = "u1",
-                serverId = 1,
+                serverId = "1",
                 type = type,
-                childId = 1,
+                childId = "1",
                 startMillis = 0,
                 endMillis = 0,
             ).build(),

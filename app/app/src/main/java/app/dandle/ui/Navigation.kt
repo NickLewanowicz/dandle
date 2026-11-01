@@ -49,6 +49,25 @@ fun AppNavHost(
                     LoginViewModel(
                         loginFlow = container.loginFlow,
                         sessionStore = container.sessionStore,
+                        // On-device backend (brief 05 §4): create the child, then adopt it as
+                        // the active one so the dashboard opens with it selected. Returns the
+                        // created child so the cloud hook below can push the SAME identity.
+                        onCreateLocalChild = { name, birthDate ->
+                            val child = container.childRepository.createLocal(name, birthDate)
+                            container.sessionStore.setActiveChild(child.id)
+                            child
+                        },
+                        cloudAuth = container.cloudAuth,
+                        vaultCloudDek = { dek ->
+                            java.util.Base64.getEncoder().encodeToString(container.vault.wrap(dek))
+                        },
+                        // P1 (QA 2026-10-31): fresh cloud accounts route to child setup. Reads
+                        // the session store (the token saved moments ago); a backend error
+                        // propagates and the ViewModel fails open into the dashboard.
+                        cloudHasChildren = { container.cloudHasChildren() },
+                        // Cloud child setup: the local Room row is the cloud record id — push
+                        // it so other devices (and the next pull) see the same child.
+                        onCloudChildCreated = { child -> container.pushCloudChild(child) },
                     )
                 }
                 LoginScreen(

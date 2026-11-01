@@ -25,6 +25,7 @@ class BabyBuddySyncPusher(
 
     override suspend fun pushCreate(type: EventType, draft: EventDraft): PushResult =
         wrap {
+            // The Baby Buddy wire keeps numeric pks; the boundary stringifies (brief 05 §3).
             val id = when (type) {
                 EventType.FEEDING -> apiProvider().createFeeding(draft.toFeedingWrite()).id
                 EventType.CHANGE -> apiProvider().createChange(draft.toChangeWrite()).id
@@ -33,33 +34,35 @@ class BabyBuddySyncPusher(
                 EventType.PUMPING -> apiProvider().createPumping(draft.toPumpingWrite()).id
                 EventType.TUMMY_TIME -> apiProvider().createTummyTime(draft.toTummyTimeWrite()).id
             }
-            PushResult.Ok(id)
+            PushResult.Ok(id.toString())
         }
 
-    override suspend fun pushEdit(type: EventType, serverId: Long, draft: EventDraft): PushResult =
+    override suspend fun pushEdit(type: EventType, serverId: String, draft: EventDraft): PushResult =
         wrap {
+            val numeric = serverId.toLong()
             when (type) {
-                EventType.FEEDING -> apiProvider().patchFeeding(serverId, draft.toFeedingWrite())
-                EventType.CHANGE -> apiProvider().patchChange(serverId, draft.toChangeWrite())
-                EventType.SLEEP -> apiProvider().patchSleep(serverId, draft.toSleepWrite())
-                EventType.NOTE -> apiProvider().patchNote(serverId, draft.toNoteWrite())
-                EventType.PUMPING -> apiProvider().patchPumping(serverId, draft.toPumpingWrite())
-                EventType.TUMMY_TIME -> apiProvider().patchTummyTime(serverId, draft.toTummyTimeWrite())
+                EventType.FEEDING -> apiProvider().patchFeeding(numeric, draft.toFeedingWrite())
+                EventType.CHANGE -> apiProvider().patchChange(numeric, draft.toChangeWrite())
+                EventType.SLEEP -> apiProvider().patchSleep(numeric, draft.toSleepWrite())
+                EventType.NOTE -> apiProvider().patchNote(numeric, draft.toNoteWrite())
+                EventType.PUMPING -> apiProvider().patchPumping(numeric, draft.toPumpingWrite())
+                EventType.TUMMY_TIME -> apiProvider().patchTummyTime(numeric, draft.toTummyTimeWrite())
             }
             PushResult.Ok(serverId)
         }
 
-    override suspend fun pushDelete(type: EventType, serverId: Long): PushResult =
+    override suspend fun pushDelete(type: EventType, serverId: String): PushResult =
         wrap {
             // Response-returning endpoints never throw on non-2xx; map codes directly
             // (deletes deliberately don't map 401 to AuthExpired — see SyncPusher doc).
+            val numeric = serverId.toLong()
             val response = when (type) {
-                EventType.FEEDING -> apiProvider().deleteFeeding(serverId)
-                EventType.CHANGE -> apiProvider().deleteChange(serverId)
-                EventType.SLEEP -> apiProvider().deleteSleep(serverId)
-                EventType.NOTE -> apiProvider().deleteNote(serverId)
-                EventType.PUMPING -> apiProvider().deletePumping(serverId)
-                EventType.TUMMY_TIME -> apiProvider().deleteTummyTime(serverId)
+                EventType.FEEDING -> apiProvider().deleteFeeding(numeric)
+                EventType.CHANGE -> apiProvider().deleteChange(numeric)
+                EventType.SLEEP -> apiProvider().deleteSleep(numeric)
+                EventType.NOTE -> apiProvider().deleteNote(numeric)
+                EventType.PUMPING -> apiProvider().deletePumping(numeric)
+                EventType.TUMMY_TIME -> apiProvider().deleteTummyTime(numeric)
             }
             when {
                 response.isSuccessful || response.code() == 404 -> PushResult.Deleted
