@@ -39,11 +39,12 @@ AI agents repeatedly re-derive the same device dance (fresh install → login �
    coordinates) and `05-sync-states-02-serverdown-pending.png` is intentionally absent pending a
    fix of the step sequence. Do not "restore" these files from old runs — a stale capture lies.
 9. **Pushing to Gitea (tower):** the `gitea` remote points at the public
-   `https://git.imnick.dev/nick/dandle.git` (Cloudflare-fronted). Large pushes
-   (the initial history, or any pack with many flow PNGs) get rejected with
-   **HTTP 413** by the proxy — push big packs over the LAN instead:
+   `https://git.imnick.dev/nick/dandle.git` (Cloudflare-fronted; migrated from
+   git.imnick.dev 2026-10-31 — a global `insteadOf` rewrite in `~/.gitconfig`
+   maps any stray old-domain URL to the new one). Large pushes (the initial
+   history, or any pack with many flow PNGs) get rejected with **HTTP 413** by
+   the proxy — push big packs over the LAN instead:
    `git push http://192.168.86.150:3010/nick/dandle.git main` (token auth same
-   as the public remote; the token lives in the sidehustle remote and in this
-   repo's gitea remote URL). Small day-to-day pushes work through the public
-   URL. The Gitea SSH endpoint on tower is port 2222 if key auth is ever set
-   up. (2026-10-30, during the migration from the old .57:3000 instance.)
+   as the public remote; the token lives in this repo's gitea remote URL).
+   Small day-to-day pushes work through the public URL. The Gitea SSH endpoint
+   on tower is port 2222 if key auth is ever set up.
