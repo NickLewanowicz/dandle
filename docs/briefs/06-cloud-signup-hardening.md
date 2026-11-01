@@ -25,5 +25,14 @@ Tell users the truth about the cloud service, make them contactable before any s
    - Phishing-safety copy note on the verify step: keep the app context visible ("Create your account · step 2 of 2") — seed-phrase confirmation UX is a known phishing mimic pattern.
 5. **Docs:** flow 12 + checklist 14 updated; tags `login/cloud_passphrase_generate`, `login/cloud_passphrase_regen`, `login/cloud_passphrase_verify`, `login/contact_email`; schema script adds `contact_email`.
 
+## Amendment (2026-11-01, owner + research)
+The original §3 ("Password + Confirm password side-by-side") is REVERSED after research: the
+adjacent confirm field is the obsolete pattern — NIST 800-63B endorses the show-password toggle
+over re-entry; web.dev, Nielsen Norman, and 2025 guides (Authgear, UX Movement) document that
+confirm fields double errors while validating nothing (managers autofill both identically).
+SHIPPED: single Password field with Show/Hide; the only next-step confirmation is the
+passphrase paste-verify — reserved for the irrecoverable secret, where separate-step
+confirmation IS the standard (wallet seed-phrase practice).
+
 ## Non-goals
 Email verification/SMTP; passphrase recovery flows; changing sign-in; marketing use of the email (copy explicitly excludes it).
