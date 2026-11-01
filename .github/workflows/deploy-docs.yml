@@ -1,10 +1,15 @@
-# Builds the Docusaurus docs site and publishes it to GitHub Pages.
+# Builds the Docusaurus docs site and runs the media smoke check.
 # Local equivalent: cd website && npm ci && npm run build   (output: website/build)
-# Cloudflare Pages alternative (no workflow file needed):
-#   Build command:     cd website && npm ci && npm run build
-#   Build output dir:  website/build
+#
+# History: this repo lived on GitHub briefly and deployed to GitHub Pages
+# (actions/upload-pages-artifact + deploy-pages). Those actions are GitHub
+# services that cannot work on the self-hosted Gitea runner — every run died
+# at "Upload Pages artifact" while build+verify were green (2026-10-31).
+# Publishing is done from the laptop: website/ builds clean, deploy target is
+# manual (Cloudflare Pages alternative: build command `cd website && npm ci
+# && npm run build`, output dir `website/build` — no workflow needed).
 
-name: Deploy docs
+name: Docs build check
 
 on:
   push:
@@ -14,16 +19,6 @@ on:
       - "website/**"
       - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Allow only one Pages deployment at a time; don't cancel in-flight deploys.
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -73,22 +68,6 @@ jobs:
           if missing:
               for page, src in missing:
                   print(f"BROKEN IMG: {src} on {page}")
-              sys.exit(1)
+                  sys.exit(1)
           print("all <img> srcs resolve")
           PY
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
