@@ -95,7 +95,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="12m · 120 mL"
+            android:text="12m · Amount: 120"
             android:textSize="12sp"
             android:textColor="#1D1B20"
             android:maxLines="1" />

@@ -1319,7 +1319,7 @@ g04_edit() {
   scroll_top
 
   step "04: feeding sheet + START moved one hour earlier via the native picker"
-  if find_row_text "Bottle · 149 mL" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
+  if find_row_text "Bottle · Amount: 149" && wait_for_tag "edit/sheet" 10 2 >/dev/null; then
     expand_sheet
     local xml before after new_hm changed hh mm
     xml="$(dump_with_retry)" || return 1
@@ -1359,7 +1359,7 @@ g04_edit() {
       assert_chk 0 "A2b timeline row updated after edit save (save button missing — step failed)"
     fi
   else
-    warn "feeding row 'Bottle · 137 mL' not found (was group 03 skipped?)"
+    warn "feeding row 'Bottle · Amount: 137' not found (was group 03 skipped?)"
     assert_chk 0 "A2a/A2b edit canaries (feeding row missing — step failed)"
   fi
 

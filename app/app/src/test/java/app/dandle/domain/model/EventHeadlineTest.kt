@@ -21,7 +21,7 @@ class EventHeadlineTest {
     @Test
     fun `feeding reads method then amount`() {
         assertEquals(
-            "Bottle · 120 mL",
+            "Bottle · Amount: 120",
             event(EventType.FEEDING) { copy(feedingMethod = "bottle", amount = 120.0) },
         )
     }
@@ -37,11 +37,11 @@ class EventHeadlineTest {
     @Test
     fun `feeding trims trailing -0 from whole amounts`() {
         assertEquals(
-            "Bottle · 3 mL",
+            "Bottle · Amount: 3",
             event(EventType.FEEDING) { copy(feedingMethod = "bottle", amount = 3.0) },
         )
         assertEquals(
-            "Bottle · 2.5 mL",
+            "Bottle · Amount: 2.5",
             event(EventType.FEEDING) { copy(feedingMethod = "bottle", amount = 2.5) },
         )
     }
@@ -87,12 +87,12 @@ class EventHeadlineTest {
 
     @Test
     fun `pumping reads Pump then amount`() {
-        assertEquals("Pump · 85 mL", event(EventType.PUMPING) { copy(amount = 85.0) })
+        assertEquals("Pump · Amount: 85", event(EventType.PUMPING) { copy(amount = 85.0) })
         assertEquals("Pump", event(EventType.PUMPING) { copy(amount = null) })
     }
 
     @Test
-    fun `zero or negative amount reads as unknown - no mL segment`() {
+    fun `zero or negative amount reads as unknown - no amount segment`() {
         // UX-review W9: the known failed-sync pump (amount 0) must not read as data,
         // in the app exactly like in the widgets (WidgetStateMapper.detailText).
         assertEquals("Pump", event(EventType.PUMPING) { copy(amount = 0.0) })

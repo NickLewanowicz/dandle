@@ -204,11 +204,12 @@ object WidgetStateMapper {
     /**
      * "12m ago" · amount for feed/pump, wet/solid for diaper, duration for nap (spec §7.2).
      * Amount ≤ 0 reads as unknown (UX-review W9): the known failed-sync pump with amount 0
-     * must not present "0 mL" as data. Kept in lockstep with [EventHeadline].
+     * must not present "Amount: 0" as data. Kept in lockstep with [EventHeadline]; unit-less
+     * per the amount rule (beta 2026-10-31 — no invented "mL").
      */
     fun detailText(event: Event): String? = when (event.type) {
         EventType.FEEDING, EventType.PUMPING ->
-            event.amount?.takeIf { it > 0.0 }?.let { amount -> "${trimNumber(amount)} mL" }
+            event.amount?.takeIf { it > 0.0 }?.let { amount -> "Amount: ${trimNumber(amount)}" }
         EventType.CHANGE -> when {
             event.wet == true && event.solid == true -> "Wet + Solid"
             event.wet == true -> "Wet"

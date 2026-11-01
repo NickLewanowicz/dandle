@@ -140,7 +140,7 @@ class WidgetStateMapperTest {
         // Priya (persona round 2): rows show CLOCK times — relative "12m" under-reports
         // as the widget goes stale between refreshes.
         assertEquals(WidgetStateMapper.clockTime(now - 12 * 60_000), feed.timeText)
-        assertEquals("120 mL", feed.detailText)
+        assertEquals("Amount: 120", feed.detailText)
         assertEquals(WidgetStateMapper.clockTime(now - 34 * 60_000), state.rows.first { it.type == EventType.CHANGE }.timeText)
         assertEquals("Wet", state.rows.first { it.type == EventType.CHANGE }.detailText)
         // Sleep 45m (>5min): start-end range (owner rule — no math for tired parents).
@@ -151,7 +151,7 @@ class WidgetStateMapperTest {
         )
         // Duration detail dropped for timed rows — the range carries it now.
         assertNull(napRange.detailText)
-        assertEquals("85 mL", state.rows.first { it.type == EventType.PUMPING }.detailText)
+        assertEquals("Amount: 85", state.rows.first { it.type == EventType.PUMPING }.detailText)
         assertTrue(state.runningSince.isEmpty())
     }
 

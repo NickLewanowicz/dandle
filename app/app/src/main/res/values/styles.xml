@@ -1,3 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The XML theme only owns the window chrome (background + system bars) while the app
+     is starting up; all real theming is Compose (ui/theme). Colors mirror the Compose
+     palette (Theme.kt LightBackground/DarkBackground) so the launch frame never flashes
+     the wrong mode. Transparent bars + enableEdgeToEdge() let content draw edge-to-edge. -->
 <resources>
-    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar" />
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>
