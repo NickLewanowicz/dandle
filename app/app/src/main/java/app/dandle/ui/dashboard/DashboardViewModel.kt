@@ -8,6 +8,10 @@ import android.net.NetworkRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -122,6 +126,8 @@ sealed interface DashboardEvent {
 class DashboardViewModel(
     private val container: AppContainer,
     private val appContext: Context,
+    /** Multi-device (brief: resume reconcile) — how often the periodic pull ticks while resumed. */
+    private val resumePullPeriodMs: Long = 60_000L,
 ) : ViewModel(), QuickActionCallbacks {
 
     private val childRepo = container.childRepository
@@ -325,6 +331,7 @@ class DashboardViewModel(
         }
 
     override fun onCleared() {
+        periodicPullJob?.cancel()
         try {
             connectivity?.unregisterNetworkCallback(networkCallback)
         } catch (_: Exception) {
@@ -468,22 +475,78 @@ class DashboardViewModel(
 
     // -- Refresh / sync --------------------------------------------------------------
 
+    /**
+     * Multi-device reconcile: the dashboard used to pull only once per composition, so an open
+     * app never reconciled against a spouse's device (stopped timer / edited history). ON_RESUME
+     * re-pulls immediately and a periodic loop keeps the open dashboard fresh; ON_PAUSE (and
+     * clear) stop the loop. Idempotent with [refresh] — every entry point shares one body
+     * ([doRefresh]) and one mutex, so a first-open double pull is merely serialized, not lost.
+     */
+    private val resumed = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    @Volatile
+    private var periodicPullJob: kotlinx.coroutines.Job? = null
+
+    /** Serializes every pull; also lets a periodic tick SKIP while a pull is in flight. */
+    private val refreshMutex = Mutex()
+
+    fun onAppResumed() {
+        if (resumed.getAndSet(true)) return
+        app.dandle.log.BbLog.d(TAG_UI, "app resumed: reconcile pull")
+        viewModelScope.launch { doRefresh() }
+        periodicPullJob = viewModelScope.launch {
+            while (isActive) {
+                delay(resumePullPeriodMs)
+                // Skip a tick while a pull is already running (mutex held): a queued duplicate
+                // pull would just pile up behind it — the next tick covers it.
+                if (refreshMutex.tryLock()) {
+                    try {
+                        pullNow()
+                    } finally {
+                        refreshMutex.unlock()
+                    }
+                }
+            }
+        }
+    }
+
+    fun onAppPaused() {
+        if (!resumed.getAndSet(false)) return
+        app.dandle.log.BbLog.d(TAG_UI, "app paused: stop periodic pull")
+        periodicPullJob?.cancel()
+        periodicPullJob = null
+    }
+
     /** Pull-to-refresh / app-open sync (spec §2.4): children + timers + events + outbox drain. */
     fun refresh() {
-        viewModelScope.launch {
-            refreshing.value = true
+        viewModelScope.launch { doRefresh() }
+    }
+
+    /** Joins (never drops): waits for an in-flight pull, then runs the full body. */
+    private suspend fun doRefresh() = refreshMutex.withLock {
+        pullNow()
+    }
+
+    /**
+     * One pull body shared by initial load, resume, the periodic tick, and pull-to-refresh.
+     * Timer reconcile runs for EVERY child, not only the active one — a timer stopped on
+     * another device must not linger on any child (DashboardMultiDeviceSyncTest).
+     */
+    private suspend fun pullNow() {
+        refreshing.value = true
+        try {
             childRepo.refresh()
-            val childId = uiState.value.activeChild?.id
-            if (childId != null) {
-                timerRepo.refresh(childId)
+            for (child in childRepo.children.first()) {
+                timerRepo.refresh(child.id)
             }
             eventRepo.refresh(limitPerType = fetchedLimitPerType)
+        } finally {
             refreshing.value = false
-            // Freshness (spec §7.2): timer reconciliation may have adopted or dropped timers
-            // (multi-device), and a pull can bring newer "last X" rows — re-render the widgets.
-            app.dandle.widget.WidgetRefresher.refreshAll(appContext)
-            SyncWorker.enqueue(appContext)
         }
+        // Freshness (spec §7.2): timer reconciliation may have adopted or dropped timers
+        // (multi-device), and a pull can bring newer "last X" rows — re-render the widgets.
+        app.dandle.widget.WidgetRefresher.refreshAll(appContext)
+        SyncWorker.enqueue(appContext)
     }
 
     /** SyncStatusChip tap (UX spec §5): force a drain + fresh pull. */
@@ -1056,7 +1119,15 @@ class DashboardViewModel(
 
         const val TIMELINE_PAGE = 30
         const val TIMELINE_PAGE_PER_TYPE = 20
-        const val INITIAL_FETCH_LIMIT_PER_TYPE = 50
+
+        /**
+         * Initial per-type pull window. 200, not 50: an EDIT-in-place does not move an event up
+         * the -end/-time ordering, so with 50+ newer same-type entries an edited row sat outside
+         * every pull until the user paged back in the UI — it never converged on an open
+         * dashboard (DashboardMultiDeviceSyncTest). 200 covers the recent history most edits
+         * target; deeper history still loads via loadOlder paging.
+         */
+        const val INITIAL_FETCH_LIMIT_PER_TYPE = 200
 
         /** T3: how long the "All synced" chip stays after a drain completes. */
         const val ALL_SYNCED_SETTLE_MS = 4_000L

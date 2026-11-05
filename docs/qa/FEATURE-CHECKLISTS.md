@@ -290,6 +290,26 @@ it on the emulator with screenshots archived under `docs/screenshots/`.
 
 **JVM tests:** `PassphraseGeneratorTest` (wordlist hygiene, entropy ≥ 60 bits), `LoginModePickerTest` (GENERATE→VERIFY machine, sign-in one-step, contact-email gating), `CloudBackendSignUpMappingTest` (contact_email wire shape + USERNAME_TAKEN mapping), `CryptoTest` (HKDF RFC 5869 vector, Argon2id, envelope round-trip, wrong-passphrase, AAD swap rejection, fresh nonce), `LocalBackendTest` LWW tombstone merge (shared merge path).
 
+
+## 15. Multi-device reconcile — resume + periodic pull (spec §6, 0.3.0)
+
+**Goal:** remote changes (spouse ends a timer, edits history) converge into an OPEN app without process death; the running-timer state never lies after a reconcile.
+
+**Steps**
+1. Device A (emulator): sign in, start a sleep timer from the quick action.
+2. End it "remotely": `scripts/qa/api.sh DELETE /api/timers/<server-id>/` (spouse's stop deletes the server timer).
+3. Background the app, foreground it → `BB/UI: app resumed: reconcile pull` then `BB/TIMER: drop stale SLEEP serverId=… (gone on server)` in `scripts/qa/applog.sh`; the timer strip is empty and the completed entry (if pulled) shows in the timeline.
+4. With the app open and idle, watch `scripts/qa/applog.sh`/server log: a pull cycle runs every ~60 s while resumed; backgrounding stops it (`app paused: stop periodic pull`).
+5. Historical edit: edit a SYNCED entry older than the newest-50 window via another client → within one resume/pull cycle the edited values appear locally.
+
+**Tags:** dashboard/timeline, dashboard/timer/<TYPE> (resume reconcile via `vm.onAppResumed()`).
+
+**Expected server requests:** on resume + each 60 s tick: GET children/ + six type lists (limit 200) + GET timers/ per child. Pull failures are silent (offline is normal).
+
+**Expected UI states:** running timer disappears on reconcile; edited history converges; no duplicate pulls stacking (mutex).
+
+**JVM tests:** `DashboardMultiDeviceSyncTest` (5 red-first pins: resume reconcile of vanished timer, resume triggers pull, periodic pull + pause stops it, out-of-window historical edit converges, plain refresh drops ended timers).
+
 ## TEMPLATE (copy for every new feature)
 
 ## N. `<Feature name>` (spec §`<ref>`)

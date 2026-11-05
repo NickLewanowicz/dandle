@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -118,6 +119,17 @@ fun DashboardScreen(
                 DashboardEvent.SignedOut -> onSignedOut()
                 is DashboardEvent.EntryCreated -> viewLastEntryUuid = event.localUuid
             }
+        }
+    }
+
+    // Multi-device reconcile: ON_RESUME re-pulls immediately and starts a periodic pull so an
+    // OPEN dashboard reconciles against other devices (stopped timer / edited history) instead
+    // of waiting for process death; ON_PAUSE stops it. Joins the LaunchedEffect initial refresh
+    // through the VM's refresh mutex — a double first-open pull is serialized, not lost.
+    LifecycleResumeEffect(Unit) {
+        viewModel.onAppResumed()
+        onPauseOrDispose {
+            viewModel.onAppPaused()
         }
     }
 

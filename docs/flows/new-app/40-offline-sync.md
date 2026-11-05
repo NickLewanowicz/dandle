@@ -13,6 +13,22 @@ title: "Flow verification: Offline & sync"
 - Current UI (2026-10-19): offline → header "Offline" chip + "Will sync" pill on pending entries; on recovery the queue drains (oldest-first) and the badges clear — both visible in the demo clip below.
 - Expected requests: while offline — none to the server (access log flat); on recovery — queued `POST`s in creation order (oldest first), each 201; a rejected op logs `BB/SYNC … op #N … rejected:` and shows the server's `non_field_errors` text.
 
+## Multi-device convergence (0.3.0)
+
+The outbox drain PUSHES local writes; pulls reconcile REMOTE changes. Pull triggers (0.3.0):
+app resume (lifecycle ON_RESUME), a ~60 s periodic tick while the dashboard is resumed
+(stopped on pause; pulls skip/queue-safe via mutex), pull-to-refresh / Sync-now chip, and the
+initial dashboard load. Timer reconciliation runs per pull for EVERY child (not just the active
+one): a server timer another device ended (stop = DELETE timer) is dropped from the local strip
+on the next pull; an edit-in-place to a SYNCED historical entry converges when the entry is
+within the pulled window (newest 200/type by end-time — edits don't bump that sort, so entries
+older than the window still need the web UI; documented limitation).
+
+How to verify: `DashboardMultiDeviceSyncTest` (5 red-first pins incl. out-of-window edit and
+vanished-timer reconcile) + checklist 15. Device evidence 2026-11-01: foreground after remote
+stop → `BB/UI: app resumed: reconcile pull` → `BB/TIMER: drop stale SLEEP serverId=615 (gone on
+server)`.
+
 ## Observed — scenario by scenario (spec §6.3)
 
 **Watch it happen — going offline and draining.**
