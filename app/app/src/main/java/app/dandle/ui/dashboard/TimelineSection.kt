@@ -3,6 +3,8 @@ package app.dandle.ui.dashboard
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,9 +73,13 @@ fun TimelineSection(
     modifier: Modifier = Modifier,
     scrollToUuid: String? = null,
     leadingItem: (@Composable () -> Unit)? = null,
+    // 0.3.1: the list extends UNDER the fixed header/quick-actions block (elevation
+    // boundary), so its content is padded by the MEASURED block height — never a constant
+    // (font scale/locale change it; hard-coding was the bug class the mock review flagged).
+    contentPaddingTop: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
 ) {
     if (totalCount == 0) {
-        Column(modifier = modifier) {
+        Column(modifier = modifier.padding(top = contentPaddingTop)) {
             leadingItem?.invoke()
             EmptyTimeline(modifier = Modifier.weight(1f))
         }
@@ -111,6 +117,7 @@ fun TimelineSection(
         modifier = modifier
             .fillMaxSize()
             .testTag(TestTags.DASHBOARD_TIMELINE),
+        contentPadding = PaddingValues(top = contentPaddingTop),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (leadingItem != null) {

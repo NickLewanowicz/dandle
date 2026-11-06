@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -23,15 +24,26 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -144,50 +156,44 @@ fun DashboardScreen(
         PullToRefreshBox(
             isRefreshing = state.refreshing,
             onRefresh = { viewModel.refresh() },
+            // Owner 0.3.1 feedback: the platform pull spinner duplicated the header chip's
+            // "Syncing…" spinner. The gesture stays; only the chip communicates the sync.
+            indicator = {},
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .testTag(TestTags.DASHBOARD),
         ) {
-            Column(
+            val pullState = rememberPullToRefreshState()
+            val density = LocalDensity.current
+            val haptics = LocalHapticFeedback.current
+            var pullCrossed by remember { mutableStateOf(false) }
+            var fixedHeightPx by remember { mutableIntStateOf(0) }
+
+            // Pull threshold haptic (ux review 0.3.1): with the platform spinner suppressed, a
+            // tick at the threshold is the "gesture registered" confirmation during the drag.
+            LaunchedEffect(pullState) {
+                snapshotFlow { pullState.distanceFraction }.collect { fraction ->
+                    if (fraction >= 1f && !pullCrossed) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        pullCrossed = true
+                    } else if (fraction < 0.9f) {
+                        pullCrossed = false
+                    }
+                }
+            }
+
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(padding)
+                    .testTag(TestTags.DASHBOARD),
             ) {
-                HeaderRow(
-                    children = state.children,
-                    activeChild = state.activeChild,
-                    onSelectChild = viewModel::selectChild,
-                    onSignOut = { showSignOutDialog = true },
-                    onHelp = { showHelpDialog = true },
-                    onAbout = { showAboutDialog = true },
-                    syncChip = syncChipState(state.isOnline, state.syncing, state.showAllSynced),
-                    onSyncChipTap = viewModel::syncNow,
-                )
-
-                if (state.sessionExpired) {
-                    SessionExpiredBanner(
-                        unsentCount = state.unsentCount,
-                        onSignIn = onSignIn,
-                    )
-                }
-
-                // U1: the grid is the first thing under the header, always at the same place.
-                QuickActionsGrid(
-                    childPresent = state.activeChild != null,
-                    runningKinds = state.runningTimers.map { it.kind }.toSet(),
-                    openType = state.openPanel?.type,
-                    runningElapsed = state.runningTimers.associate {
-                        it.kind to ElapsedTimeFormatter.durationShort(nowMillis - it.startedAtMillis)
-                    },
-                    enabled = state.activeChild != null,
-                    onTap = viewModel::onQuickActionTap,
-                )
-
-                // U2: a running timer renders as the expanded TOP ELEMENT of the list — it is the
-                // timeline's first item, so it scrolls with it and the keyboard can never hide
-                // the field being typed into.
+                // U2 (unchanged): a running timer renders as the expanded TOP ELEMENT of the list.
                 val runningPanel = state.openPanel?.takeIf { it.type.isTimed && it.timer != null }
+
+                // The timeline spans the full screen and scrolls UNDER the fixed block
+                // (ux review 0.3.1, treatment A: elevation boundary).
                 TimelineSection(
                     events = state.timeline,
                     totalCount = state.totalTimelineCount,
@@ -211,7 +217,19 @@ fun DashboardScreen(
                     onFailureBadge = viewModel::onFailureBadgeTapped,
                     onLoadOlder = { viewModel.loadOlder() },
                     scrollToUuid = viewLastEntryUuid,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics {
+                            customActions = listOf(
+                                CustomAccessibilityAction("Refresh") {
+                                    viewModel.refresh()
+                                    true
+                                },
+                            )
+                        },
+                    // Padded by the MEASURED fixed-block height (never a constant — font scale
+                    // and locale change it; hard-coding was the bug class the review flagged).
+                    contentPaddingTop = with(density) { fixedHeightPx.toDp() } + 8.dp,
                     leadingItem = runningPanel?.let { panel ->
                         {
                             val guardTimer = stopGuardTimer
@@ -234,6 +252,51 @@ fun DashboardScreen(
                         }
                     },
                 )
+
+                // Fixed block: header + session banner + quick actions — elevated above the
+                // scrolling history. tonalElevation separates it in dark mode (a shadow alone is
+                // invisible there); shadowElevation draws the light-mode shadow. Always-on.
+                Surface(
+                    shape = RectangleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { fixedHeightPx = it.height },
+                ) {
+                    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                        HeaderRow(
+                            children = state.children,
+                            activeChild = state.activeChild,
+                            onSelectChild = viewModel::selectChild,
+                            onSignOut = { showSignOutDialog = true },
+                            onHelp = { showHelpDialog = true },
+                            onAbout = { showAboutDialog = true },
+                            syncChip = syncChipState(state.isOnline, state.syncing, state.showAllSynced),
+                            onSyncChipTap = viewModel::syncNow,
+                        )
+
+                        if (state.sessionExpired) {
+                            SessionExpiredBanner(
+                                unsentCount = state.unsentCount,
+                                onSignIn = onSignIn,
+                            )
+                        }
+
+                        // U1: the grid is the first thing under the header, always at the same place.
+                        QuickActionsGrid(
+                            childPresent = state.activeChild != null,
+                            runningKinds = state.runningTimers.map { it.kind }.toSet(),
+                            openType = state.openPanel?.type,
+                            runningElapsed = state.runningTimers.associate {
+                                it.kind to ElapsedTimeFormatter.durationShort(nowMillis - it.startedAtMillis)
+                            },
+                            enabled = state.activeChild != null,
+                            onTap = viewModel::onQuickActionTap,
+                        )
+                    }
+                }
             }
         }
     }

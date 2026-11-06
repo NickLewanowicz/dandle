@@ -17,6 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import app.dandle.R
@@ -168,11 +171,15 @@ fun SyncStatusChip(state: SyncChipState, onTap: () -> Unit) {
                 }
             }
 
+            // 0.3.1: syncing is the only pull feedback (platform spinner suppressed) —
+            // emphasize with secondaryContainer + announce for TalkBack.
             SyncChipState.Syncing -> Surface(
                 onClick = onTap,
                 shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.testTag(TestTags.DASHBOARD_SYNC_CHIP),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier
+                    .testTag(TestTags.DASHBOARD_SYNC_CHIP)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
