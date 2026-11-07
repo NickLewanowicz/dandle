@@ -24,6 +24,16 @@ on the next pull; an edit-in-place to a SYNCED historical entry converges when t
 within the pulled window (newest 200/type by end-time — edits don't bump that sort, so entries
 older than the window still need the web UI; documented limitation).
 
+Ghost-timer rule (0.3.1): a stop while offline/failed leaves the server timer RUNNING (the
+stop's server-timer delete is best-effort) while the completed entry syncs later — devices then
+mirror a ghost "running" timer alongside the saved record. Reconcile now matches: a server
+app-timer whose start is within ±2 min of a completed same-child/same-type entry's start is a
+GHOST — deleted server-side and dropped locally. Safeguard (owner requirement): an unmatched
+running timer (e.g. an offline-started timer syncing late with no completion entry) is never
+cancelled — cancellation requires the start-time match. Pinned by TimerRepositoryTest
+(REPRO ghost + tolerance + safeguard tests). Note: a sub-2-minute entry followed by an
+immediate same-type restart can false-match (documented; refine with endMillis if it bites).
+
 How to verify: `DashboardMultiDeviceSyncTest` (5 red-first pins incl. out-of-window edit and
 vanished-timer reconcile) + checklist 15. Device evidence 2026-11-01: foreground after remote
 stop → `BB/UI: app resumed: reconcile pull` → `BB/TIMER: drop stale SLEEP serverId=615 (gone on

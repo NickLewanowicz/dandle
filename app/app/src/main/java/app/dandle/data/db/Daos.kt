@@ -60,6 +60,18 @@ interface EventDao {
     )
     suspend fun latestByType(childId: String, type: String): EventEntity?
 
+    /**
+     * Ghost-timer match probe (TimerRepository.refresh): a completed entry for the same child +
+     * type whose start sits within [startMin, startMax] of a still-listed server timer's start
+     * proves the timer was logically stopped and only its server-side deletion failed. Any sync
+     * state counts — a FAILED completion attempt still documents the stop intent.
+     */
+    @Query(
+        "SELECT * FROM events WHERE childId = :childId AND type = :type AND deleted = 0 " +
+            "AND startMillis BETWEEN :startMin AND :startMax LIMIT 1"
+    )
+    suspend fun findByStartNear(childId: String, type: String, startMin: Long, startMax: Long): EventEntity?
+
     @Query("SELECT COUNT(*) FROM events WHERE syncState = 'FAILED' AND deleted = 0")
     fun observeFailedCount(): Flow<Int>
 

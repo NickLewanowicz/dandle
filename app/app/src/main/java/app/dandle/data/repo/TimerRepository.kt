@@ -37,6 +37,16 @@ class TimerRepository(
     /** BbLog tag for timer lifecycle logs (see app.dandle.log.BbLog). */
     private val TAG = app.dandle.log.BbLog.TAG_TIMER
 
+    private companion object {
+        /**
+         * Ghost-match window (±2 min): the stopping device stamps the completion entry's start
+         * from the timer's own start, so an exact match is expected; the tolerance absorbs clock
+         * differences between devices and short manual entries (cross-device ghost timer bug,
+         * 0.3.1 user report).
+         */
+        const val GHOST_MATCH_TOLERANCE_MS = 120_000L
+    }
+
     fun observeRunning(): Flow<List<RunningTimer>> =
         timerDao.observeAll().map { rows -> rows.map { it.toModel() } }
 
@@ -139,11 +149,46 @@ class TimerRepository(
             val serverAppTimers = mirror.listForChild(childId).filter { timer ->
                 timer.name != null && EventType.entries.any { it.serverTimerName == timer.name }
             }
-            val trackedServerIds = timerDao.snapshot().mapNotNull { it.serverTimerId }.toSet()
+            val localTimers = timerDao.snapshot()
+            val trackedServerIds = localTimers.mapNotNull { it.serverTimerId }.toSet()
 
             for (timer in serverAppTimers) {
-                if (timer.id in trackedServerIds) continue
                 val kind = EventType.entries.first { it.serverTimerName == timer.name }
+                // Ghost check BEFORE the tracked/adopt decision: a completed entry for this
+                // child+type whose start sits within GHOST_MATCH_TOLERANCE_MS of the timer's own
+                // start is the PROOF the timer was logically stopped (stopAndSave stamps the
+                // entry start from the timer's start) and only the server-timer DELETE failed.
+                // Without this, every device faithfully re-adopts a timer the server never got
+                // told to delete — the "ghost still running next to its saved record" (0.3.1).
+                val timerStart = timer.startIso?.let { runCatching { Iso8601.parse(it) }.getOrNull() }
+                val completion = timerStart?.let { start ->
+                    db.eventDao().findByStartNear(
+                        childId = timer.childId ?: childId,
+                        type = kind.name,
+                        startMin = start - GHOST_MATCH_TOLERANCE_MS,
+                        startMax = start + GHOST_MATCH_TOLERANCE_MS,
+                    )
+                }
+                if (completion != null) {
+                    app.dandle.log.BbLog.d(
+                        TAG,
+                        "ghost ${kind.name} serverId=${timer.id}: completion entry exists, deleting server timer",
+                    )
+                    try {
+                        mirror.delete(timer.id)
+                    } catch (e: Exception) {
+                        // Left on the server for now; the entry persists as the proof and the
+                        // deletion retries on the next refresh. The local row is still dropped:
+                        // the timer is logically stopped on this device.
+                        app.dandle.log.BbLog.d(TAG, "ghost delete failed serverId=${timer.id}: ${e.message}")
+                    }
+                    localTimers.filter { it.serverTimerId == timer.id }.forEach { timerDao.delete(it.id) }
+                    continue
+                }
+                // Owner safeguard above: an unmatched timer is genuinely running — keep/adopt it
+                // exactly as before (an offline-started timer that syncs late is NEVER cancelled
+                // just because some recent entry exists; cancellation requires the start match).
+                if (timer.id in trackedServerIds) continue
                 app.dandle.log.BbLog.d(TAG, "restore ${kind.name} serverId=${timer.id}")
                 timerDao.insert(
                     TimerEntity(
@@ -169,8 +214,10 @@ class TimerRepository(
                     timerDao.delete(local.id)
                 }
             }
-        } catch (_: Exception) {
-            // Offline: local timers keep running; nothing to reconcile.
+        } catch (e: Exception) {
+            // Offline / unreachable: local timers keep running; nothing was reconciled. Never
+            // silent — a swallowed reconcile failure hid the ghost-timer bug for weeks.
+            app.dandle.log.BbLog.d(TAG, "reconcile failed: ${e.message}")
         }
     }
 }

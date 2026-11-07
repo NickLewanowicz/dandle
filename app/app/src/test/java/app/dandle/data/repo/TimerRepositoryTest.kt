@@ -339,4 +339,132 @@ class TimerRepositoryTest {
         assertEquals(Iso8601.parse("2025-10-10T00:07:00Z"), saved.endMillis)
         assertEquals(12 * 60_000L, saved.endMillis - saved.startMillis)
     }
+
+    // -- 0.3.1 reproduction: cross-device ghost timer --------------------------------
+    // Wife starts a timer (server timer exists). She then STOPS it while offline/her delete
+    // fails: her completed entry is saved, but the server-timer DELETE never reaches the
+    // server — so the server still lists the timer as RUNNING. The user's device pulls the
+    // completed entry but keeps mirroring the ghost timer forever.
+
+    private suspend fun insertCompletedEntry(serverTimerStartIso: String) {
+        val start = Iso8601.parse(serverTimerStartIso)
+        db.eventDao().upsert(
+            app.dandle.data.db.EventEntity(
+                localUuid = "ghost-entry-1",
+                serverId = "301",
+                type = EventType.SLEEP.name,
+                childId = "1",
+                startMillis = start,
+                endMillis = start + 3_600_000L,
+                feedingType = null,
+                feedingMethod = null,
+                amount = null,
+                wet = null,
+                solid = null,
+                color = null,
+                noteText = "night sleep",
+                milestone = null,
+                syncState = SyncState.SYNCED.name,
+                failureReason = null,
+                conflictUiPath = null,
+                conflictServerId = null,
+                createdAtMillis = serverNow,
+                updatedAtMillis = serverNow,
+            )
+        )
+    }
+
+    private fun serverTimersResponse(vararg ids: Long) = MockResponse().setResponseCode(200).setBody(
+        """{"count":${ids.size},"next":null,"previous":null,"results":[""" + ids.joinToString(",") { id ->
+            """{"id":$id,"child":1,"name":"Sleep-BBapp:2","start":"${Iso8601.format(serverNow)}"}"""
+        } + """]}"""
+    )
+
+    @Test
+    fun `REPRO ghost — refresh drops a running server timer whose completion entry already exists`() = runTest {
+        // Wife starts: server timer 9 created; local row adopted with serverTimerId=9.
+        responses += timerCreatedResponse(9, Iso8601.format(serverNow))
+        timerRepo.start(EventType.SLEEP, childId = "1")
+        assertEquals("9", db.timerDao().snapshot().single().serverTimerId)
+
+        // Wife stops offline: her completed entry exists (same child, type, start = timer start),
+        // but the server-timer DELETE never reached the server — timer 9 is still listed.
+        insertCompletedEntry(Iso8601.format(serverNow))
+
+        responses += serverTimersResponse(9) // server truth: timer 9 still "running"
+        timerRepo.refresh("1")
+
+        // The entry IS the completion record of this timer: the ghost must be dropped
+        // locally and the stale server timer deleted.
+        assertNull(
+            "a running timer whose completion entry exists must not keep running",
+            timerRepo.findRunning(EventType.SLEEP, "1"),
+        )
+        assertTrue(
+            "the ghost server timer must be deleted on reconcile",
+            seenRequests.any { it == "DELETE /api/timers/9/" },
+        )
+    }
+
+    @Test
+    fun `ghost matching respects the tolerance - entry 100s before the timer start still matches`() = runTest {
+        // Clock drift between the stopping device and the server: the entry start is stamped
+        // 100 s before the timer's own start — inside the ±2 min window, so still a match.
+        responses += timerCreatedResponse(9, Iso8601.format(serverNow))
+        timerRepo.start(EventType.SLEEP, childId = "1")
+        insertCompletedEntry(Iso8601.format(serverNow - 100_000L))
+
+        responses += serverTimersResponse(9)
+        timerRepo.refresh("1")
+
+        assertNull("a ghost within the tolerance window must be dropped", timerRepo.findRunning(EventType.SLEEP, "1"))
+        assertTrue(seenRequests.any { it == "DELETE /api/timers/9/" })
+    }
+
+    @Test
+    fun `an entry 10 minutes before the timer start does not match - timer kept`() = runTest {
+        // A recent same-type entry is NOT proof of completion when its start is far from the
+        // timer's own start: the timer keeps running and must not be deleted server-side.
+        responses += timerCreatedResponse(9, Iso8601.format(serverNow))
+        timerRepo.start(EventType.SLEEP, childId = "1")
+        insertCompletedEntry(Iso8601.format(serverNow - 10 * 60_000L))
+
+        responses += serverTimersResponse(9)
+        timerRepo.refresh("1")
+
+        val running = timerRepo.findRunning(EventType.SLEEP, "1")
+        assertNotNull("an unmatched running timer must keep running", running)
+        assertEquals("9", running!!.serverTimerId)
+        assertTrue(
+            "no delete may be sent for a genuinely running timer",
+            seenRequests.none { it.startsWith("DELETE /api/timers/") },
+        )
+    }
+
+    @Test
+    fun `an unmatched running server timer is never cancelled (offline-start safeguard)`() = runTest {
+        // Timer running on the server (started on another device, synced late), NO completion
+        // entry anywhere: adoption must proceed exactly as before the ghost fix.
+        responses += serverTimersResponse(9)
+        timerRepo.refresh("1")
+
+        val adopted = timerRepo.findRunning(EventType.SLEEP, "1")
+        assertNotNull("an offline-started timer must be adopted, never cancelled", adopted)
+        assertEquals("9", adopted!!.serverTimerId)
+        assertTrue(seenRequests.none { it.startsWith("DELETE /api/timers/") })
+    }
+
+    @Test
+    fun `reconcile failure is logged and leaves local state untouched`() = runTest {
+        // Offline-created local timer (create 500s → local-only row), then the timers LIST
+        // fails too (unscripted → 500): refresh must fail soft — no adoption, no mutation.
+        timerRepo.start(EventType.SLEEP, childId = "1")
+        timerRepo.refresh("1") // GET /api/timers/ → 500
+
+        assertTrue(seenRequests.contains("GET /api/timers/"))
+        val running = timerRepo.findRunning(EventType.SLEEP, "1")
+        assertNotNull("a failed reconcile must not touch local timers", running)
+        assertNull("a failed reconcile must not adopt or mutate the local row", running!!.serverTimerId)
+        assertEquals(1, db.timerDao().snapshot().size)
+    }
 }
