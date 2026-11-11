@@ -62,7 +62,7 @@ Dandle Cloud is a free service and could change or end. Add an optional contact 
 ## Watch it happen
 
 <p align="center">
-  <img src="docs/media/demo-timer.gif" width="220" alt="Start a sleep timer, save it with one tap">
+  <img src="docs/media/demo-sleep-timer.gif" width="220" alt="Start a sleep timer, save it with one tap">
   &nbsp;&nbsp;
   <img src="docs/media/demo-reconcile.gif" width="220" alt="A timer ended on another phone resolves on this one — no restart needed">
   &nbsp;&nbsp;
