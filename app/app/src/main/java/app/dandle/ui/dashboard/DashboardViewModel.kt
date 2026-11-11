@@ -115,6 +115,13 @@ sealed interface DashboardEvent {
 
     /** A quick-action save landed locally — the UI scrolls the timeline to the new row. */
     data class EntryCreated(val localUuid: String) : DashboardEvent
+
+    /**
+     * One-shot calm notice (0.3.1 QA): the open panel's timer was ended on another device /
+     * the web UI and reconcile removed it — the panel was closed; the message states what
+     * happened in parent language ("Sleep ended on another phone.").
+     */
+    data class TimerEndedRemotely(val message: String) : DashboardEvent
 }
 
 /**
@@ -303,12 +310,20 @@ class DashboardViewModel(
      * panel. This collector opens the panel whenever a timer runs for the active child and no
      * editor is open (app restart with a timer, child switch, timer started from the widget).
      * Idempotent: the panel it opens satisfies the guard on the next emission.
+     *
+     * Remote-end close (0.3.1 QA): the reverse edge — when the open TIMED panel's own timer row
+     * disappears from [TimerRepository.observeRunning] (reconcile dropped it: the timer was
+     * ended on another device or the web UI), the panel must not keep ticking and savable from
+     * its stale snapshot — see [autoCloseIfTimerEndedRemotely]. The auto-OPEN guard below is
+     * unchanged: a panel that stays open still suppresses auto-open.
      */
     private fun observeRunningTimersAutoOpen() {
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(activeChildId, timerRepo.observeRunning()) { childId, timers ->
                 childId to timers
             }.collect { (childId, timers) ->
+                latestRunningSnapshot = timers
+                autoCloseIfTimerEndedRemotely(timers)
                 if (childId == null || openPanel.value != null) return@collect
                 val unopened = timers.firstOrNull { it.childId == childId && openPanel.value?.type != it.kind }
                 if (unopened != null) {
@@ -317,6 +332,53 @@ class DashboardViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Latest running-timers emission — lets a deferred re-check ([onDuplicateDismiss]) act on
+     * the table state the collector last saw without re-querying Room. Null until the first
+     * emission, so a re-check never acts on an uninitialized (falsely empty) snapshot.
+     */
+    @Volatile
+    private var latestRunningSnapshot: List<RunningTimer>? = null
+
+    /**
+     * The panel-ending flow currently mid-flight ([commitSave] / [discardTimer]). Its own
+     * timer-row delete produces exactly the emission the auto-close reacts to — the collector
+     * must defer to it for that panel type, or the user's OWN save/discard would be announced
+     * as "ended on another phone". The flow still closes the panel itself (its normal tail).
+     */
+    @Volatile
+    private var panelEndingInFlight: EventType? = null
+
+    /**
+     * 0.3.1 QA multi-device fix: an open TIMED panel is bound to its running timer row; when
+     * that row is gone (reconcile dropped it — ended elsewhere), close the panel calmly.
+     * Guards, in order: manual-entry panels (timer == null) are never auto-closed; a save the
+     * duplicate guard is holding ([heldSave]) resolves through its own paths; a mid-flight
+     * save/discard of this panel type owns the panel ([panelEndingInFlight]). The match is by
+     * localId — the exact row this panel was showing, never merely "no timer of this kind".
+     */
+    private fun autoCloseIfTimerEndedRemotely(timers: List<RunningTimer>) {
+        val panel = openPanel.value ?: return
+        val timer = panel.timer ?: return
+        if (heldSave != null || panelEndingInFlight == panel.type) return
+        if (timers.any { it.localId == timer.localId }) return
+        closeRemotelyEndedPanel(panel)
+    }
+
+    /**
+     * Closes a panel whose timer was stopped elsewhere. Draft cleanup mirrors [commitSave]
+     * (the panel's session is over — its entry was already logged by the other device), and
+     * one calm line states what happened. Non-suspend: callable from the collector and from
+     * commitSave's vanished-timer branch alike; the DataStore cleanup fires on the VM scope.
+     */
+    private fun closeRemotelyEndedPanel(panel: OpenPanel) {
+        val timer = panel.timer ?: return
+        app.dandle.log.BbLog.d(TAG_UI, "auto-close ${panel.type.name}: timer ${timer.localId} ended elsewhere")
+        openPanel.value = null
+        viewModelScope.launch { quickActions.clearPanel(timer.childId, panel.type.name) }
+        _events.tryEmit(DashboardEvent.TimerEndedRemotely("${panel.type.label} ended on another phone."))
     }
 
     /**
@@ -536,10 +598,14 @@ class DashboardViewModel(
         refreshing.value = true
         try {
             childRepo.refresh()
+            // Events BEFORE timers (0.3.1 QA regression): the ghost-timer match compares a
+            // still-listed server timer against a completion entry — if the type lists are
+            // pulled AFTER the timer reconcile, a ghost whose entry arrives in this same
+            // cycle survives until the next cycle (minutes of a savable running card).
+            eventRepo.refresh(limitPerType = fetchedLimitPerType)
             for (child in childRepo.children.first()) {
                 timerRepo.refresh(child.id)
             }
-            eventRepo.refresh(limitPerType = fetchedLimitPerType)
         } finally {
             refreshing.value = false
         }
@@ -743,12 +809,19 @@ class DashboardViewModel(
     fun discardTimer(timer: RunningTimer) {
         app.dandle.log.BbLog.d(TAG_UI, "strip discard ${timer.kind.name} localId=${timer.localId}")
         viewModelScope.launch {
-            timerRepo.discard(timer)
-            app.dandle.widget.WidgetRefresher.refreshAll(appContext)
-            val panel = openPanel.value?.takeIf { it.type == timer.kind }
-            if (panel != null) {
-                openPanel.value = null
-                quickActions.savePanel(timer.childId, panel.type.name, panel.draft.copy(open = false))
+            // Own the panel: the delete's emission must not trip the auto-close collector
+            // mid-discard (the panel is closed by THIS flow, with its own no-snackbar rules).
+            panelEndingInFlight = timer.kind
+            try {
+                timerRepo.discard(timer)
+                app.dandle.widget.WidgetRefresher.refreshAll(appContext)
+                val panel = openPanel.value?.takeIf { it.type == timer.kind }
+                if (panel != null) {
+                    openPanel.value = null
+                    quickActions.savePanel(timer.childId, panel.type.name, panel.draft.copy(open = false))
+                }
+            } finally {
+                panelEndingInFlight = null
             }
         }
     }
@@ -767,12 +840,39 @@ class DashboardViewModel(
         app.dandle.log.BbLog.d(TAG_UI, "duplicate prompt: dismiss")
         duplicatePrompt.value = null
         heldSave = null
+        // The auto-close collector skipped while the duplicate guard held this panel's save; if
+        // the timer ended remotely during the prompt, close it now — no further timer-table
+        // emission will fire on its own (the drop emission was already consumed by the skip).
+        latestRunningSnapshot?.let { autoCloseIfTimerEndedRemotely(it) }
     }
 
     private suspend fun commitSave(type: EventType, childId: String, draft: EventDraft, timer: RunningTimer?) {
+        // Own the panel for the duration: the stop below deletes the timer row, whose emission
+        // must not trip the auto-close collector mid-save (see panelEndingInFlight).
+        panelEndingInFlight = type
+        try {
+            commitSaveInner(type, childId, draft, timer)
+        } finally {
+            panelEndingInFlight = null
+        }
+    }
+
+    private suspend fun commitSaveInner(type: EventType, childId: String, draft: EventDraft, timer: RunningTimer?) {
         val created = if (type.isTimed) {
-            val running = timer ?: timerRepo.findRunning(type, childId) ?: return
-            timerRepo.stopAndSave(running, draft)
+            val running = timer ?: timerRepo.findRunning(type, childId)
+            if (running == null) {
+                // The timer row vanished while this save was in flight — a reconcile dropped it
+                // (ended elsewhere, or the drop raced this very save, e.g. the initial pull's
+                // stale-snapshot drop-stale hitting a just-started timer). Nothing to stop, and
+                // the panel still closes via the shared tail below — but an EXPLICIT save is
+                // never discarded: the draft already carries the started-ago backdate, so the
+                // entry lands through the normal local-first create path (PENDING, queued) and
+                // the duplicate guard / sync conflict flow sorts out any overlap with the other
+                // device's entry.
+                eventRepo.create(draft)
+            } else {
+                timerRepo.stopAndSave(running, draft)
+            }
         } else {
             eventRepo.create(draft)
         }

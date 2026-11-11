@@ -33,12 +33,25 @@ android {
             // The old ~/.dandle-release.keystore and its in-repo password literal are retired —
             // existing 0.3.x beta installs need one uninstall/reinstall (signature mismatch).
             // The password lives ONLY in ~/.config/dandle/release-keystore.env (chmod 600,
-            // outside the repo; scripts/dev-env.sh exports it). `!!` fails loudly when unset:
-            // a release build must never silently fall back to a guessable password.
+            // outside the repo). Read from the FILE at configuration time rather than
+            // System.getenv alone: Gradle daemon reuse means the daemon's environment may
+            // predate a rotation — a shell-side `export` alone is not reliable.
+            val keystoreEnv: Map<String, String> by lazy {
+                val f = File(System.getProperty("user.home"), ".config/dandle/release-keystore.env")
+                if (f.exists()) {
+                    f.readLines().filter { "=" in it }.associate { line ->
+                        line.substringBefore("=") to line.substringAfter("=")
+                    }
+                } else emptyMap()
+            }
+            val releaseStorePassword =
+                System.getenv("DANDLE_STORE_PASSWORD")
+                    ?: keystoreEnv["DANDLE_STORE_PASSWORD"]
+                    ?: throw GradleException("DANDLE_STORE_PASSWORD not set (env or ~/.config/dandle/release-keystore.env)")
             storeFile = file(System.getProperty("user.home") + "/.dandle-release-v2.keystore")
-            storePassword = System.getenv("DANDLE_STORE_PASSWORD")!!
+            storePassword = releaseStorePassword
             keyAlias = "dandle"
-            keyPassword = System.getenv("DANDLE_STORE_PASSWORD")!!
+            keyPassword = releaseStorePassword
         }
     }
 

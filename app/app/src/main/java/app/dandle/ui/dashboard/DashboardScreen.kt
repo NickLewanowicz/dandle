@@ -3,6 +3,9 @@ package app.dandle.ui.dashboard
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
@@ -130,6 +135,7 @@ fun DashboardScreen(
             when (event) {
                 DashboardEvent.SignedOut -> onSignedOut()
                 is DashboardEvent.EntryCreated -> viewLastEntryUuid = event.localUuid
+                is DashboardEvent.TimerEndedRemotely -> scope.launch { snackbar.showSnackbar(event.message) }
             }
         }
     }
@@ -254,13 +260,14 @@ fun DashboardScreen(
                 )
 
                 // Fixed block: header + session banner + quick actions — elevated above the
-                // scrolling history. tonalElevation separates it in dark mode (a shadow alone is
-                // invisible there); shadowElevation draws the light-mode shadow. Always-on.
+                // scrolling history. tonalElevation separates it in dark mode. Light-mode
+                // boundary cue: a UNIFORM gradient fade below the block (owner fix 0.3.1 —
+                // shadowElevation's drawn shadow accumulated at the corners and read as two
+                // different weights on one edge).
                 Surface(
                     shape = RectangleShape,
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 3.dp,
-                    shadowElevation = 3.dp,
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { fixedHeightPx = it.height },
@@ -297,6 +304,20 @@ fun DashboardScreen(
                         )
                     }
                 }
+
+                // Uniform boundary fade (owner fix 0.3.1): same weight across the full width.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(y = with(density) { fixedHeightPx.toDp() })
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), Color.Transparent),
+                            )
+                        ),
+                )
             }
         }
     }

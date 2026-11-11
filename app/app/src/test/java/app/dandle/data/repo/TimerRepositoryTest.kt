@@ -467,4 +467,5 @@ class TimerRepositoryTest {
         assertNull("a failed reconcile must not adopt or mutate the local row", running!!.serverTimerId)
         assertEquals(1, db.timerDao().snapshot().size)
     }
+
 }

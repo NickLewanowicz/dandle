@@ -66,7 +66,13 @@ val EventType.emoji: String
 }
 
 /** Feeding entries show the bottle regardless of method; the method reads in the row text. */
-fun feedingEmoji(feedingMethod: String?): String = "🍼"
+fun feedingEmoji(feedingType: String?, feedingMethod: String?): String = when {
+    // 0.3.1 fix (owner-reported): the old stub returned 🍼 unconditionally, erasing
+    // breast feedings and solid food. Solid → 🥄; breast sides → 🤱; rest → 🍼.
+    feedingType.equals("solid food", ignoreCase = true) -> "🥄"
+    feedingMethod in setOf("left breast", "right breast", "both breasts") -> "🤱"
+    else -> "🍼"
+}
 
 /** Display label used across strip, panels, dialogs. */
 val EventType.label: String

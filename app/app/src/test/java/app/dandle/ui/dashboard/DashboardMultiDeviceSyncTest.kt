@@ -64,6 +64,10 @@ class DashboardMultiDeviceSyncTest {
     private val sleepBody = AtomicReference("""{"count":0,"next":null,"previous":null,"results":[]}""")
     private val childrenRequests = AtomicInteger(0)
     private val timersRequests = AtomicInteger(0)
+    private val timerDeletes = AtomicInteger(0)
+
+    /** Calm remote-end snackbar notice (DashboardEvent.TimerEndedRemotely), if one was emitted. */
+    private val lastNotice = AtomicReference<String?>(null)
 
     /** Test-owned route override (test 4's 220-row window fixture); null falls through to the default. */
     @Volatile
@@ -109,6 +113,16 @@ class DashboardMultiDeviceSyncTest {
     }
 
     private fun defaultRoute(request: RecordedRequest): MockResponse = when {
+        // In-app timer start (mirror create) — returns the created timer so the local row
+        // carries a serverTimerId (the precondition for the reconcile drop branch).
+        request.path!!.startsWith("/api/timers") && request.method == "POST" ->
+            MockResponse().setResponseCode(201).setBody(
+                """{"id":42,"child":1,"name":"Sleep-BBapp:2","start":"2026-11-04T18:00:00Z"}""",
+            )
+        request.path!!.startsWith("/api/timers") && request.method == "DELETE" -> {
+            timerDeletes.incrementAndGet()
+            MockResponse().setResponseCode(204)
+        }
         request.path!!.startsWith("/api/timers") -> {
             timersRequests.incrementAndGet()
             MockResponse().setResponseCode(200).setBody(timersBody.get())
@@ -191,6 +205,37 @@ class DashboardMultiDeviceSyncTest {
         assertTrue(
             "no running timers may remain after the server dropped them: ${latest.value.runningTimers}",
             latest.value.runningTimers.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `one resume cycle resolves a ghost whose completion entry arrives in the same pull`() = runBlocking {
+        // QA 0.3.1 regression pin: fetch order is timers → type lists, so a completion entry
+        // that arrives in the same pull as the still-listed ghost can only match on the NEXT
+        // cycle. The contract: ONE resume must resolve it — timers reconcile against the
+        // entry the same cycle's type lists just landed.
+        val vm = newViewModel()
+        loadDashboardWithServerTimer(vm)
+        assertTrue(
+            "precondition: the running sleep timer is on the strip",
+            latest.value.runningTimers.any { it.kind == EventType.SLEEP },
+        )
+
+        // Spouse's stop lands server-side WHILE a pull is about to run: timer still listed +
+        // the completed entry arrives in the same type-list response.
+        sleepBody.set(
+            """{"count":1,"next":null,"previous":null,"results":[
+               {"id":777,"child":1,"start":"2026-11-04T18:00:00Z","end":"2026-11-04T20:00:00Z",
+                "notes":"ended on another device"}]}""",
+        )
+
+        vm.onAppResumed()
+        awaitTrue("one cycle must drop the locally running ghost timer") {
+            latest.value.runningTimers.none { it.kind == EventType.SLEEP }
+        }
+        assertTrue(
+            "the ghost server timer must be deleted in that cycle too",
+            timerDeletes.get() > 0,
         )
     }
 
@@ -335,6 +380,73 @@ class DashboardMultiDeviceSyncTest {
         assertTrue(
             "no running timers may remain: ${latest.value.runningTimers}",
             latest.value.runningTimers.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `panel auto-closes when its running timer is reconciled away`() = runBlocking {
+        lastNotice.set(null)
+        val vm = newViewModel()
+        appScope.launch {
+            vm.events.collect {
+                if (it is DashboardEvent.TimerEndedRemotely) lastNotice.set(it.message)
+            }
+        }
+        vm.refresh()
+        awaitTrue("active child resolved") { latest.value.activeChild != null }
+
+        // Real path: the sleep quick action STARTS the timer (no server timers yet) and the
+        // panel opens carrying the running timer (running card, live counter, savable).
+        vm.onQuickActionTap(EventType.SLEEP)
+        awaitTrue("sleep panel opens carrying the running timer") {
+            latest.value.openPanel?.type == EventType.SLEEP && latest.value.openPanel?.timer != null
+        }
+
+        // Spouse ends it on another device: the server timer list empties; a refresh reconcile
+        // drops the local row (same mechanics test 1/5 pin). The OPEN panel must not outlive it.
+        timersBody.set("""{"count":0,"next":null,"previous":null,"results":[]}""")
+        vm.refresh()
+        awaitTrue("open panel must auto-close once its timer row is reconciled away") {
+            latest.value.openPanel == null
+        }
+        awaitTrue("calm remote-end notice emitted") { lastNotice.get() != null }
+        org.junit.Assert.assertEquals("Sleep ended on another phone.", lastNotice.get())
+    }
+
+    @Test
+    fun `a panel for an unsynced local entry is not auto-closed by a reconcile cycle`() = runBlocking {
+        val vm = newViewModel()
+        vm.refresh()
+        awaitTrue("active child resolved") { latest.value.activeChild != null }
+
+        // A manual-entry panel (note): openPanel with timer == null — never a running timer.
+        vm.onQuickActionTap(EventType.NOTE)
+        awaitTrue("note panel opens") { latest.value.openPanel?.type == EventType.NOTE }
+        assertTrue(
+            "precondition: the note panel carries no running timer",
+            latest.value.openPanel?.timer == null,
+        )
+
+        // A reconcile cycle that CHANGES the timers table (a spouse's sleep timer appears —
+        // the same emission class that must close a dead timer's panel) must leave a
+        // manual-entry panel untouched.
+        timersBody.set(
+            """{"count":1,"next":null,"previous":null,"results":[
+               {"id":9,"child":1,"name":"Sleep-BBapp:2","start":"2026-11-04T18:00:00Z"}]}""",
+        )
+        vm.refresh()
+        awaitTrue("reconcile adopted the server timer (collector re-emitted)") {
+            latest.value.runningTimers.any { it.kind == EventType.SLEEP }
+        }
+        // Give any (overzealous) auto-close several scheduler beats to land before asserting.
+        repeat(8) {
+            testDispatcher.scheduler.advanceTimeBy(250)
+            testDispatcher.scheduler.runCurrent()
+            Thread.sleep(25)
+        }
+        assertTrue(
+            "manual-entry panel must survive a reconcile cycle: ${latest.value.openPanel}",
+            latest.value.openPanel?.type == EventType.NOTE,
         )
     }
 }

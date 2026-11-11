@@ -117,7 +117,10 @@ fun TimelineSection(
         modifier = modifier
             .fillMaxSize()
             .testTag(TestTags.DASHBOARD_TIMELINE),
-        contentPadding = PaddingValues(top = contentPaddingTop),
+        // Horizontal padding restored (0.3.1 regression): the layered restructure made the
+        // list full-bleed and lost the 16dp side margins the old Column provided — day
+        // headers and rows sat nearly at the screen edge (owner-reported on-device).
+        contentPadding = PaddingValues(top = contentPaddingTop, start = 16.dp, end = 16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (leadingItem != null) {
@@ -226,7 +229,7 @@ private fun TimelineRow(
                         // no tint. The method detail (left/right/both) reads in the row text.
                         Text(
                             if (event.type == EventType.FEEDING) {
-                                feedingEmoji(event.feedingMethod)
+                                feedingEmoji(event.feedingType, event.feedingMethod)
                             } else {
                                 event.type.emoji
                             },

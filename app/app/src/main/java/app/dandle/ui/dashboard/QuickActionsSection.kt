@@ -85,6 +85,9 @@ fun QuickActionsGrid(
     runningElapsed: Map<EventType, String>,
     enabled: Boolean,
     onTap: (EventType) -> Unit,
+    // 0.3.1: the RUNNING feeding cell swaps 🍼 for the breast/solid emoji of the open
+    // panel's type+method (owner-reported regression — the cell showed a bottle mid-nursing).
+    runningFeedingEmoji: String? = null,
 ) {
     val order = listOf(
         EventType.FEEDING, EventType.CHANGE, EventType.SLEEP,
@@ -107,6 +110,7 @@ fun QuickActionsGrid(
                         type = type,
                         running = type in runningKinds,
                         open = openType == type,
+                        emojiOverride = if (type == EventType.FEEDING) runningFeedingEmoji else null,
                         elapsedLabel = runningElapsed[type],
                         enabled = enabled,
                         onTap = { onTap(type) },
@@ -122,6 +126,7 @@ private fun QuickActionButton(
     type: EventType,
     running: Boolean,
     open: Boolean,
+    emojiOverride: String? = null,
     elapsedLabel: String?,
     enabled: Boolean,
     onTap: () -> Unit,
@@ -141,7 +146,7 @@ private fun QuickActionButton(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     // Emoji icons (v5 mocks): device-font rendered, multicolor — no tint.
-                    Text(type.emoji, fontSize = 26.sp)
+                    Text(emojiOverride ?: type.emoji, fontSize = 26.sp)
                 }
             }
             if (running) {
@@ -252,7 +257,7 @@ fun RunningTimerCard(
                         .background(cardPalette(scene, typeColors).chip),
                 ) {
                     Text(
-                        if (type == EventType.FEEDING) feedingEmoji(panel.draft.feedingMethod) else type.emoji,
+                        if (type == EventType.FEEDING) feedingEmoji(panel.draft.feedingType, panel.draft.feedingMethod) else type.emoji,
                         fontSize = 19.sp,
                     )
                 }
