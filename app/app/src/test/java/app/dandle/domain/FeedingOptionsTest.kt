@@ -64,7 +64,7 @@ class FeedingOptionsTest {
     fun `labels use the server wire values with sentence case`() {
         assertEquals("Fortified milk", FeedingOptions.typeLabel("fortified breast milk"))
         assertEquals("Both breasts", FeedingOptions.methodLabel("both breasts"))
-        assertEquals("Solid food", FeedingOptions.typeLabel("solid food"))
+        assertEquals("Solids", FeedingOptions.typeLabel("solid food"))
     }
 
     @Test

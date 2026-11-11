@@ -1,5 +1,7 @@
 package app.dandle.domain.model
 
+import app.dandle.domain.FeedingOptions
+
 /**
  * Timeline headline formats — MUST be consistent app-wide (functional spec §4.1):
  * - Feeding: "Bottle · Amount: 120" (method · amount; amount omitted when null or ≤ 0 —
@@ -24,8 +26,7 @@ object EventHeadline {
             val method = event.feedingMethod?.replaceFirstChar { it.uppercase() } ?: "Feed"
             val type = event.feedingType
                 ?.takeIf { it.isNotBlank() && it != "breast milk" }
-                ?.replaceFirstChar { it.uppercase() }
-                ?.let { " · $it" }
+                ?.let { " · ${FeedingOptions.typeLabel(it)}" }
                 .orEmpty()
             val amount = amountText(event)
             "$method$type$amount"

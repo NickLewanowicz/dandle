@@ -56,7 +56,7 @@ class FeedingCascadeTest {
             feedingCascade("breast milk", "both breasts", expanded = false).summaryText,
         )
         assertEquals(
-            "Solid food · Parent fed",
+            "Solids · Parent fed",
             feedingCascade("solid food", "parent fed", expanded = false).summaryText,
         )
     }

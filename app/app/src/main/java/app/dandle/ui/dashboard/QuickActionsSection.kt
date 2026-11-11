@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1023,7 +1024,14 @@ private fun SceneChipRow(
         return
     }
     val p = cardPalette(scene, typeColors)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+    // FlowRow, not Row: whole chips wrap to the next line when the width runs out — a plain
+    // Row squeezes the last chip into a sliver and its label stacks letter-by-letter
+    // (owner-reported "B o t l e", 0.3.2).
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
         options.forEach { (wire, label) ->
             val isSelected = selected == wire
             Surface(
@@ -1038,6 +1046,8 @@ private fun SceneChipRow(
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     // Selected pill flips to the dark-on-light color on dark scenes.
                     color = if (isSelected) p.chipSelectedText else p.content,
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                 )
             }

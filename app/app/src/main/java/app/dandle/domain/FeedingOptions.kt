@@ -18,7 +18,7 @@ object FeedingOptions {
         Option("formula", "Formula"),
         // Display is shortened (UX spec §3); the wire value stays the exact server enum.
         Option("fortified breast milk", "Fortified milk"),
-        Option("solid food", "Solid food"),
+        Option("solid food", "Solids"),
     )
 
     val NURSING_METHODS = listOf(
