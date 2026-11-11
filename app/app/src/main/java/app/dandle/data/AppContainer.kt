@@ -114,13 +114,20 @@ class AppContainer(
 
     /**
      * BB/API request logging (debug builds only; BbLog gates output). BODY level with the
-     * Authorization header redacted and every line truncated to ~2KB.
+     * Authorization header redacted and every line truncated to ~2KB. Security review
+     * 2026-11-10: BODY-level bodies carry credentials — PB auth-with-password / createUser
+     * send password + passwordConfirm JSON, the BB form login posts password as
+     * x-www-form-urlencoded, and BB's key login answers with an api_key — so every line
+     * passes through [redactSecrets] before truncation. BODY-level logging itself stays
+     * DEBUG-ONLY: release builds install no logging interceptor at all.
      */
     private fun debugLogInterceptor(): okhttp3.logging.HttpLoggingInterceptor {
         val interceptor = okhttp3.logging.HttpLoggingInterceptor { message ->
             app.dandle.log.BbLog.d(
                 app.dandle.log.BbLog.TAG_API,
-                message.take(MAX_LOG_LINE_CHARS),
+                // Redact BEFORE truncating: truncation could otherwise cut a secret value in
+                // half (leaving the secret-bearing fragment unmatched) or cut everything but it.
+                redactSecrets(message).take(MAX_LOG_LINE_CHARS),
             )
         }
         interceptor.level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
@@ -462,6 +469,35 @@ class AppContainer(
     companion object {
         /** BB/API log lines are truncated to ~2KB (review + product logging rules). */
         private const val MAX_LOG_LINE_CHARS = 2_048
+
+        /**
+         * Credential redaction for debug network log lines (security review 2026-11-10).
+         * Targeted patterns only — each matches a wire shape we actually send or receive:
+         *  - JSON secrets: "password" / "passwordConfirm" (PB auth-with-password and
+         *    createUser bodies) and "api_key" (BB key-login response). The key match is
+         *    case-insensitive; the value pattern `(?:[^"\\]|\\.)*` is escaped-value aware,
+         *    i.e. a `\"` inside the value does not terminate the match. An unterminated
+         *    (malformed/truncated) value does not match — nothing is half-redacted.
+         *  - Form secrets: password / passwordConfirm in x-www-form-urlencoded bodies
+         *    (the BB form login posts `password=<password>`, which OkHttp logs literally);
+         *    the value ends at `&` or whitespace, matching percent-encoded content.
+         * Applied to EVERY logged line in [debugLogInterceptor] (debug builds only).
+         */
+        private val jsonSecretRegex = Regex(
+            """("(?:password|passwordConfirm|api_key)"\s*:\s*")(?:[^"\\]|\\.)*(")""",
+            RegexOption.IGNORE_CASE,
+        )
+        private val formSecretRegex = Regex(
+            """\b(password(?:Confirm)?)=[^&\s]*""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** Redacts credential values (see [jsonSecretRegex] / [formSecretRegex]) in-place. */
+        private fun redactSecrets(message: String): String = formSecretRegex.replace(
+            jsonSecretRegex.replace(message) { match ->
+                match.groupValues[1] + "***" + match.groupValues[2]
+            },
+        ) { match -> match.groupValues[1] + "=***" }
 
         private fun unb64(text: String): ByteArray = java.util.Base64.getDecoder().decode(text)
 

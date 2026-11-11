@@ -29,10 +29,16 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getProperty("user.home") + "/.dandle-release.keystore")
-            storePassword = System.getenv("DANDLE_STORE_PASSWORD") ?: "__REDACTED__"
+            // Security review 2026-11-10: keystore ROTATED to v2 (RSA 4096, 10000 days).
+            // The old ~/.dandle-release.keystore and its in-repo password literal are retired —
+            // existing 0.3.x beta installs need one uninstall/reinstall (signature mismatch).
+            // The password lives ONLY in ~/.config/dandle/release-keystore.env (chmod 600,
+            // outside the repo; scripts/dev-env.sh exports it). `!!` fails loudly when unset:
+            // a release build must never silently fall back to a guessable password.
+            storeFile = file(System.getProperty("user.home") + "/.dandle-release-v2.keystore")
+            storePassword = System.getenv("DANDLE_STORE_PASSWORD")!!
             keyAlias = "dandle"
-            keyPassword = System.getenv("DANDLE_STORE_PASSWORD") ?: "__REDACTED__"
+            keyPassword = System.getenv("DANDLE_STORE_PASSWORD")!!
         }
     }
 

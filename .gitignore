@@ -22,3 +22,7 @@ website/.docusaurus/
 .venv/
 
 .playwright-mcp/
+
+# Signing keystores never enter the repo (their passwords live outside it too)
+*.keystore
+*.jks
